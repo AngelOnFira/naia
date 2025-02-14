@@ -12,7 +12,7 @@ use log::warn;
 use naia_bevy_shared::{HostOwned, HostSyncEvent, WorldMutType};
 use naia_server::EntityOwner;
 
-use crate::{world_proxy::{get_world_mut_from_id, WorldProxyMut, WorldProxy}, world_entity::WorldId, plugin::Singleton, server::ServerWrapper, ClientOwned, EntityAuthStatus};
+use crate::{world_proxy::{get_world_mut_from_id, WorldProxyMut, WorldProxy}, world_entity::WorldId, plugin::Singleton, ClientOwned, EntityAuthStatus};
 
 mod naia_events {
     pub use naia_server::{
@@ -30,25 +30,28 @@ mod bevy_events {
     };
 }
 
-use crate::{world_entity::WorldEntity, events::CachedTickEventsState};
+use crate::{main_server::MainServer, world_entity::WorldEntity, events::CachedTickEventsState};
 
 pub(crate) fn main_world_before_receive_events(main_world: &mut World) {
-    main_world.resource_scope(|main_world, mut server: Mut<ServerWrapper>| {
+    main_world.resource_scope(|main_world, mut server: Mut<MainServer>| {
         if !server.is_listening() {
             return;
         }
 
         // Host Component Updates in Main World
-        host_component_updates(WorldId::main(), &mut server, main_world);
+        main_host_component_updates(main_world, &mut server);
 
         // Receive Events
-        before_receive_events_impl(WorldId::main(), main_world, &mut server);
+        main_before_receive_events(main_world, &mut server);
     });
 }
 
-fn host_component_updates(world_id: WorldId, server: &mut ServerWrapper, sub_world: &mut World) {
+fn main_host_component_updates(world: &mut World, server: &mut MainServer) {
+
+    let world_id = WorldId::main();
+
     // Host Component Updates
-    let mut host_component_event_reader = sub_world
+    let mut host_component_event_reader = world
         .get_resource_mut::<Events<HostSyncEvent>>()
         .unwrap();
     let host_component_events: Vec<HostSyncEvent> = host_component_event_reader.drain().collect();
@@ -60,7 +63,7 @@ fn host_component_updates(world_id: WorldId, server: &mut ServerWrapper, sub_wor
                     // if auth status is denied, that means the client is performing this operation and it's already being handled
                     continue;
                 }
-                let mut world_proxy = sub_world.proxy_mut();
+                let mut world_proxy = world.proxy_mut();
                 let Some(mut component_mut) = world_proxy.component_mut_of_kind(&world_entity, &component_kind) else {
                     warn!("could not find Component in World which has just been inserted!");
                     continue;
@@ -87,15 +90,17 @@ fn host_component_updates(world_id: WorldId, server: &mut ServerWrapper, sub_wor
     }
 }
 
-fn before_receive_events_impl(world_id: WorldId, main_world: &mut World, server: &mut ServerWrapper) {
+fn main_before_receive_events(world: &mut World, server: &mut MainServer) {
+
+    let world_id = WorldId::main();
 
     // Receive Events
-    let mut events = server.receive(main_world.proxy_mut());
+    let mut events = server.receive(world.proxy_mut());
     if !events.is_empty() {
 
         // Connect Event
         if events.has::<naia_events::ConnectEvent>() {
-            let mut event_writer = main_world
+            let mut event_writer = world
                 .get_resource_mut::<Events<bevy_events::ConnectEvent>>()
                 .unwrap();
             for user_key in events.read::<naia_events::ConnectEvent>() {
@@ -105,7 +110,7 @@ fn before_receive_events_impl(world_id: WorldId, main_world: &mut World, server:
 
         // Disconnect Event
         if events.has::<naia_events::DisconnectEvent>() {
-            let mut event_writer = main_world
+            let mut event_writer = world
                 .get_resource_mut::<Events<bevy_events::DisconnectEvent>>()
                 .unwrap();
             for (user_key, user) in events.read::<naia_events::DisconnectEvent>() {
@@ -115,7 +120,7 @@ fn before_receive_events_impl(world_id: WorldId, main_world: &mut World, server:
 
         // Error Event
         if events.has::<naia_events::ErrorEvent>() {
-            let mut event_writer = main_world
+            let mut event_writer = world
                 .get_resource_mut::<Events<bevy_events::ErrorEvent>>()
                 .unwrap();
             for error in events.read::<naia_events::ErrorEvent>() {
@@ -125,7 +130,7 @@ fn before_receive_events_impl(world_id: WorldId, main_world: &mut World, server:
 
         // Tick Event
         if events.has::<naia_events::TickEvent>() {
-            let mut event_writer = main_world
+            let mut event_writer = world
                 .get_resource_mut::<Events<bevy_events::TickEvent>>()
                 .unwrap();
             for tick in events.read::<naia_events::TickEvent>() {
@@ -135,7 +140,7 @@ fn before_receive_events_impl(world_id: WorldId, main_world: &mut World, server:
 
         // Message Event
         if events.has_messages() {
-            let mut event_writer = main_world
+            let mut event_writer = world
                 .get_resource_mut::<Events<bevy_events::MessageEvents>>()
                 .unwrap();
             event_writer.send(bevy_events::MessageEvents::from(&mut events));
@@ -143,7 +148,7 @@ fn before_receive_events_impl(world_id: WorldId, main_world: &mut World, server:
 
         // Request Event
         if events.has_requests() {
-            let mut event_writer = main_world
+            let mut event_writer = world
                 .get_resource_mut::<Events<bevy_events::RequestEvents>>()
                 .unwrap();
             event_writer.send(bevy_events::RequestEvents::from(&mut events));
@@ -151,7 +156,7 @@ fn before_receive_events_impl(world_id: WorldId, main_world: &mut World, server:
 
         // Auth Event
         if events.has_auths() {
-            let mut event_writer = main_world
+            let mut event_writer = world
                 .get_resource_mut::<Events<bevy_events::AuthEvents>>()
                 .unwrap();
             event_writer.send(bevy_events::AuthEvents::from(&mut events));
@@ -161,7 +166,7 @@ fn before_receive_events_impl(world_id: WorldId, main_world: &mut World, server:
         if events.has::<naia_events::SpawnEntityEvent>() {
             let mut spawned_world_entities = Vec::new();
             {
-                let mut event_writer = main_world
+                let mut event_writer = world
                     .get_resource_mut::<Events<bevy_events::SpawnEntityEvent>>()
                     .unwrap();
 
@@ -179,7 +184,7 @@ fn before_receive_events_impl(world_id: WorldId, main_world: &mut World, server:
                     panic!("spawned entity that already belongs to a different client ... shouldn't be possible.");
                 }
 
-                get_world_mut_from_id(main_world, &world_entity, |world| {
+                get_world_mut_from_id(world, &world_entity, |world| {
                     world.entity_mut(entity).insert(ClientOwned(new_user_key));
                 });
             }
@@ -187,7 +192,7 @@ fn before_receive_events_impl(world_id: WorldId, main_world: &mut World, server:
 
         // Despawn Entity Event
         if events.has::<naia_events::DespawnEntityEvent>() {
-            let mut event_writer = main_world
+            let mut event_writer = world
                 .get_resource_mut::<Events<bevy_events::DespawnEntityEvent>>()
                 .unwrap();
             for (user_key, world_entity) in events.read::<naia_events::DespawnEntityEvent>() {
@@ -201,7 +206,7 @@ fn before_receive_events_impl(world_id: WorldId, main_world: &mut World, server:
 
         // Publish Entity Event
         if events.has::<naia_events::PublishEntityEvent>() {
-            let mut event_writer = main_world
+            let mut event_writer = world
                 .get_resource_mut::<Events<bevy_events::PublishEntityEvent>>()
                 .unwrap();
             for (user_key, world_entity) in events.read::<naia_events::PublishEntityEvent>() {
@@ -215,7 +220,7 @@ fn before_receive_events_impl(world_id: WorldId, main_world: &mut World, server:
 
         // Unpublish Entity Event
         if events.has::<naia_events::UnpublishEntityEvent>() {
-            let mut event_writer = main_world
+            let mut event_writer = world
                 .get_resource_mut::<Events<bevy_events::UnpublishEntityEvent>>()
                 .unwrap();
             for (user_key, world_entity) in events.read::<naia_events::UnpublishEntityEvent>() {
@@ -233,7 +238,7 @@ fn before_receive_events_impl(world_id: WorldId, main_world: &mut World, server:
 
                 let entity = world_entity.entity();
 
-                get_world_mut_from_id(main_world, &world_entity, |world| {
+                get_world_mut_from_id(world, &world_entity, |world| {
                     world.entity_mut(entity).insert(HostOwned::new::<Singleton>());
                 });
             }
@@ -245,7 +250,7 @@ fn before_receive_events_impl(world_id: WorldId, main_world: &mut World, server:
 
                 let entity = world_entity.entity();
 
-                get_world_mut_from_id(main_world, &world_entity, |world| {
+                get_world_mut_from_id(world, &world_entity, |world| {
                     world.entity_mut(entity).remove::<HostOwned>();
                 });
             }
@@ -257,7 +262,7 @@ fn before_receive_events_impl(world_id: WorldId, main_world: &mut World, server:
 
                 let entity = world_entity.entity();
 
-                get_world_mut_from_id(main_world, &world_entity, |world| {
+                get_world_mut_from_id(world, &world_entity, |world| {
                     if let Ok(mut entity_mut) = world.get_entity_mut(entity) {
                         entity_mut.insert(HostOwned::new::<Singleton>());
                     }
@@ -280,7 +285,7 @@ fn before_receive_events_impl(world_id: WorldId, main_world: &mut World, server:
                 }
                 new_inserts.insert(kind, new_components);
             }
-            let mut event_writer = main_world
+            let mut event_writer = world
                 .get_resource_mut::<Events<bevy_events::InsertComponentEvents>>()
                 .unwrap();
             event_writer.send(bevy_events::InsertComponentEvents::new(new_inserts));
@@ -301,7 +306,7 @@ fn before_receive_events_impl(world_id: WorldId, main_world: &mut World, server:
                 }
                 new_updates.insert(kind, new_components);
             }
-            let mut event_writer = main_world
+            let mut event_writer = world
                 .get_resource_mut::<Events<bevy_events::UpdateComponentEvents>>()
                 .unwrap();
             event_writer
@@ -323,7 +328,7 @@ fn before_receive_events_impl(world_id: WorldId, main_world: &mut World, server:
                 }
                 new_removes.insert(kind, new_components);
             }
-            let mut event_writer = main_world
+            let mut event_writer = world
                 .get_resource_mut::<Events<bevy_events::RemoveComponentEvents>>()
                 .unwrap();
             event_writer.send(bevy_events::RemoveComponentEvents::new(new_removes));
@@ -340,7 +345,7 @@ pub fn send_packets_init(world: &mut World) {
 }
 
 pub fn send_packets(world: &mut World) {
-    world.resource_scope(|world, mut server: Mut<ServerWrapper>| {
+    world.resource_scope(|world, mut server: Mut<MainServer>| {
         if !server.is_listening() {
             return;
         }

@@ -7,12 +7,12 @@ use naia_bevy_shared::{BeforeReceiveEvents, Protocol, SendPackets, SharedPlugin}
 use naia_server::{Server, ServerConfig};
 
 use super::{
+    main_server::MainServer,
     events::{
         AuthEvents, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent,
         InsertComponentEvents, MessageEvents, PublishEntityEvent, RemoveComponentEvents,
         RequestEvents, SpawnEntityEvent, TickEvent, UnpublishEntityEvent, UpdateComponentEvents,
     },
-    server::ServerWrapper,
     systems::{main_world_before_receive_events, send_packets, send_packets_init},
     world_entity::{WorldId, WorldEntity},
 };
@@ -56,7 +56,7 @@ impl PluginType for Plugin {
         app.insert_resource(world_data);
 
         let server = Server::<WorldEntity>::new(config.server_config, config.protocol.into());
-        let server = ServerWrapper::main(server);
+        let server = MainServer::wrap(server);
 
         app
             // SHARED PLUGIN //

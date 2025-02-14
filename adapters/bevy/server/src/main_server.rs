@@ -2,11 +2,14 @@
 
 use std::{time::Duration};
 
+use bevy_ecs::prelude::Resource;
+
 use naia_bevy_shared::{Channel, ComponentKind, EntityAndGlobalEntityConverter, EntityDoesNotExistError, GlobalEntity, Message, Request, Response, ResponseSendKey, WorldMutType, WorldRefType};
 use naia_server::{shared::SocketConfig, transport::Socket, ReplicationConfig, RoomKey, UserKey, Server as NaiaServer, NaiaServerError, Events, EntityOwner, TickBufferMessages};
 
 use crate::{EntityAuthStatus, WorldId, world_entity::WorldEntity, user_scope::{UserScopeMut, UserScopeRef}, user::{UserMut, UserRef}, room::{RoomMut, RoomRef}, Tick, ResponseReceiveKey, Replicate};
 
+#[derive(Resource)]
 pub(crate) struct MainServer {
     server: NaiaServer<WorldEntity>,
 }

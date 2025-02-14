@@ -1,9 +1,13 @@
+
 // SubServer
+
+use bevy_ecs::prelude::Resource;
 
 use naia_bevy_shared::ComponentKind;
 
 use crate::{world_entity::WorldEntity, Replicate};
 
+#[derive(Resource)]
 pub(crate) struct SubServer {
 
 }
