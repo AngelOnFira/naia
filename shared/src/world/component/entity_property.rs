@@ -782,9 +782,9 @@ impl HostOwnedRelation {
     pub fn set<E: Copy + Eq + Hash + Sync + Send>(
         &mut self,
         converter: &dyn EntityAndGlobalEntityConverter<E>,
-        world_entity: &E,
+        entity: &E,
     ) {
-        if let Ok(new_global_entity) = converter.entity_to_global_entity(world_entity) {
+        if let Ok(new_global_entity) = converter.entity_to_global_entity(entity) {
             self.global_entity = Some(new_global_entity);
             self.mutate();
         } else {

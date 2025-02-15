@@ -28,3 +28,5 @@ pub use components::{ClientOwned, ServerOwned};
 pub use plugin::Plugin;
 pub use server::Server;
 pub use world_entity::WorldId;
+pub use main_server::MainServer;
+pub use sub_server::SubServer;

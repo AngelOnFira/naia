@@ -118,8 +118,8 @@ impl<'w> Server<'w> {
             ServerMut::Main(server) => {
                 server.send_message::<C, M>(user_key, message);
             }
-            ServerMut::Sub(_server) => {
-                panic!("SubServers do not support this method");
+            ServerMut::Sub(server) => {
+                server.send_message::<C, M>(user_key, message);
             }
         }
     }
@@ -195,6 +195,7 @@ impl<'w> Server<'w> {
     //// Updates ////
 
     pub fn scope_checks(&self) -> Vec<(RoomKey, UserKey, Entity)> {
+        let world_id = *self.world_id;
         match self.get() {
             ServerRef::Main(server) => {
                 server
@@ -209,8 +210,18 @@ impl<'w> Server<'w> {
                     )
                     .collect()
             }
-            ServerRef::Sub(_server) => {
-                panic!("SubServers do not support this method");
+            ServerRef::Sub(server) => {
+                server
+                    .scope_checks()
+                    .iter()
+                    .filter(
+                        |(_, _, world_entity)| world_entity.world_id() == world_id
+                    )
+                    .map(
+                        |(room_key, user_key, world_entity)|
+                            (*room_key, *user_key, world_entity.entity())
+                    )
+                    .collect()
             }
         }
     }
@@ -301,8 +312,8 @@ impl<'w> Server<'w> {
             ServerMut::Main(server) => {
                 server.make_room()
             }
-            ServerMut::Sub(_server) => {
-                panic!("SubServers do not support this method");
+            ServerMut::Sub(server) => {
+                server.make_room()
             }
         }
     }
@@ -334,8 +345,8 @@ impl<'w> Server<'w> {
             ServerMut::Main(server) => {
                 server.room_mut(room_key)
             }
-            ServerMut::Sub(_server) => {
-                panic!("SubServers do not support this method");
+            ServerMut::Sub(server) => {
+                server.room_mut(room_key)
             }
         }
     }
@@ -543,8 +554,10 @@ impl<'w> EntityAndGlobalEntityConverter<Entity> for Server<'w> {
                 let world_entity = WorldEntity::main_new(*entity);
                 server.entity_to_global_entity(&world_entity)
             }
-            ServerRef::Sub(_server) => {
-                panic!("SubServers do not support this method");
+            ServerRef::Sub(server) => {
+                let world_id = server.world_id();
+                let world_entity = WorldEntity::new(world_id, *entity);
+                server.entity_to_global_entity(&world_entity)
             }
         }
     }

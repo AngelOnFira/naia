@@ -7,10 +7,10 @@ use bevy_ecs::prelude::Resource;
 use naia_bevy_shared::{Channel, ComponentKind, EntityAndGlobalEntityConverter, EntityDoesNotExistError, GlobalEntity, Message, Request, Response, ResponseSendKey, WorldMutType, WorldRefType};
 use naia_server::{shared::SocketConfig, transport::Socket, ReplicationConfig, RoomKey, UserKey, Server as NaiaServer, NaiaServerError, Events, EntityOwner, TickBufferMessages};
 
-use crate::{EntityAuthStatus, WorldId, world_entity::WorldEntity, user_scope::{UserScopeMut, UserScopeRef}, user::{UserMut, UserRef}, room::{RoomMut, RoomRef}, Tick, ResponseReceiveKey, Replicate};
+use crate::{sub_server::SubServer, EntityAuthStatus, WorldId, world_entity::WorldEntity, user_scope::{UserScopeMut, UserScopeRef}, user::{UserMut, UserRef}, room::{RoomMut, RoomRef}, Tick, ResponseReceiveKey, Replicate};
 
 #[derive(Resource)]
-pub(crate) struct MainServer {
+pub struct MainServer {
     server: NaiaServer<WorldEntity>,
 }
 
@@ -20,6 +20,10 @@ impl MainServer {
         Self {
             server,
         }
+    }
+
+    pub fn to_sub(self, world_id: WorldId) -> SubServer {
+        SubServer::wrap(world_id, self.server)
     }
 
     pub(crate) fn listen<S: Into<Box<dyn Socket>>>(&mut self, socket: S) {
