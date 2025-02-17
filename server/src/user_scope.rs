@@ -1,14 +1,14 @@
 use std::hash::Hash;
 
-use super::{server::Server, user::UserKey};
+use super::{server::WorldServer, user::UserKey};
 
 pub struct UserScopeRef<'s, E: Copy + Eq + Hash + Send + Sync> {
-    server: &'s Server<E>,
+    server: &'s WorldServer<E>,
     key: UserKey,
 }
 
 impl<'s, E: Copy + Eq + Hash + Send + Sync> UserScopeRef<'s, E> {
-    pub fn new(server: &'s Server<E>, key: &UserKey) -> Self {
+    pub(crate) fn new(server: &'s WorldServer<E>, key: &UserKey) -> Self {
         Self { server, key: *key }
     }
 
@@ -19,12 +19,12 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync> UserScopeRef<'s, E> {
 }
 
 pub struct UserScopeMut<'s, E: Copy + Eq + Hash + Send + Sync> {
-    server: &'s mut Server<E>,
+    server: &'s mut WorldServer<E>,
     key: UserKey,
 }
 
 impl<'s, E: Copy + Eq + Hash + Send + Sync> UserScopeMut<'s, E> {
-    pub fn new(server: &'s mut Server<E>, key: &UserKey) -> Self {
+    pub(crate) fn new(server: &'s mut WorldServer<E>, key: &UserKey) -> Self {
         Self { server, key: *key }
     }
 

@@ -19,6 +19,8 @@ pub trait MessageBuilder: Send + Sync {
         reader: &mut BitReader,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
     ) -> Result<MessageContainer, SerdeErr>;
+
+    fn box_clone(&self) -> Box<dyn MessageBuilder>;
 }
 
 // Message

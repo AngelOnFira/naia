@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use log::warn;
 
-use crate::{messages::channels::receivers::indexed_message_reader::IndexedMessageReader, world::entity::local_entity::RemoteEntity, world::local_world_manager::LocalWorldManager, BitReader, ComponentKind, ComponentKinds, ComponentUpdate, EntityAction, EntityActionReceiver, EntityActionType, GlobalEntity, LocalEntityAndGlobalEntityConverter, MessageIndex, Protocol, Replicate, Serde, SerdeErr, Tick, UnsignedVariableInteger};
+use crate::{messages::channels::receivers::indexed_message_reader::IndexedMessageReader, world::entity::local_entity::RemoteEntity, world::local_world_manager::LocalWorldManager, BitReader, ComponentKind, ComponentKinds, ComponentUpdate, EntityAction, EntityActionReceiver, EntityActionType, GlobalEntity, LocalEntityAndGlobalEntityConverter, MessageIndex, Replicate, Serde, SerdeErr, Tick, UnsignedVariableInteger};
 
 pub struct RemoteWorldReader {
     receiver: EntityActionReceiver<RemoteEntity>,
@@ -64,17 +64,17 @@ impl RemoteWorldReader {
     pub fn read_world_events(
         &mut self,
         local_world_manager: &mut LocalWorldManager,
-        protocol: &Protocol,
+        component_kinds: &ComponentKinds,
         tick: &Tick,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
         // read entity updates
-        self.read_updates(local_world_manager, &protocol.component_kinds, tick, reader)?;
+        self.read_updates(local_world_manager, component_kinds, tick, reader)?;
 
         // read entity actions
         self.read_actions(
             local_world_manager.entity_converter(),
-            &protocol.component_kinds,
+            component_kinds,
             reader,
         )?;
 

@@ -224,10 +224,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
             if let Some((prev_receiving_tick, current_receiving_tick)) = receiving_tick_happened {
                 // read packets on tick boundary, de-jittering
-                if connection
-                    .read_buffered_packets(&self.protocol)
-                    .is_err()
-                {
+                if connection.read_buffered_packets(
+                        &self.protocol.channel_kinds,
+                        &self.protocol.message_kinds,
+                        &self.protocol.component_kinds
+                    ).is_err() {
                     // TODO: Except for cosmic radiation .. Server should never send a malformed packet .. handle this
                     warn!("Error reading from buffered packet!");
                 }
@@ -258,7 +259,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
                 // collect waiting auth release messages
                 if let Some(global_entities) = connection
-                    .base
+                    .world
                     .host_world_manager
                     .world_channel
                     .collect_auth_release_messages()
@@ -329,10 +330,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         if let Some(connection) = &mut self.server_connection {
             let mut converter = EntityConverterMut::new(
                 &self.global_world_manager,
-                &mut connection.base.local_world_manager,
+                &mut connection.world.local_world_manager,
             );
             let message = MessageContainer::from_write(message_box, &mut converter);
-            connection.base.message_manager.send_message(
+            connection.world.message_manager.send_message(
                 &self.protocol.message_kinds,
                 &mut converter,
                 channel_kind,
@@ -375,12 +376,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         };
         let mut converter = EntityConverterMut::new(
             &self.global_world_manager,
-            &mut connection.base.local_world_manager,
+            &mut connection.world.local_world_manager,
         );
 
         let request_id = connection.global_request_manager.create_request_id();
         let message = MessageContainer::from_write(request_box, &mut converter);
-        connection.base.message_manager.send_request(
+        connection.world.message_manager.send_request(
             &self.protocol.message_kinds,
             &mut converter,
             channel_kind,
@@ -421,11 +422,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         };
         let mut converter = EntityConverterMut::new(
             &self.global_world_manager,
-            &mut connection.base.local_world_manager,
+            &mut connection.world.local_world_manager,
         );
 
         let response = MessageContainer::from_write(response_box, &mut converter);
-        connection.base.message_manager.send_response(
+        connection.world.message_manager.send_response(
             &self.protocol.message_kinds,
             &mut converter,
             &channel_kind,
@@ -489,7 +490,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         if let Some(connection) = self.server_connection.as_mut() {
             let mut converter = EntityConverterMut::new(
                 &self.global_world_manager,
-                &mut connection.base.local_world_manager,
+                &mut connection.world.local_world_manager,
             );
             let message = MessageContainer::from_write(message_box, &mut converter);
             connection
@@ -520,8 +521,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
         if let Some(connection) = &mut self.server_connection {
             let component_kinds = self.global_world_manager.component_kinds(&global_entity).unwrap();
-            connection.base.host_world_manager.init_entity(
-                &mut connection.base.local_world_manager,
+            connection.world.host_world_manager.init_entity(
+                &mut connection.world.local_world_manager,
                 &global_entity,
                 component_kinds,
             );
@@ -680,7 +681,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 return;
             };
             let new_host_entity = connection
-                .base
+                .world
                 .local_world_manager
                 .host_reserve_entity(&global_entity);
 
@@ -707,7 +708,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 return;
             };
             let send_release_message = connection
-                .base
+                .world
                 .host_world_manager
                 .world_channel
                 .entity_release_authority(&global_entity);
@@ -855,7 +856,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
         if let Some(connection) = &mut self.server_connection {
             //remove entity from server connection
-            connection.base.host_world_manager.despawn_entity(&global_entity);
+            connection.world.host_world_manager.despawn_entity(&global_entity);
         }
 
         // Remove from ECS Record
@@ -901,9 +902,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         // insert component into server connection
         if let Some(connection) = &mut self.server_connection {
             // insert component into server connection
-            if connection.base.host_world_manager.host_has_entity(&global_entity) {
+            if connection.world.host_world_manager.host_has_entity(&global_entity) {
                 connection
-                    .base
+                    .world
                     .host_world_manager
                     .insert_component(&global_entity, &component_kind);
             }
@@ -943,7 +944,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         // remove component from server connection
         if let Some(connection) = &mut self.server_connection {
             connection
-                .base
+                .world
                 .host_world_manager
                 .remove_component(&global_entity, &component_kind);
         }
@@ -1063,8 +1064,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 };
                 // Migrate Entity from Remote -> Host connection
                 let component_kinds = self.global_world_manager.component_kinds(global_entity).unwrap();
-                connection.base.host_world_manager.track_remote_entity(
-                    &mut connection.base.local_world_manager,
+                connection.world.host_world_manager.track_remote_entity(
+                    &mut connection.world.local_world_manager,
                     global_entity,
                     component_kinds,
                 );
@@ -1081,9 +1082,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     return;
                 };
                 connection
-                    .base
+                    .world
                     .host_world_manager
-                    .untrack_remote_entity(&mut connection.base.local_world_manager, global_entity);
+                    .untrack_remote_entity(&mut connection.world.local_world_manager, global_entity);
 
                 // push outgoing event
                 self.incoming_events.push_auth_reset(*world_entity);
@@ -1106,7 +1107,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     return;
                 };
                 connection
-                    .base
+                    .world
                     .local_world_manager
                     .remove_reserved_host_entity(global_entity);
             }
@@ -1283,7 +1284,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     // Handle based on PacketType
                     match header.packet_type {
                         PacketType::Data => {
-                            connection.base.mark_should_send_empty_ack();
+                            connection.world.mark_should_send_empty_ack();
 
                             if connection
                                 .buffer_data_packet(&server_tick, &mut reader)
@@ -1327,14 +1328,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
     fn handle_heartbeats(connection: &mut Connection, io: &mut Io) {
         // send heartbeats
-        if connection.base.should_send_heartbeat() {
+        if connection.world.should_send_heartbeat() {
             Self::send_heartbeat_packet(connection, io);
         }
     }
 
     fn handle_empty_acks(connection: &mut Connection, io: &mut Io) {
         // send empty acks
-        if connection.base.should_send_empty_ack() {
+        if connection.world.should_send_empty_ack() {
             Self::send_heartbeat_packet(connection, io);
         }
     }
@@ -1344,7 +1345,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
         // write header
         connection
-            .base
+            .world
             .write_header(PacketType::Heartbeat, &mut writer);
 
         // send packet
@@ -1352,13 +1353,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             // TODO: pass this on and handle above
             warn!("Client Error: Cannot send heartbeat packet to Server");
         }
-        connection.base.mark_sent();
+        connection.mark_sent();
     }
 
     fn handle_pings(connection: &mut Connection, io: &mut Io) {
         // send pings
         if connection.time_manager.send_ping(io) {
-            connection.base.mark_sent();
+            connection.mark_sent();
         }
     }
 
@@ -1381,7 +1382,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             panic!("Client is already disconnected!");
         };
 
-        let remote_entities = connection.base.remote_entities();
+        let remote_entities = connection.world.remote_entities();
         let entity_events = SharedGlobalWorldManager::despawn_all_entities(
             world,
             &self.global_entity_map,
@@ -1429,13 +1430,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         panic!("Client is disconnected!");
                     };
                     let remote_entity = connection
-                        .base
+                        .world
                         .local_world_manager
                         .entity_converter()
                         .global_entity_to_remote_entity(&global_entity)
                         .unwrap();
                     connection
-                        .base
+                        .world
                         .remote_world_manager
                         .on_entity_channel_opened(&remote_entity);
                 }
@@ -1526,7 +1527,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
         // Local World Manager now tracks the Entity by it's Remote Entity
         connection
-            .base
+            .world
             .local_world_manager
             .insert_remote_entity(&global_entity, remote_entity);
 
@@ -1536,7 +1537,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             .component_kinds(&global_entity)
             .unwrap();
         connection
-            .base
+            .world
             .remote_world_reader
             .track_hosts_redundant_remote_entity(&remote_entity, &component_kinds);
     }

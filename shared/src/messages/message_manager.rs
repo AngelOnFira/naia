@@ -28,7 +28,7 @@ use crate::{constants::FRAGMENTATION_LIMIT_BITS, messages::{
 }, types::{HostType, MessageIndex, PacketIndex}, world::{
     entity::entity_converters::LocalEntityAndGlobalEntityConverterMut,
     remote::entity_waitlist::EntityWaitlist,
-}, LocalEntityAndGlobalEntityConverter, MessageKinds, Protocol};
+}, LocalEntityAndGlobalEntityConverter, MessageKinds, PacketNotifiable, Protocol};
 
 /// Handles incoming/outgoing messages, tracks the delivery status of Messages
 /// so that guaranteed Messages can be re-transmitted to the remote host
@@ -289,7 +289,8 @@ impl MessageManager {
 
     pub fn read_messages(
         &mut self,
-        protocol: &Protocol,
+        channel_kinds: &ChannelKinds,
+        message_kinds: &MessageKinds,
         entity_waitlist: &mut EntityWaitlist,
         entity_converter: &dyn LocalEntityAndGlobalEntityConverter,
         reader: &mut BitReader,
@@ -302,11 +303,11 @@ impl MessageManager {
             }
 
             // read channel id
-            let channel_kind = ChannelKind::de(&protocol.channel_kinds, reader)?;
+            let channel_kind = ChannelKind::de(channel_kinds, reader)?;
 
             // continue read inside channel
             let channel = self.channel_receivers.get_mut(&channel_kind).unwrap();
-            channel.read_messages(&protocol.message_kinds, entity_waitlist, entity_converter, reader)?;
+            channel.read_messages(message_kinds, entity_waitlist, entity_converter, reader)?;
         }
 
         Ok(())
@@ -373,10 +374,10 @@ impl MessageManager {
     }
 }
 
-impl MessageManager {
+impl PacketNotifiable for MessageManager {
     /// Occurs when a packet has been notified as delivered. Stops tracking the
     /// status of Messages in that packet.
-    pub fn notify_packet_delivered(&mut self, packet_index: PacketIndex) {
+    fn notify_packet_delivered(&mut self, packet_index: PacketIndex) {
         if let Some(channel_list) = self.packet_to_message_map.get(&packet_index) {
             for (channel_kind, message_indices) in channel_list {
                 if let Some(channel) = self.channel_senders.get_mut(channel_kind) {

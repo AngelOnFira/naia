@@ -37,9 +37,27 @@ mod inner {
 
     // Packet
 
-    pub trait PacketSender: Send + Sync {
+    pub trait PacketSender: PacketSenderClone + Send + Sync {
         /// Sends a packet to the Server Socket
         fn send(&self, address: &SocketAddr, payload: &[u8]) -> Result<(), SendError>;
+    }
+
+    /// Used to clone Box<dyn PacketSender>
+    pub trait PacketSenderClone {
+        /// Clone the boxed PacketSender
+        fn clone_box(&self) -> Box<dyn PacketSender>;
+    }
+
+    impl<T: 'static + PacketSender + Clone> PacketSenderClone for T {
+        fn clone_box(&self) -> Box<dyn PacketSender> {
+            Box::new(self.clone())
+        }
+    }
+
+    impl Clone for Box<dyn PacketSender> {
+        fn clone(&self) -> Box<dyn PacketSender> {
+            PacketSenderClone::clone_box(self.as_ref())
+        }
     }
 
     pub trait PacketReceiver: PacketReceiverClone + Send + Sync {

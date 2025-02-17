@@ -69,7 +69,7 @@ impl BaseTimeManager {
         let mut writer = BitWriter::new();
 
         // write header
-        connection.base.write_header(PacketType::Pong, &mut writer);
+        connection.world.write_header(PacketType::Pong, &mut writer);
 
         // write index
         ping_index.ser(&mut writer);
@@ -79,7 +79,7 @@ impl BaseTimeManager {
             // TODO: pass this on and handle above
             warn!("Client Error: Cannot send pong packet to Server");
         }
-        connection.base.mark_sent();
+        connection.mark_sent();
     }
 
     pub fn read_pong(

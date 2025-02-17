@@ -11,7 +11,7 @@ use naia_bevy_shared::{
     Channel, ChannelKind, ComponentKind, Message, MessageContainer, MessageKind, Replicate,
     Request, ResponseSendKey, Tick,
 };
-use naia_server::{shared::GlobalResponseId, Events, NaiaServerError, User, UserKey};
+use naia_server::{shared::GlobalResponseId, Events, MainUser, NaiaServerError, UserKey};
 
 // ConnectEvent
 #[derive(Event)]
@@ -19,7 +19,7 @@ pub struct ConnectEvent(pub UserKey);
 
 // DisconnectEvent
 #[derive(Event)]
-pub struct DisconnectEvent(pub UserKey, pub User);
+pub struct DisconnectEvent(pub UserKey, pub MainUser);
 
 // ErrorEvent
 #[derive(Event)]

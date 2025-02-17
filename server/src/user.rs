@@ -1,12 +1,12 @@
 use std::{
-    collections::{hash_set::Iter, HashSet},
+    collections::hash_set::Iter,
     hash::Hash,
     net::SocketAddr,
 };
 
 use naia_shared::BigMapKey;
 
-use crate::{RoomKey, Server};
+use crate::{server::{MainServer, WorldServer}, MainUserMut, MainUserRef, RoomKey, WorldUserMut, WorldUserRef};
 
 // UserKey
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
@@ -22,134 +22,93 @@ impl BigMapKey for UserKey {
     }
 }
 
-// User
-
-#[derive(Clone)]
-pub struct User {
-    auth_addr: Option<SocketAddr>,
-    data_addr: Option<SocketAddr>,
-    rooms_cache: HashSet<RoomKey>,
-}
-
-impl User {
-    pub fn new(auth_addr: SocketAddr) -> User {
-        Self {
-            auth_addr: Some(auth_addr),
-            data_addr: None,
-            rooms_cache: HashSet::new(),
-        }
-    }
-
-    pub fn has_address(&self) -> bool {
-        self.data_addr.is_some()
-    }
-
-    pub fn address(&self) -> SocketAddr {
-        self.data_addr.unwrap()
-    }
-
-    pub fn address_opt(&self) -> Option<SocketAddr> {
-        self.data_addr
-    }
-
-    pub(crate) fn set_address(&mut self, addr: &SocketAddr) {
-        self.data_addr = Some(*addr);
-    }
-
-    pub(crate) fn take_auth_address(&mut self) -> SocketAddr {
-        self.auth_addr.take().unwrap()
-    }
-
-    pub(crate) fn cache_room(&mut self, room_key: &RoomKey) {
-        self.rooms_cache.insert(*room_key);
-    }
-
-    pub(crate) fn uncache_room(&mut self, room_key: &RoomKey) {
-        self.rooms_cache.remove(room_key);
-    }
-
-    pub(crate) fn room_keys(&self) -> &HashSet<RoomKey> {
-        &self.rooms_cache
-    }
-
-    pub(crate) fn room_count(&self) -> usize {
-        self.rooms_cache.len()
-    }
-}
-
 // UserRef
 
 pub struct UserRef<'s, E: Copy + Eq + Hash + Send + Sync> {
-    server: &'s Server<E>,
-    key: UserKey,
+    main_user_ref: MainUserRef<'s>,
+    world_user_ref: WorldUserRef<'s, E>,
 }
 
 impl<'s, E: Copy + Eq + Hash + Send + Sync> UserRef<'s, E> {
-    pub fn new(server: &'s Server<E>, key: &UserKey) -> Self {
-        UserRef { server, key: *key }
+    pub(crate) fn new(main: &'s MainServer, world: &'s WorldServer<E>, key: &UserKey) -> Self {
+
+        let main_user_ref = MainUserRef::new(main, key);
+        let world_user_ref = WorldUserRef::new(world, key);
+
+        Self {
+            main_user_ref,
+            world_user_ref,
+        }
     }
 
     pub fn key(&self) -> UserKey {
-        self.key
+        self.main_user_ref.key()
     }
 
     pub fn address(&self) -> SocketAddr {
-        self.server.user_address(&self.key).unwrap()
+        self.main_user_ref.address()
     }
 
     pub fn room_count(&self) -> usize {
-        self.server.user_rooms_count(&self.key).unwrap()
+        self.world_user_ref.room_count()
     }
 
     /// Returns an iterator of all the keys of the [`Room`]s the User belongs to
     pub fn room_keys(&self) -> impl Iterator<Item = &RoomKey> {
-        self.server.user_room_keys(&self.key).unwrap()
+        self.world_user_ref.room_keys()
     }
 }
 
 // UserMut
 pub struct UserMut<'s, E: Copy + Eq + Hash + Send + Sync> {
-    server: &'s mut Server<E>,
-    key: UserKey,
+    main_user_ref: MainUserMut<'s>,
+    world_user_ref: WorldUserMut<'s, E>,
 }
 
 impl<'s, E: Copy + Eq + Hash + Send + Sync> UserMut<'s, E> {
-    pub fn new(server: &'s mut Server<E>, key: &UserKey) -> Self {
-        UserMut { server, key: *key }
+    pub(crate) fn new(main: &'s mut MainServer, world: &'s mut WorldServer<E>, key: &UserKey) -> Self {
+
+        let main_user_mut = MainUserMut::new(main, key);
+        let world_user_mut = WorldUserMut::new(world, key);
+
+        Self {
+            main_user_ref: main_user_mut,
+            world_user_ref: world_user_mut,
+        }
     }
 
     pub fn key(&self) -> UserKey {
-        self.key
+        self.main_user_ref.key()
     }
 
     pub fn address(&self) -> SocketAddr {
-        self.server.user_address(&self.key).unwrap()
+        self.main_user_ref.address()
     }
 
     pub fn disconnect(&mut self) {
-        self.server.user_queue_disconnect(&self.key);
+        self.main_user_ref.disconnect();
     }
 
     // Rooms
 
     pub fn enter_room(&mut self, room_key: &RoomKey) -> &mut Self {
-        self.server.room_add_user(room_key, &self.key);
+        self.world_user_ref.enter_room(room_key);
 
         self
     }
 
     pub fn leave_room(&mut self, room_key: &RoomKey) -> &mut Self {
-        self.server.room_remove_user(room_key, &self.key);
+        self.world_user_ref.leave_room(room_key);
 
         self
     }
 
     pub fn room_count(&self) -> usize {
-        self.server.user_rooms_count(&self.key).unwrap()
+        self.world_user_ref.room_count()
     }
 
     /// Returns an iterator of all the keys of the [`Room`]s the User belongs to
     pub fn room_keys(&self) -> Iter<RoomKey> {
-        self.server.user_room_keys(&self.key).unwrap()
+        self.world_user_ref.room_keys()
     }
 }

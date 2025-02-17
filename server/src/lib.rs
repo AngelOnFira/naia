@@ -28,28 +28,36 @@ pub use naia_shared::SerdeBevyServer as SerdeBevy;
 mod connection;
 mod error;
 mod events;
+mod main_events;
+mod world_events;
 mod handshake;
 mod request;
 mod room;
 mod server;
-mod server_config;
 mod time_manager;
-mod user;
 mod user_scope;
 mod world;
+mod user;
+mod main_user;
+mod world_user;
 
 pub use connection::tick_buffer_messages::TickBufferMessages;
 pub use error::NaiaServerError;
-pub use events::{
-    AuthEvent, ConnectEvent, DelegateEntityEvent, DespawnEntityEvent, DisconnectEvent,
-    EntityAuthGrantEvent, EntityAuthResetEvent, ErrorEvent, Events, InsertComponentEvent,
+pub use events::{Events, Event};
+pub use main_events::{
+    AuthEvent, ConnectEvent, DisconnectEvent, ErrorEvent,
+};
+pub use world_events::{
+    DelegateEntityEvent, DespawnEntityEvent,
+    EntityAuthGrantEvent, EntityAuthResetEvent, InsertComponentEvent,
     MessageEvent, PublishEntityEvent, RemoveComponentEvent, RequestEvent, SpawnEntityEvent,
-    TickEvent, UnpublishEntityEvent, UpdateComponentEvent,
+    UnpublishEntityEvent, UpdateComponentEvent, TickEvent,
 };
 pub use room::{RoomKey, RoomMut, RoomRef};
-pub use server::Server;
-pub use server_config::ServerConfig;
-pub use user::{User, UserKey, UserMut, UserRef};
+pub use server::{Server, ServerConfig};
+pub use user::{UserKey, UserMut, UserRef};
+pub use world_user::{WorldUser, WorldUserRef, WorldUserMut};
+pub use main_user::{MainUser, MainUserRef, MainUserMut};
 pub use user_scope::{UserScopeMut, UserScopeRef};
 pub use world::{
     entity_mut::EntityMut, entity_owner::EntityOwner, replication_config::ReplicationConfig,

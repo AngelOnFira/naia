@@ -58,6 +58,7 @@ pub use connection::{
     ack_manager::AckManager,
     bandwidth_monitor::BandwidthMonitor,
     base_connection::BaseConnection,
+    world_connection::WorldConnection,
     compression_config::{CompressionConfig, CompressionMode},
     connection_config::ConnectionConfig,
     decoder::Decoder,

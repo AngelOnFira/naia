@@ -2,17 +2,17 @@ use std::hash::Hash;
 
 use naia_shared::{EntityAuthStatus, ReplicaMutWrapper, ReplicatedComponent, WorldMutType};
 
-use crate::{room::RoomKey, server::Server, ReplicationConfig};
+use crate::{server::WorldServer, room::RoomKey, ReplicationConfig};
 
 // EntityMut
 pub struct EntityMut<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> {
-    server: &'s mut Server<E>,
+    server: &'s mut WorldServer<E>,
     world: W,
     entity: E,
 }
 
 impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> EntityMut<'s, E, W> {
-    pub(crate) fn new(server: &'s mut Server<E>, world: W, entity: &E) -> Self {
+    pub(crate) fn new(server: &'s mut WorldServer<E>, world: W, entity: &E) -> Self {
         Self {
             server,
             world,

@@ -5,7 +5,7 @@ use std::{
 
 use naia_shared::{BigMapKey, Channel, ChannelKind, GlobalEntity, Message};
 
-use super::user::UserKey;
+use super::{server::WorldServer, user::UserKey};
 
 // RoomKey
 #[derive(Clone, Copy, Eq, PartialEq, Hash)]
@@ -100,18 +100,16 @@ impl Room {
 
 // room references
 
-use super::server::Server;
-
 // RoomRef
 
 pub struct RoomRef<'s, E: Copy + Eq + Hash + Send + Sync> {
-    server: &'s Server<E>,
+    server: &'s WorldServer<E>,
     key: RoomKey,
 }
 
 impl<'s, E: Copy + Eq + Hash + Send + Sync> RoomRef<'s, E> {
-    pub fn new(server: &'s Server<E>, key: &RoomKey) -> Self {
-        RoomRef { server, key: *key }
+    pub(crate) fn new(server: &'s WorldServer<E>, key: &RoomKey) -> Self {
+        Self { server, key: *key }
     }
 
     pub fn key(&self) -> RoomKey {
@@ -162,13 +160,13 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync> RoomRef<'s, E> {
 
 // RoomMut
 pub struct RoomMut<'s, E: Copy + Eq + Hash + Send + Sync> {
-    server: &'s mut Server<E>,
+    server: &'s mut WorldServer<E>,
     key: RoomKey,
 }
 
 impl<'s, E: Copy + Eq + Hash + Send + Sync> RoomMut<'s, E> {
-    pub fn new(server: &'s mut Server<E>, key: &RoomKey) -> Self {
-        RoomMut { server, key: *key }
+    pub(crate) fn new(server: &'s mut WorldServer<E>, key: &RoomKey) -> Self {
+        Self { server, key: *key }
     }
 
     pub fn key(&self) -> RoomKey {

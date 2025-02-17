@@ -100,4 +100,20 @@ impl MessageKinds {
             .expect("Must properly initialize Message with Protocol via `add_message()` function!")
             .1;
     }
+
+    pub fn clone(&self) -> Self {
+        let current_net_id = self.current_net_id;
+        let net_id_map = self.net_id_map.clone();
+
+        let mut kind_map = HashMap::new();
+        for (key, value) in self.kind_map.iter() {
+            kind_map.insert(*key, (value.0, value.1.box_clone()));
+        }
+
+        Self {
+            current_net_id,
+            kind_map,
+            net_id_map,
+        }
+    }
 }

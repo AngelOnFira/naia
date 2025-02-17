@@ -8,6 +8,7 @@ use crate::{
     transport::{PacketReceiver, PacketSender},
 };
 
+#[derive(Clone)]
 pub struct Io {
     packet_sender: Option<Box<dyn PacketSender>>,
     packet_receiver: Option<Box<dyn PacketReceiver>>,
@@ -38,7 +39,7 @@ impl Io {
                 .map(|mode| Decoder::new(mode.clone()))
         });
 
-        Io {
+        Self {
             packet_sender: None,
             packet_receiver: None,
             outgoing_bandwidth_monitor,

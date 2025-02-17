@@ -2,21 +2,21 @@ use std::{any::Any, hash::Hash};
 
 use log::warn;
 
-use naia_shared::{BaseConnection, BitReader, BitWriter, ChannelKind, ChannelKinds, ConnectionConfig, EntityAndGlobalEntityConverter, EntityEventMessage, EntityEventMessageAction, EntityResponseEvent, GlobalEntitySpawner, HostType, HostWorldEvents, Instant, OwnedBitReader, PacketType, Protocol, Serde, SerdeErr, StandardHeader, SystemChannel, Tick, WorldMutType, WorldRefType};
+use naia_shared::{BaseConnection, BitReader, BitWriter, ChannelKind, ChannelKinds, ComponentKinds, ConnectionConfig, EntityAndGlobalEntityConverter, EntityEventMessage, EntityEventMessageAction, EntityResponseEvent, GlobalEntitySpawner, HostType, HostWorldEvents, Instant, MessageKinds, OwnedBitReader, PacketType, Protocol, Serde, SerdeErr, StandardHeader, SystemChannel, Tick, WorldConnection, WorldMutType, WorldRefType};
 
-use crate::request::GlobalRequestManager;
 use crate::{
     connection::{
         io::Io, tick_buffer_sender::TickBufferSender, tick_queue::TickQueue,
         time_manager::TimeManager,
     },
     events::Events,
-    request::GlobalResponseManager,
+    request::{GlobalResponseManager, GlobalRequestManager},
     world::global_world_manager::GlobalWorldManager,
 };
 
 pub struct Connection {
     pub base: BaseConnection,
+    pub world: WorldConnection,
     pub time_manager: TimeManager,
     pub tick_buffer: TickBufferSender,
     /// Small buffer when receiving updates (entity actions, entity updates) from the server
@@ -37,11 +37,12 @@ impl Connection {
         let tick_buffer = TickBufferSender::new(channel_kinds);
 
         let mut connection = Self {
-            base: BaseConnection::new(
+            base: BaseConnection::new(connection_config),
+            world: WorldConnection::new(
+                connection_config,
                 &None,
                 HostType::Client,
                 0,
-                connection_config,
                 channel_kinds,
                 global_world_manager,
             ),
@@ -55,8 +56,8 @@ impl Connection {
         let existing_entities = global_world_manager.entities();
         for entity in existing_entities {
             let component_kinds = global_world_manager.component_kinds(&entity).unwrap();
-            connection.base.host_world_manager.init_entity(
-                &mut connection.base.local_world_manager,
+            connection.world.host_world_manager.init_entity(
+                &mut connection.world.local_world_manager,
                 &entity,
                 component_kinds,
             );
@@ -67,9 +68,14 @@ impl Connection {
 
     // Incoming data
 
+    /// Record that a message has been sent (to prevent needing to send a
+    /// heartbeat)
+    pub fn mark_sent(&mut self) {
+        self.world.mark_sent();
+    }
+
     pub fn process_incoming_header(&mut self, header: &StandardHeader) {
-        self.base
-            .process_incoming_header(header, &mut [&mut self.tick_buffer]);
+        self.world.process_incoming_header(header, &mut [&mut self.tick_buffer]);
     }
 
     pub fn buffer_data_packet(
@@ -86,15 +92,19 @@ impl Connection {
     /// `receiving_tick`. Reads packets, storing necessary data into an internal buffer
     pub fn read_buffered_packets(
         &mut self,
-        protocol: &Protocol,
+        channel_kinds: &ChannelKinds,
+        message_kinds: &MessageKinds,
+        component_kinds: &ComponentKinds,
     ) -> Result<(), SerdeErr> {
         let receiving_tick = self.time_manager.client_receiving_tick;
 
         while let Some((server_tick, owned_reader)) = self.jitter_buffer.pop_item(receiving_tick) {
             let mut reader = owned_reader.borrow();
 
-            self.base.read_packet(
-                protocol,
+            self.world.read_packet(
+                channel_kinds,
+                message_kinds,
+                component_kinds,
                 &server_tick,
                 true,
                 &mut reader,
@@ -116,11 +126,11 @@ impl Connection {
     ) -> Vec<EntityResponseEvent> {
         let mut response_events = Vec::new();
         // Receive Message Events
-        let messages = self.base.message_manager.receive_messages(
+        let messages = self.world.message_manager.receive_messages(
             &protocol.message_kinds,
             now,
-            self.base.local_world_manager.entity_converter(),
-            &mut self.base.remote_world_manager.entity_waitlist,
+            self.world.local_world_manager.entity_converter(),
+            &mut self.world.remote_world_manager.entity_waitlist,
         );
         for (channel_kind, messages) in messages {
             if channel_kind == ChannelKind::of::<SystemChannel>() {
@@ -159,7 +169,7 @@ impl Connection {
         }
 
         // Receive Request and Response Events
-        let (requests, responses) = self.base.message_manager.receive_requests_and_responses();
+        let (requests, responses) = self.world.message_manager.receive_requests_and_responses();
         // Requests
         for (channel_kind, requests) in requests {
             for (local_response_id, request) in requests {
@@ -176,11 +186,11 @@ impl Connection {
         }
 
         // Receive World Events
-        let remote_events = self.base.remote_world_reader.take_incoming_events();
-        let world_events = self.base.remote_world_manager.process_world_events(
+        let remote_events = self.world.remote_world_reader.take_incoming_events();
+        let world_events = self.world.remote_world_manager.process_world_events(
             global_entity_map,
             global_world_manager,
-            &mut self.base.local_world_manager,
+            &mut self.world.local_world_manager,
             &protocol.component_kinds,
             world,
             now,
@@ -203,12 +213,12 @@ impl Connection {
         global_world_manager: &GlobalWorldManager,
     ) {
         let rtt_millis = self.time_manager.rtt();
-        self.base.collect_messages(now, &rtt_millis);
+        self.world.collect_messages(now, &rtt_millis);
         self.tick_buffer.collect_messages(
             &self.time_manager.client_sending_tick,
             &self.time_manager.server_receivable_tick,
         );
-        let mut host_world_events = self.base.host_world_manager.take_outgoing_events(
+        let mut host_world_events = self.world.host_world_manager.take_outgoing_events(
             world,
             converter,
             global_world_manager,
@@ -233,7 +243,7 @@ impl Connection {
             }
         }
         if any_sent {
-            self.base.mark_sent();
+            self.mark_sent();
         }
     }
 
@@ -249,7 +259,7 @@ impl Connection {
         host_world_events: &mut HostWorldEvents,
     ) -> bool {
         if host_world_events.has_events()
-            || self.base.message_manager.has_outgoing_messages()
+            || self.world.message_manager.has_outgoing_messages()
             || self.tick_buffer.has_messages()
         {
             let writer = self.write_packet(
@@ -282,7 +292,7 @@ impl Connection {
         global_world_manager: &GlobalWorldManager,
         host_world_events: &mut HostWorldEvents,
     ) -> BitWriter {
-        let next_packet_index = self.base.next_packet_index();
+        let next_packet_index = self.world.next_packet_index();
 
         let mut writer = BitWriter::new();
 
@@ -294,7 +304,7 @@ impl Connection {
         writer.reserve_bits(4);
 
         // write header
-        self.base.write_header(PacketType::Data, &mut writer);
+        self.world.write_header(PacketType::Data, &mut writer);
 
         // write client tick
         let client_tick: Tick = self.time_manager.client_sending_tick;
@@ -306,7 +316,7 @@ impl Connection {
         self.tick_buffer.write_messages(
             &protocol,
             global_world_manager,
-            &mut self.base.local_world_manager,
+            &mut self.world.local_world_manager,
             &mut writer,
             next_packet_index,
             &client_tick,
@@ -314,7 +324,7 @@ impl Connection {
         );
 
         // write common parts of packet (messages & world events)
-        self.base.write_packet(
+        self.world.write_packet(
             protocol,
             now,
             &mut writer,
