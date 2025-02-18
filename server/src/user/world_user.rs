@@ -4,7 +4,7 @@ use std::{
     net::SocketAddr,
 };
 
-use crate::{server::WorldServer, RoomKey, UserKey};
+use crate::{server::WorldServer, RoomKey, UserKey, UserMut};
 
 // User
 
@@ -42,36 +42,6 @@ impl WorldUser {
 
     pub(crate) fn room_count(&self) -> usize {
         self.rooms_cache.len()
-    }
-}
-
-// WorldUserRef
-
-pub struct WorldUserRef<'s, E: Copy + Eq + Hash + Send + Sync> {
-    server: &'s WorldServer<E>,
-    key: UserKey,
-}
-
-impl<'s, E: Copy + Eq + Hash + Send + Sync> WorldUserRef<'s, E> {
-    pub(crate) fn new(server: &'s WorldServer<E>, key: &UserKey) -> Self {
-        Self { server, key: *key }
-    }
-
-    pub fn key(&self) -> UserKey {
-        self.key
-    }
-
-    pub fn address(&self) -> SocketAddr {
-        self.server.user_address(&self.key).unwrap()
-    }
-
-    pub fn room_count(&self) -> usize {
-        self.server.user_rooms_count(&self.key).unwrap()
-    }
-
-    /// Returns an iterator of all the keys of the [`Room`]s the User belongs to
-    pub fn room_keys(&self) -> impl Iterator<Item = &RoomKey> {
-        self.server.user_room_keys(&self.key).unwrap()
     }
 }
 
@@ -119,5 +89,10 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync> WorldUserMut<'s, E> {
     /// Returns an iterator of all the keys of the [`Room`]s the User belongs to
     pub fn room_keys(&self) -> Iter<RoomKey> {
         self.server.user_room_keys(&self.key).unwrap()
+    }
+
+    pub fn upgrade(self) -> UserMut<'s, E> {
+        UserMut::new(None, self.server, &self.key)
+
     }
 }

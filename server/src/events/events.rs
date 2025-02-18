@@ -25,6 +25,12 @@ pub struct Events<E: Hash + Copy + Eq + Sync + Send> {
     world_events: WorldEvents<E>,
 }
 
+impl<E: Hash + Copy + Eq + Sync + Send> From<WorldEvents<E>> for Events<E> {
+    fn from(world_events: WorldEvents<E>) -> Self {
+        Self::new(MainEvents::new(), world_events)
+    }
+}
+
 impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
     pub(crate) fn new(mut main_events: MainEvents, mut world_events: WorldEvents<E>) -> Self {
         if main_events.has::<ConnectEvent>() {

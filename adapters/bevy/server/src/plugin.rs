@@ -4,7 +4,7 @@ use bevy_app::{App, Last, Plugin as PluginType, Startup, Update};
 use bevy_ecs::{entity::Entity, schedule::IntoSystemConfigs};
 
 use naia_bevy_shared::{BeforeReceiveEvents, Protocol, SendPackets, SharedPlugin};
-use naia_server::{Server, ServerConfig};
+use naia_server::{Server, WorldServer, ServerConfig, shared::{Protocol as NaiaProtocol}};
 
 use super::{
     events::{
@@ -12,7 +12,7 @@ use super::{
         InsertComponentEvents, MessageEvents, PublishEntityEvent, RemoveComponentEvents,
         RequestEvents, SpawnEntityEvent, TickEvent, UnpublishEntityEvent, UpdateComponentEvents,
     },
-    server::ServerWrapper,
+    server::ServerImpl,
     systems::{before_receive_events, send_packets, send_packets_init},
 };
 
@@ -35,13 +35,23 @@ pub struct Singleton;
 
 pub struct Plugin {
     config: Mutex<Option<PluginConfig>>,
+    world_only: bool,
 }
 
 impl Plugin {
     pub fn new(server_config: ServerConfig, protocol: Protocol) -> Self {
+        Self::new_impl(server_config, protocol, false)
+    }
+
+    pub fn world_only(server_config: ServerConfig, protocol: Protocol) -> Self {
+        Self::new_impl(server_config, protocol, true)
+    }
+
+    fn new_impl(server_config: ServerConfig, protocol: Protocol, world_only: bool) -> Self {
         let config = PluginConfig::new(server_config, protocol);
         Self {
             config: Mutex::new(Some(config)),
+            world_only,
         }
     }
 }
@@ -54,14 +64,37 @@ impl PluginType for Plugin {
         world_data.add_systems(app);
         app.insert_resource(world_data);
 
-        let server = Server::<Entity>::new(config.server_config, config.protocol.into());
-        let server = ServerWrapper(server);
+        let server_impl = if !self.world_only {
+            let server = Server::<Entity>::new(config.server_config, config.protocol.into());
+            ServerImpl::full(server)
+        } else {
+            let protocol: NaiaProtocol = config.protocol.into();
+            let NaiaProtocol {
+                channel_kinds,
+                message_kinds,
+                component_kinds,
+                tick_interval,
+                compression,
+                client_authoritative_entities,
+                ..
+            } = protocol;
+            let server = WorldServer::<Entity>::new(
+                config.server_config,
+                compression,
+                channel_kinds,
+                message_kinds.clone(),
+                component_kinds,
+                client_authoritative_entities,
+                tick_interval
+            );
+            ServerImpl::world_only(server)
+        };
 
         app
             // SHARED PLUGIN //
             .add_plugins(SharedPlugin::<Singleton>::new())
             // RESOURCES //
-            .insert_resource(server)
+            .insert_resource(server_impl)
             // EVENTS //
             .add_event::<ConnectEvent>()
             .add_event::<DisconnectEvent>()

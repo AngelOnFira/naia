@@ -11,7 +11,7 @@ use log::warn;
 use naia_bevy_shared::{HostOwned, HostSyncEvent, WorldMutType, WorldProxy, WorldProxyMut};
 use naia_server::EntityOwner;
 
-use crate::{plugin::Singleton, server::ServerWrapper, ClientOwned, EntityAuthStatus};
+use crate::{plugin::Singleton, server::ServerImpl, ClientOwned, EntityAuthStatus};
 
 mod naia_events {
     pub use naia_server::{
@@ -32,8 +32,8 @@ mod bevy_events {
 use crate::events::CachedTickEventsState;
 
 pub fn before_receive_events(world: &mut World) {
-    world.resource_scope(|world, mut server: Mut<ServerWrapper>| {
-        if !server.0.is_listening() {
+    world.resource_scope(|world, mut server: Mut<ServerImpl>| {
+        if !server.is_listening() {
             return;
         }
 
@@ -45,7 +45,7 @@ pub fn before_receive_events(world: &mut World) {
         for event in host_component_events {
             match event {
                 HostSyncEvent::Insert(_host_id, entity, component_kind) => {
-                    if server.0.entity_authority_status(&entity) == Some(EntityAuthStatus::Denied) {
+                    if server.entity_authority_status(&entity) == Some(EntityAuthStatus::Denied) {
                         // if auth status is denied, that means the client is performing this operation and it's already being handled
                         continue;
                     }
@@ -54,27 +54,27 @@ pub fn before_receive_events(world: &mut World) {
                         warn!("could not find Component in World which has just been inserted!");
                         continue;
                     };
-                    server.0.insert_component_worldless(&entity, DerefMut::deref_mut(&mut component_mut));
+                    server.insert_component_worldless(&entity, DerefMut::deref_mut(&mut component_mut));
                 }
                 HostSyncEvent::Remove(_host_id, entity, component_kind) => {
-                    if server.0.entity_authority_status(&entity) == Some(EntityAuthStatus::Denied) {
+                    if server.entity_authority_status(&entity) == Some(EntityAuthStatus::Denied) {
                         // if auth status is denied, that means the client is performing this operation and it's already being handled
                         continue;
                     }
-                    server.0.remove_component_worldless(&entity, &component_kind);
+                    server.remove_component_worldless(&entity, &component_kind);
                 }
                 HostSyncEvent::Despawn(_host_id, entity) => {
-                    if server.0.entity_authority_status(&entity) == Some(EntityAuthStatus::Denied) {
+                    if server.entity_authority_status(&entity) == Some(EntityAuthStatus::Denied) {
                         // if auth status is denied, that means the client is performing this operation and it's already being handled
                         continue;
                     }
-                    server.0.despawn_entity_worldless(&entity);
+                    server.despawn_entity_worldless(&entity);
                 }
             }
         }
 
         // Receive Events
-        let mut events = server.0.receive(world.proxy_mut());
+        let mut events = server.receive(world.proxy_mut());
         if !events.is_empty() {
 
             // Connect Event
@@ -152,7 +152,7 @@ pub fn before_receive_events(world: &mut World) {
                     event_writer.send(bevy_events::SpawnEntityEvent(user_key, entity));
                 }
                 for entity in spawned_entities {
-                    let EntityOwner::Client(user_key) = server.0.entity_owner(&entity) else {
+                    let EntityOwner::Client(user_key) = server.entity_owner(&entity) else {
                         panic!("spawned entity that doesn't belong to a client ... shouldn't be possible.");
                     };
                     world.entity_mut(entity).insert(ClientOwned(user_key));
@@ -253,8 +253,8 @@ pub fn send_packets_init(world: &mut World) {
 }
 
 pub fn send_packets(world: &mut World) {
-    world.resource_scope(|world, mut server: Mut<ServerWrapper>| {
-        if !server.0.is_listening() {
+    world.resource_scope(|world, mut server: Mut<ServerImpl>| {
+        if !server.is_listening() {
             return;
         }
 
@@ -270,7 +270,7 @@ pub fn send_packets(world: &mut World) {
                 }
 
                 if did_tick {
-                    server.0.send_all_updates(world.proxy());
+                    server.send_all_updates(world.proxy());
                 }
             },
         );

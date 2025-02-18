@@ -300,7 +300,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Panics if the user does not exist.
     pub fn user(&self, user_key: &UserKey) -> UserRef<E> {
         if self.user_exists(user_key) {
-            return UserRef::new(&self.main_server, &self.world_server, user_key);
+            return UserRef::new(&self.world_server, user_key);
         }
         panic!("No User exists for given Key!");
     }
@@ -310,7 +310,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Returns None if the user does not exist.
     pub fn user_mut(&mut self, user_key: &UserKey) -> UserMut<E> {
         if self.user_exists(user_key) {
-            return UserMut::new(&mut self.main_server, &mut self.world_server, user_key);
+            return UserMut::new(Some(&mut self.main_server), &mut self.world_server, user_key);
         }
         panic!("No User exists for given Key!");
     }

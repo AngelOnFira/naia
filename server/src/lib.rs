@@ -19,7 +19,7 @@ pub mod shared {
         default_channels, BigMap, BigMapKey, BitReader, BitWrite, BitWriter, ConstBitLength,
         FileBitWriter, GlobalResponseId, Random, ResponseReceiveKey, Serde, SerdeErr,
         SignedInteger, SignedVariableInteger, SocketConfig, UnsignedInteger,
-        UnsignedVariableInteger,
+        UnsignedVariableInteger, Protocol,
     };
 }
 
@@ -49,7 +49,6 @@ pub use room::{RoomKey, RoomMut, RoomRef};
 pub use server::{MainServer, Server, ServerConfig, WorldServer};
 pub use user::{
     MainUser, MainUserMut, MainUserRef, UserKey, UserMut, UserRef, WorldUser, WorldUserMut,
-    WorldUserRef,
 };
 pub use user_scope::{UserScopeMut, UserScopeRef};
 pub use world::{

@@ -36,7 +36,7 @@ use crate::{
         global_world_manager::GlobalWorldManager, server_auth_handler::AuthOwner,
     },
     NaiaServerError, ReplicationConfig, RoomKey, RoomMut, RoomRef, ServerConfig, UserKey,
-    UserScopeMut, UserScopeRef, WorldUser, WorldUserMut, WorldUserRef,
+    UserScopeMut, UserScopeRef, WorldUser, WorldUserMut, UserRef,
 };
 
 /// A server that uses either UDP or WebRTC communication to send/receive
@@ -859,9 +859,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// Retrieves an UserRef that exposes read-only operations for the User
     /// associated with the given UserKey.
     /// Panics if the user does not exist.
-    pub fn user(&self, user_key: &UserKey) -> WorldUserRef<E> {
+    pub fn user(&self, user_key: &UserKey) -> UserRef<E> {
         if self.users.contains_key(user_key) {
-            return WorldUserRef::new(self, user_key);
+            return UserRef::new(self, user_key);
         }
         panic!("No User exists for given Key!");
     }
