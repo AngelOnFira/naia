@@ -1,15 +1,20 @@
-use std::{
-    hash::Hash,
-    net::SocketAddr,
-    panic,
-    time::Duration,
+use naia_shared::{
+    Channel, ComponentKind, EntityAndGlobalEntityConverter, EntityAuthStatus,
+    EntityDoesNotExistError, GlobalEntity, Message, Protocol, RemoteEntity, Replicate, Request,
+    Response, ResponseReceiveKey, ResponseSendKey, SocketConfig, Tick, WorldMutType, WorldRefType,
 };
-use log::info;
-use naia_shared::{Channel, ComponentKind, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityDoesNotExistError, GlobalEntity, Message, Protocol, RemoteEntity, Replicate, Request, Response, ResponseReceiveKey, ResponseSendKey, SocketConfig, Tick, WorldMutType, WorldRefType};
+use std::{hash::Hash, net::SocketAddr, panic, time::Duration};
 
-use crate::{transport::{PacketChannel, PacketSender}, events::main_events::WorldPacketEvent, server::{world_server::WorldServer, main_server::MainServer}, connection::tick_buffer_messages::TickBufferMessages, transport::Socket, world::{
-    entity_mut::EntityMut, entity_owner::EntityOwner, entity_ref::EntityRef,
-}, Events, ReplicationConfig, ServerConfig, UserKey, NaiaServerError, RoomKey, UserRef, UserMut, UserScopeRef, UserScopeMut, RoomMut, RoomRef, ConnectEvent, DisconnectEvent};
+use crate::{
+    connection::tick_buffer_messages::TickBufferMessages,
+    events::main_events::WorldPacketEvent,
+    server::{main_server::MainServer, world_server::WorldServer},
+    transport::Socket,
+    transport::{PacketChannel, PacketSender},
+    world::{entity_mut::EntityMut, entity_owner::EntityOwner, entity_ref::EntityRef},
+    ConnectEvent, DisconnectEvent, Events, NaiaServerError, ReplicationConfig, RoomKey, RoomMut,
+    RoomRef, ServerConfig, UserKey, UserMut, UserRef, UserScopeMut, UserScopeRef,
+};
 
 /// A server that uses either UDP or WebRTC communication to send/receive
 /// messages to/from connected clients, and syncs registered entities to
@@ -23,7 +28,6 @@ pub struct Server<E: Copy + Eq + Hash + Send + Sync> {
 impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Create a new Server
     pub fn new<P: Into<Protocol>>(server_config: ServerConfig, protocol: P) -> Self {
-
         // split up protocol
         let protocol: Protocol = protocol.into();
         let Protocol {
@@ -38,8 +42,21 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         } = protocol;
 
         Self {
-            main_server: MainServer::new(server_config.clone(), socket, compression.clone(), message_kinds.clone()),
-            world_server: WorldServer::new(server_config, compression, channel_kinds, message_kinds.clone(), component_kinds, client_authoritative_entities, tick_interval),
+            main_server: MainServer::new(
+                server_config.clone(),
+                socket,
+                compression.clone(),
+                message_kinds.clone(),
+            ),
+            world_server: WorldServer::new(
+                server_config,
+                compression,
+                channel_kinds,
+                message_kinds.clone(),
+                component_kinds,
+                client_authoritative_entities,
+                tick_interval,
+            ),
             to_world_sender_opt: None,
         }
     }
@@ -52,7 +69,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         let world_io_sender = self.main_server.sender_cloned();
         let (to_world_sender, world_io_receiver) = PacketChannel::unbounded();
         self.to_world_sender_opt = Some(to_world_sender);
-        self.world_server.io_load(world_io_sender, world_io_receiver);
+        self.world_server
+            .io_load(world_io_sender, world_io_receiver);
     }
 
     /// Returns whether or not the Server has initialized correctly and is
@@ -92,7 +110,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             if let Err(_e) = to_world_sender.send(&addr, &payload) {
                 main_events.push_error(NaiaServerError::SendError(addr));
             }
-
         }
 
         // world server process
@@ -222,7 +239,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         world_entity: &E,
         config: ReplicationConfig,
     ) {
-        self.world_server.configure_entity_replication(world, world_entity, config);
+        self.world_server
+            .configure_entity_replication(world, world_entity, config);
     }
 
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
@@ -232,7 +250,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         world_entity: &E,
         remote_entity: &RemoteEntity,
     ) {
-        self.world_server.client_request_authority(origin_user, world_entity, remote_entity);
+        self.world_server
+            .client_request_authority(origin_user, world_entity, remote_entity);
     }
 
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
@@ -242,7 +261,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
     pub fn entity_release_authority(&mut self, origin_user: Option<&UserKey>, world_entity: &E) {
-        self.world_server.entity_release_authority(origin_user, world_entity);
+        self.world_server
+            .entity_release_authority(origin_user, world_entity);
     }
 
     /// Retrieves an EntityRef that exposes read-only operations for the
@@ -402,21 +422,29 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
     // This intended to be used by adapter crates, do not use this as it will not update the world
     pub fn insert_component_worldless(&mut self, world_entity: &E, component: &mut dyn Replicate) {
-        self.world_server.insert_component_worldless(world_entity, component);
+        self.world_server
+            .insert_component_worldless(world_entity, component);
     }
 
     // This intended to be used by adapter crates, do not use this as it will not update the world
     pub fn remove_component_worldless(&mut self, world_entity: &E, component_kind: &ComponentKind) {
-        self.world_server.remove_component_worldless(world_entity, component_kind);
+        self.world_server
+            .remove_component_worldless(world_entity, component_kind);
     }
 }
 
 impl<E: Hash + Copy + Eq + Sync + Send> EntityAndGlobalEntityConverter<E> for Server<E> {
-    fn global_entity_to_entity(&self, global_entity: &GlobalEntity) -> Result<E, EntityDoesNotExistError> {
+    fn global_entity_to_entity(
+        &self,
+        global_entity: &GlobalEntity,
+    ) -> Result<E, EntityDoesNotExistError> {
         self.world_server.global_entity_to_entity(global_entity)
     }
 
-    fn entity_to_global_entity(&self, world_entity: &E) -> Result<GlobalEntity, EntityDoesNotExistError> {
+    fn entity_to_global_entity(
+        &self,
+        world_entity: &E,
+    ) -> Result<GlobalEntity, EntityDoesNotExistError> {
         self.world_server.entity_to_global_entity(world_entity)
     }
 }

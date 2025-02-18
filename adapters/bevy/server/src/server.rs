@@ -11,7 +11,10 @@ use naia_server::{
     UserScopeRef,
 };
 
-use naia_bevy_shared::{Channel, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityDoesNotExistError, GlobalEntity, Message, Request, Response, ResponseReceiveKey, ResponseSendKey, Tick};
+use naia_bevy_shared::{
+    Channel, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityDoesNotExistError,
+    GlobalEntity, Message, Request, Response, ResponseReceiveKey, ResponseSendKey, Tick,
+};
 
 #[derive(Resource)]
 pub struct ServerWrapper(pub NaiaServer<Entity>);

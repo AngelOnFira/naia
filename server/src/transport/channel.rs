@@ -1,6 +1,9 @@
 use std::net::SocketAddr;
 
-use smol::{channel, channel::{Receiver, TryRecvError, Sender}};
+use smol::{
+    channel,
+    channel::{Receiver, Sender, TryRecvError},
+};
 
 use super::{
     PacketReceiver as TransportReceiver, PacketSender as TransportSender, RecvError, SendError,
@@ -18,7 +21,8 @@ impl PacketChannel {
 
 impl TransportSender for Sender<(SocketAddr, Box<[u8]>)> {
     fn send(&self, address: &SocketAddr, payload: &[u8]) -> Result<(), SendError> {
-        self.send_blocking((*address, payload.into())).map_err(|_| SendError)
+        self.send_blocking((*address, payload.into()))
+            .map_err(|_| SendError)
     }
 }
 
@@ -44,7 +48,7 @@ impl TransportReceiver for PacketChannelReceiver {
             Ok((address, payload)) => {
                 self.current_payload = Some(payload);
                 return Ok(Some((address, self.current_payload.as_ref().unwrap())));
-            },
+            }
             Err(TryRecvError::Empty) => Ok(None),
             Err(_) => Err(RecvError),
         }

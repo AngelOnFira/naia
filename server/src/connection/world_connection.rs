@@ -2,18 +2,23 @@ use std::{any::Any, hash::Hash, net::SocketAddr};
 
 use log::warn;
 
-use naia_shared::{BigMapKey, BitReader, BitWriter, ChannelKind, ChannelKinds, ComponentKinds, ConnectionConfig, EntityAndGlobalEntityConverter, EntityEventMessage, EntityResponseEvent, GlobalEntitySpawner, HostType, HostWorldEvents, Instant, MessageKinds, PacketType, Serde, SerdeErr, StandardHeader, SystemChannel, Tick, WorldConnection, WorldMutType, WorldRefType};
+use naia_shared::{
+    BigMapKey, BitReader, BitWriter, ChannelKind, ChannelKinds, ComponentKinds, ConnectionConfig,
+    EntityAndGlobalEntityConverter, EntityEventMessage, EntityResponseEvent, GlobalEntitySpawner,
+    HostType, HostWorldEvents, Instant, MessageKinds, PacketType, Serde, SerdeErr, StandardHeader,
+    SystemChannel, Tick, WorldConnection, WorldMutType, WorldRefType,
+};
 
 use crate::{
     connection::{
-        io::Io, ping_config::PingConfig, tick_buffer_messages::TickBufferMessages,
-        tick_buffer_receiver::TickBufferReceiver, ping_manager::PingManager,
+        io::Io, ping_config::PingConfig, ping_manager::PingManager,
+        tick_buffer_messages::TickBufferMessages, tick_buffer_receiver::TickBufferReceiver,
     },
+    events::WorldEvents,
+    request::{GlobalRequestManager, GlobalResponseManager},
     time_manager::TimeManager,
     user::UserKey,
     world::global_world_manager::GlobalWorldManager,
-    request::{GlobalRequestManager, GlobalResponseManager},
-    events::WorldEvents,
 };
 
 pub struct ServerWorldConnection {
@@ -125,7 +130,8 @@ impl ServerWorldConnection {
                     };
                     match event_message.entity.get_inner() {
                         Some(global_entity) => {
-                            response_events.push(event_message.action.to_response_event(&global_entity));
+                            response_events
+                                .push(event_message.action.to_response_event(&global_entity));
                         }
                         None => {
                             warn!(
@@ -177,8 +183,11 @@ impl ServerWorldConnection {
                 now,
                 remote_events,
             );
-            response_events
-                .extend(incoming_events.receive_entity_events(global_entity_map.to_converter(), &self.user_key, world_events));
+            response_events.extend(incoming_events.receive_entity_events(
+                global_entity_map.to_converter(),
+                &self.user_key,
+                world_events,
+            ));
         }
 
         return response_events;

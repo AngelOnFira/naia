@@ -1,21 +1,19 @@
-use std::{
-    collections::HashMap,
-    net::SocketAddr,
-    panic,
-};
+use std::{collections::HashMap, net::SocketAddr, panic};
 
 use log::{info, warn};
 
-use naia_shared::{BigMap, BitReader, CompressionConfig,
-                  FakeEntityConverter,
-                  MessageKinds, PacketType,
-                  Serde, SocketConfig, StandardHeader,
-                  Timer};
+use naia_shared::{
+    BigMap, BitReader, CompressionConfig, FakeEntityConverter, MessageKinds, PacketType, Serde,
+    SocketConfig, StandardHeader, Timer,
+};
 
-use crate::{events::main_events::MainEvents, connection::{base_connection::ServerBaseConnection, io::Io},
-            handshake::{HandshakeAction, HandshakeManager, Handshaker},
-            transport::{PacketSender, AuthReceiver, AuthSender, Socket},
-            MainUser, MainUserMut, MainUserRef, NaiaServerError, ServerConfig, UserKey};
+use crate::{
+    connection::{base_connection::ServerBaseConnection, io::Io},
+    events::main_events::MainEvents,
+    handshake::{HandshakeAction, HandshakeManager, Handshaker},
+    transport::{AuthReceiver, AuthSender, PacketSender, Socket},
+    MainUser, MainUserMut, MainUserRef, NaiaServerError, ServerConfig, UserKey,
+};
 
 /// A server that uses either UDP or WebRTC communication to send/receive
 /// messages to/from connected clients, and syncs registered entities to
@@ -46,7 +44,6 @@ impl MainServer {
         compression_config: Option<CompressionConfig>,
         message_kinds: MessageKinds,
     ) -> Self {
-
         let io = Io::new(
             &server_config.connection.bandwidth_measure_duration,
             &compression_config,
@@ -98,7 +95,6 @@ impl MainServer {
     /// Must be called regularly, maintains connection to and receives messages
     /// from all Clients
     pub fn receive(&mut self) -> MainEvents {
-
         // Need to run this to maintain connection with all clients, and receive packets
         // until none left
         self.maintain_socket();
@@ -166,10 +162,7 @@ impl MainServer {
             return;
         };
         user.set_address(user_address);
-        let new_connection = ServerBaseConnection::new(
-            &self.server_config.connection,
-            user_key,
-        );
+        let new_connection = ServerBaseConnection::new(&self.server_config.connection, user_key);
 
         self.user_connections.insert(user.address(), new_connection);
 
@@ -234,12 +227,10 @@ impl MainServer {
         None
     }
 
-    pub(crate) fn user_disconnect(
-        &mut self,
-        user_key: &UserKey,
-    ) {
+    pub(crate) fn user_disconnect(&mut self, user_key: &UserKey) {
         let user = self.user_delete(user_key);
-        self.incoming_events.push_disconnection(user_key, user.address());
+        self.incoming_events
+            .push_disconnection(user_key, user.address());
     }
 
     pub(crate) fn user_queue_disconnect(&mut self, user_key: &UserKey) {
@@ -287,9 +278,8 @@ impl MainServer {
 
                         // convert bytes into auth object
                         let mut reader = BitReader::new(auth_bytes);
-                        let Ok(auth_message) = self
-                            .message_kinds
-                            .read(&mut reader, &FakeEntityConverter)
+                        let Ok(auth_message) =
+                            self.message_kinds.read(&mut reader, &FakeEntityConverter)
                         else {
                             warn!("Server Error: cannot read auth message");
                             continue;
@@ -324,10 +314,14 @@ impl MainServer {
                     };
 
                     match header.packet_type {
-                        PacketType::Data | PacketType::Heartbeat | PacketType::Pong | PacketType::Ping => {
+                        PacketType::Data
+                        | PacketType::Heartbeat
+                        | PacketType::Pong
+                        | PacketType::Ping => {
                             if let Some(connection) = self.user_connections.get_mut(&address) {
                                 connection.base.mark_heard();
-                                self.incoming_events.push_world_packet(address, owned_reader.take_buffer());
+                                self.incoming_events
+                                    .push_world_packet(address, owned_reader.take_buffer());
                             }
                         }
                         PacketType::Handshake => {
@@ -337,11 +331,16 @@ impl MainServer {
                                 self.user_connections.contains_key(&address),
                             ) {
                                 Ok(HandshakeAction::ForwardPacket) => {
-                                    if let Some(connection) = self.user_connections.get_mut(&address) {
+                                    if let Some(connection) =
+                                        self.user_connections.get_mut(&address)
+                                    {
                                         connection.base.mark_heard();
-                                        self.incoming_events.push_world_packet(address, owned_reader.take_buffer());
+                                        self.incoming_events
+                                            .push_world_packet(address, owned_reader.take_buffer());
                                     } else {
-                                        warn!("Server Error: Cannot forward packet to unknown user..");
+                                        warn!(
+                                            "Server Error: Cannot forward packet to unknown user.."
+                                        );
                                     }
                                 }
                                 Ok(HandshakeAction::SendPacket(packet)) => {

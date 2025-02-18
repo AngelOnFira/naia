@@ -1,6 +1,11 @@
 use std::{any::Any, collections::HashMap};
 
-use naia_shared::{BigMap, ComponentFieldUpdate, ComponentKind, ComponentUpdate, EntityAndGlobalEntityConverter, GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter, ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, SerdeErr, WorldMutType, WorldRefType};
+use naia_shared::{
+    BigMap, ComponentFieldUpdate, ComponentKind, ComponentUpdate, EntityAndGlobalEntityConverter,
+    GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter, ReplicaDynMutWrapper,
+    ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, SerdeErr, WorldMutType,
+    WorldRefType,
+};
 
 use super::{
     component_ref::{ComponentMut, ComponentRef},

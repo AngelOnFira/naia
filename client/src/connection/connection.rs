@@ -2,7 +2,13 @@ use std::{any::Any, hash::Hash};
 
 use log::warn;
 
-use naia_shared::{BaseConnection, BitReader, BitWriter, ChannelKind, ChannelKinds, ComponentKinds, ConnectionConfig, EntityAndGlobalEntityConverter, EntityEventMessage, EntityEventMessageAction, EntityResponseEvent, GlobalEntitySpawner, HostType, HostWorldEvents, Instant, MessageKinds, OwnedBitReader, PacketType, Protocol, Serde, SerdeErr, StandardHeader, SystemChannel, Tick, WorldConnection, WorldMutType, WorldRefType};
+use naia_shared::{
+    BaseConnection, BitReader, BitWriter, ChannelKind, ChannelKinds, ComponentKinds,
+    ConnectionConfig, EntityAndGlobalEntityConverter, EntityEventMessage, EntityEventMessageAction,
+    EntityResponseEvent, GlobalEntitySpawner, HostType, HostWorldEvents, Instant, MessageKinds,
+    OwnedBitReader, PacketType, Protocol, Serde, SerdeErr, StandardHeader, SystemChannel, Tick,
+    WorldConnection, WorldMutType, WorldRefType,
+};
 
 use crate::{
     connection::{
@@ -10,7 +16,7 @@ use crate::{
         time_manager::TimeManager,
     },
     events::Events,
-    request::{GlobalResponseManager, GlobalRequestManager},
+    request::{GlobalRequestManager, GlobalResponseManager},
     world::global_world_manager::GlobalWorldManager,
 };
 
@@ -75,7 +81,8 @@ impl Connection {
     }
 
     pub fn process_incoming_header(&mut self, header: &StandardHeader) {
-        self.world.process_incoming_header(header, &mut [&mut self.tick_buffer]);
+        self.world
+            .process_incoming_header(header, &mut [&mut self.tick_buffer]);
     }
 
     pub fn buffer_data_packet(
@@ -144,7 +151,8 @@ impl Connection {
                     };
                     match event_message.entity.get_inner() {
                         Some(global_entity) => {
-                            response_events.push(event_message.action.to_response_event(&global_entity));
+                            response_events
+                                .push(event_message.action.to_response_event(&global_entity));
                         }
                         None => {
                             match &event_message.action {
@@ -196,7 +204,9 @@ impl Connection {
             now,
             remote_events,
         );
-        response_events.extend(incoming_events.receive_world_events(global_entity_map.to_converter(), world_events));
+        response_events.extend(
+            incoming_events.receive_world_events(global_entity_map.to_converter(), world_events),
+        );
         response_events
     }
 

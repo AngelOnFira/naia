@@ -4,7 +4,10 @@ use std::{
     marker::PhantomData,
 };
 
-use crate::{messages::channels::receivers::reliable_receiver::ReliableReceiver, sequence_less_than, world::component::component_kinds::ComponentKind, EntityAction, MessageIndex as ActionIndex};
+use crate::{
+    messages::channels::receivers::reliable_receiver::ReliableReceiver, sequence_less_than,
+    world::component::component_kinds::ComponentKind, EntityAction, MessageIndex as ActionIndex,
+};
 
 // keep E here! TODO: remove
 pub struct EntityActionReceiver<E: Copy + Hash + Eq> {

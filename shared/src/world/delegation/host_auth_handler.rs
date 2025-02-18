@@ -1,9 +1,12 @@
 use std::collections::HashMap;
 
-use crate::{world::delegation::{
-    auth_channel::{EntityAuthAccessor, EntityAuthChannel, EntityAuthMutator},
-    entity_auth_status::{EntityAuthStatus, HostEntityAuthStatus},
-}, GlobalEntity, HostType};
+use crate::{
+    world::delegation::{
+        auth_channel::{EntityAuthAccessor, EntityAuthChannel, EntityAuthMutator},
+        entity_auth_status::{EntityAuthStatus, HostEntityAuthStatus},
+    },
+    GlobalEntity, HostType,
+};
 
 pub struct HostAuthHandler {
     auth_channels: HashMap<GlobalEntity, (EntityAuthMutator, EntityAuthAccessor)>,
@@ -16,7 +19,11 @@ impl HostAuthHandler {
         }
     }
 
-    pub fn register_entity(&mut self, host_type: HostType, entity: &GlobalEntity) -> EntityAuthAccessor {
+    pub fn register_entity(
+        &mut self,
+        host_type: HostType,
+        entity: &GlobalEntity,
+    ) -> EntityAuthAccessor {
         if self.auth_channels.contains_key(&entity) {
             panic!("Entity cannot register with Server more than once!");
         }

@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, hash::Hash, any::Any, collections::HashMap};
+use std::{any::Any, collections::HashMap, hash::Hash, net::SocketAddr};
 
 use bevy_ecs::{
     entity::Entity,

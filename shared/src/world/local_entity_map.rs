@@ -2,7 +2,10 @@ use std::collections::HashMap;
 
 use log::warn;
 
-use crate::{world::entity::local_entity::{HostEntity, OwnedLocalEntity, RemoteEntity}, EntityDoesNotExistError, GlobalEntity, LocalEntityAndGlobalEntityConverter};
+use crate::{
+    world::entity::local_entity::{HostEntity, OwnedLocalEntity, RemoteEntity},
+    EntityDoesNotExistError, GlobalEntity, LocalEntityAndGlobalEntityConverter,
+};
 
 #[derive(Debug)]
 pub struct LocalEntityRecord {
@@ -41,7 +44,10 @@ pub struct LocalEntityMap {
 }
 
 impl LocalEntityAndGlobalEntityConverter for LocalEntityMap {
-    fn global_entity_to_host_entity(&self, global_entity: &GlobalEntity) -> Result<HostEntity, EntityDoesNotExistError> {
+    fn global_entity_to_host_entity(
+        &self,
+        global_entity: &GlobalEntity,
+    ) -> Result<HostEntity, EntityDoesNotExistError> {
         if let Some(record) = self.world_to_local.get(global_entity) {
             if let Some(host) = record.host {
                 return Ok(host);
@@ -50,7 +56,10 @@ impl LocalEntityAndGlobalEntityConverter for LocalEntityMap {
         Err(EntityDoesNotExistError)
     }
 
-    fn global_entity_to_remote_entity(&self, global_entity: &GlobalEntity) -> Result<RemoteEntity, EntityDoesNotExistError> {
+    fn global_entity_to_remote_entity(
+        &self,
+        global_entity: &GlobalEntity,
+    ) -> Result<RemoteEntity, EntityDoesNotExistError> {
         if let Some(record) = self.world_to_local.get(global_entity) {
             if let Some(remote) = record.remote {
                 return Ok(remote);
@@ -59,7 +68,10 @@ impl LocalEntityAndGlobalEntityConverter for LocalEntityMap {
         Err(EntityDoesNotExistError)
     }
 
-    fn global_entity_to_owned_entity(&self, global_entity: &GlobalEntity) -> Result<OwnedLocalEntity, EntityDoesNotExistError> {
+    fn global_entity_to_owned_entity(
+        &self,
+        global_entity: &GlobalEntity,
+    ) -> Result<OwnedLocalEntity, EntityDoesNotExistError> {
         if let Some(record) = self.world_to_local.get(global_entity) {
             if let Some(remote) = record.remote {
                 return Ok(OwnedLocalEntity::Remote(remote.value()));
@@ -70,14 +82,20 @@ impl LocalEntityAndGlobalEntityConverter for LocalEntityMap {
         Err(EntityDoesNotExistError)
     }
 
-    fn host_entity_to_global_entity(&self, host_entity: &HostEntity) -> Result<GlobalEntity, EntityDoesNotExistError> {
+    fn host_entity_to_global_entity(
+        &self,
+        host_entity: &HostEntity,
+    ) -> Result<GlobalEntity, EntityDoesNotExistError> {
         if let Some(world_entity) = self.host_to_world.get(host_entity) {
             return Ok(*world_entity);
         }
         Err(EntityDoesNotExistError)
     }
 
-    fn remote_entity_to_global_entity(&self, remote_entity: &RemoteEntity) -> Result<GlobalEntity, EntityDoesNotExistError> {
+    fn remote_entity_to_global_entity(
+        &self,
+        remote_entity: &RemoteEntity,
+    ) -> Result<GlobalEntity, EntityDoesNotExistError> {
         if let Some(world_entity) = self.remote_to_world.get(remote_entity) {
             return Ok(*world_entity);
         }
@@ -131,7 +149,10 @@ impl LocalEntityMap {
         record_opt
     }
 
-    pub fn remove_redundant_host_entity(&mut self, world_entity: &GlobalEntity) -> Option<HostEntity> {
+    pub fn remove_redundant_host_entity(
+        &mut self,
+        world_entity: &GlobalEntity,
+    ) -> Option<HostEntity> {
         if let Some(record) = self.world_to_local.get_mut(world_entity) {
             if record.host.is_some() && record.remote.is_some() {
                 let Some(host_entity) = record.host.take() else {

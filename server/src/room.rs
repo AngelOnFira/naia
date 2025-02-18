@@ -68,11 +68,16 @@ impl Room {
         self.entities.insert(*global_entity);
     }
 
-    pub(crate) fn remove_entity(&mut self, global_entity: &GlobalEntity, entity_is_despawned: bool) -> bool {
+    pub(crate) fn remove_entity(
+        &mut self,
+        global_entity: &GlobalEntity,
+        entity_is_despawned: bool,
+    ) -> bool {
         if self.entities.remove(global_entity) {
             if !entity_is_despawned {
                 for user_key in self.users.iter() {
-                    self.entity_removal_queue.push_back((*user_key, *global_entity));
+                    self.entity_removal_queue
+                        .push_back((*user_key, *global_entity));
                 }
             }
             true
@@ -134,7 +139,11 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync> RoomRef<'s, E> {
     // Entities
 
     pub fn has_entity(&self, entity: &E) -> bool {
-        if let Ok(global_entity) = self.server.entity_converter().entity_to_global_entity(entity) {
+        if let Ok(global_entity) = self
+            .server
+            .entity_converter()
+            .entity_to_global_entity(entity)
+        {
             return self.server.room_has_entity(&self.key, &global_entity);
         } else {
             return false;
@@ -149,7 +158,11 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync> RoomRef<'s, E> {
         let mut output = Vec::new();
 
         for global_entity in self.server.room_entities(&self.key) {
-            if let Ok(entity) = self.server.entity_converter().global_entity_to_entity(global_entity) {
+            if let Ok(entity) = self
+                .server
+                .entity_converter()
+                .global_entity_to_entity(global_entity)
+            {
                 output.push(entity);
             }
         }
@@ -207,7 +220,11 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync> RoomMut<'s, E> {
     // Entities
 
     pub fn has_entity(&self, entity: &E) -> bool {
-        if let Ok(global_entity) = self.server.entity_converter().entity_to_global_entity(entity) {
+        if let Ok(global_entity) = self
+            .server
+            .entity_converter()
+            .entity_to_global_entity(entity)
+        {
             return self.server.room_has_entity(&self.key, &global_entity);
         } else {
             return false;

@@ -55,7 +55,8 @@ impl Handshaker for HandshakeManager {
                     let Ok(id_token) = self.recv_identify_request(reader) else {
                         return Ok(HandshakeAction::None);
                     };
-                    let Some(user_key) = self.authenticated_unidentified_users.remove(&id_token) else {
+                    let Some(user_key) = self.authenticated_unidentified_users.remove(&id_token)
+                    else {
                         return Ok(HandshakeAction::None);
                     };
                     // remove identity token from map
@@ -64,11 +65,15 @@ impl Handshaker for HandshakeManager {
                     }
 
                     // User is authenticated
-                    self.authenticated_and_identified_users.insert(*address, user_key);
+                    self.authenticated_and_identified_users
+                        .insert(*address, user_key);
 
                     // send identify response
                     let identify_response = Self::write_identity_response().to_packet();
-                    return Ok(HandshakeAction::FinalizeConnection(user_key, identify_response));
+                    return Ok(HandshakeAction::FinalizeConnection(
+                        user_key,
+                        identify_response,
+                    ));
                 }
             }
             HandshakeHeader::ClientConnectRequest => {

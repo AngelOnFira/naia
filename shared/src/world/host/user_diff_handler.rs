@@ -62,7 +62,11 @@ impl UserDiffHandler {
     //        return self.receivers.contains_key(component_key);
     //    }
 
-    pub fn diff_mask_is_clear(&self, entity: &GlobalEntity, component_kind: &ComponentKind) -> bool {
+    pub fn diff_mask_is_clear(
+        &self,
+        entity: &GlobalEntity,
+        component_kind: &ComponentKind,
+    ) -> bool {
         let Some(receiver) = self.receivers.get(&(*entity, *component_kind)) else {
             panic!("Should not call this unless we're sure there's a receiver");
         };

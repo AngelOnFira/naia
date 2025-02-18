@@ -1,12 +1,17 @@
-use std::{net::SocketAddr, hash::Hash, any::Any, collections::HashMap, marker::PhantomData, mem, vec::IntoIter};
+use std::{
+    any::Any, collections::HashMap, hash::Hash, marker::PhantomData, mem, net::SocketAddr,
+    vec::IntoIter,
+};
 
 use log::warn;
 
 use naia_shared::{
-    Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter, EntityEvent, EntityResponseEvent,
-    GlobalResponseId, Message, MessageContainer, MessageKind, Replicate, Request, ResponseSendKey, Tick};
+    Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter, EntityEvent,
+    EntityResponseEvent, GlobalResponseId, Message, MessageContainer, MessageKind, Replicate,
+    Request, ResponseSendKey, Tick,
+};
 
-use crate::{NaiaServerError, user::UserKey, ConnectEvent, DisconnectEvent, ErrorEvent};
+use crate::{user::UserKey, ConnectEvent, DisconnectEvent, ErrorEvent, NaiaServerError};
 
 pub struct WorldEvents<E: Hash + Copy + Eq + Sync + Send> {
     connections: Vec<UserKey>,
@@ -286,8 +291,10 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvents<E> {
                     if let Ok(entity) = converter.global_entity_to_entity(&global_entity) {
                         self.push_insert(user_key, &entity, &component_kind);
                     }
-                    response_events
-                        .push(EntityResponseEvent::InsertComponent(global_entity, component_kind));
+                    response_events.push(EntityResponseEvent::InsertComponent(
+                        global_entity,
+                        component_kind,
+                    ));
                 }
                 EntityEvent::RemoveComponent(global_entity, component_box) => {
                     let kind = component_box.kind();
@@ -398,7 +405,9 @@ pub struct MessageEvent<C: Channel, M: Message> {
     phantom_c: PhantomData<C>,
     phantom_m: PhantomData<M>,
 }
-impl<E: Hash + Copy + Eq + Sync + Send, C: Channel, M: Message> WorldEvent<E> for MessageEvent<C, M> {
+impl<E: Hash + Copy + Eq + Sync + Send, C: Channel, M: Message> WorldEvent<E>
+    for MessageEvent<C, M>
+{
     type Iter = IntoIter<(UserKey, M)>;
 
     fn iter(events: &mut WorldEvents<E>) -> Self::Iter {
@@ -469,7 +478,9 @@ pub struct RequestEvent<C: Channel, Q: Request> {
     phantom_c: PhantomData<C>,
     phantom_m: PhantomData<Q>,
 }
-impl<E: Hash + Copy + Eq + Sync + Send, C: Channel, Q: Request> WorldEvent<E> for RequestEvent<C, Q> {
+impl<E: Hash + Copy + Eq + Sync + Send, C: Channel, Q: Request> WorldEvent<E>
+    for RequestEvent<C, Q>
+{
     type Iter = IntoIter<(UserKey, ResponseSendKey<Q::Response>, Q)>;
 
     fn iter(events: &mut WorldEvents<E>) -> Self::Iter {

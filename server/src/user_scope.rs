@@ -35,14 +35,16 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync> UserScopeMut<'s, E> {
 
     /// Adds an Entity to the User's scope
     pub fn include(&mut self, world_entity: &E) -> &mut Self {
-        self.server.user_scope_set_entity(&self.key, world_entity, true);
+        self.server
+            .user_scope_set_entity(&self.key, world_entity, true);
 
         self
     }
 
     /// Removes an Entity from the User's scope
     pub fn exclude(&mut self, world_entity: &E) -> &mut Self {
-        self.server.user_scope_set_entity(&self.key, world_entity, false);
+        self.server
+            .user_scope_set_entity(&self.key, world_entity, false);
 
         self
     }

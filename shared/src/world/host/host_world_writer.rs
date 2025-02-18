@@ -4,9 +4,17 @@ use std::{
     hash::Hash,
 };
 
-use crate::{messages::channels::senders::indexed_message_writer::IndexedMessageWriter, sequence_list::SequenceList, world::{
-    entity::entity_converters::GlobalWorldManagerType, local_world_manager::LocalWorldManager,
-}, BitWrite, BitWriter, ComponentKind, ComponentKinds, ConstBitLength, EntityAction, EntityActionType, EntityAndGlobalEntityConverter, EntityConverterMut, GlobalEntity, HostWorldEvents, HostWorldManager, Instant, MessageIndex, PacketIndex, Serde, UnsignedVariableInteger, WorldRefType};
+use crate::{
+    messages::channels::senders::indexed_message_writer::IndexedMessageWriter,
+    sequence_list::SequenceList,
+    world::{
+        entity::entity_converters::GlobalWorldManagerType, local_world_manager::LocalWorldManager,
+    },
+    BitWrite, BitWriter, ComponentKind, ComponentKinds, ConstBitLength, EntityAction,
+    EntityActionType, EntityAndGlobalEntityConverter, EntityConverterMut, GlobalEntity,
+    HostWorldEvents, HostWorldManager, Instant, MessageIndex, PacketIndex, Serde,
+    UnsignedVariableInteger, WorldRefType,
+};
 
 use super::entity_action_event::EntityActionEvent;
 
@@ -241,7 +249,6 @@ impl HostWorldWriter {
                 }
             }
             EntityActionEvent::InsertComponent(global_entity, component) => {
-
                 // get world entity
                 let world_entity = entity_converter
                     .global_entity_to_entity(global_entity)
@@ -407,7 +414,10 @@ impl HostWorldWriter {
 
         for global_entity in all_update_entities {
             // get LocalEntity
-            let host_entity = local_world_manager.entity_converter().global_entity_to_host_entity(&global_entity).unwrap();
+            let host_entity = local_world_manager
+                .entity_converter()
+                .global_entity_to_host_entity(&global_entity)
+                .unwrap();
 
             // get World Entity
             let world_entity = converter.global_entity_to_entity(&global_entity).unwrap();

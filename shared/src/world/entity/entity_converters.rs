@@ -140,13 +140,14 @@ impl<'a, 'b> EntityConverterMut<'a, 'b> {
     }
 }
 
-impl<'a, 'b> LocalEntityAndGlobalEntityConverter for EntityConverterMut<'a, 'b>
-{
+impl<'a, 'b> LocalEntityAndGlobalEntityConverter for EntityConverterMut<'a, 'b> {
     fn global_entity_to_host_entity(
         &self,
         global_entity: &GlobalEntity,
     ) -> Result<HostEntity, EntityDoesNotExistError> {
-        self.local_world_manager.entity_converter().global_entity_to_host_entity(global_entity)
+        self.local_world_manager
+            .entity_converter()
+            .global_entity_to_host_entity(global_entity)
     }
 
     fn global_entity_to_remote_entity(
@@ -186,20 +187,21 @@ impl<'a, 'b> LocalEntityAndGlobalEntityConverter for EntityConverterMut<'a, 'b>
     }
 }
 
-impl<'a, 'b> LocalEntityAndGlobalEntityConverterMut for EntityConverterMut<'a, 'b>
-{
+impl<'a, 'b> LocalEntityAndGlobalEntityConverterMut for EntityConverterMut<'a, 'b> {
     fn get_or_reserve_entity(
         &mut self,
         global_entity: &GlobalEntity,
     ) -> Result<OwnedLocalEntity, EntityDoesNotExistError> {
-
         if !self
             .global_world_manager
             .entity_can_relate_to_user(global_entity, self.local_world_manager.get_user_key())
         {
             return Err(EntityDoesNotExistError);
         }
-        let result = self.local_world_manager.entity_converter().global_entity_to_owned_entity(global_entity);
+        let result = self
+            .local_world_manager
+            .entity_converter()
+            .global_entity_to_owned_entity(global_entity);
         if result.is_ok() {
             return result;
         }

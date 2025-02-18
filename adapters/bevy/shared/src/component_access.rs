@@ -3,7 +3,10 @@ use std::{any::Any, marker::PhantomData};
 use bevy_app::{App, Update};
 use bevy_ecs::{component::Component, entity::Entity, schedule::IntoSystemConfigs, world::World};
 
-use naia_shared::{EntityAndGlobalEntityConverter, GlobalWorldManagerType, ReplicaDynMutWrapper, ReplicaDynRefWrapper, Replicate};
+use naia_shared::{
+    EntityAndGlobalEntityConverter, GlobalWorldManagerType, ReplicaDynMutWrapper,
+    ReplicaDynRefWrapper, Replicate,
+};
 
 use super::{
     change_detection::{on_component_added, on_component_removed},
@@ -18,13 +21,21 @@ pub trait AppTag: Send + Sync + 'static {
 pub trait ComponentAccess: Send + Sync {
     fn add_systems(&self, app: &mut App);
     fn box_clone(&self) -> Box<dyn ComponentAccess>;
-    fn component<'w>(&self, world: &'w World, world_entity: &Entity) -> Option<ReplicaDynRefWrapper<'w>>;
+    fn component<'w>(
+        &self,
+        world: &'w World,
+        world_entity: &Entity,
+    ) -> Option<ReplicaDynRefWrapper<'w>>;
     fn component_mut<'w>(
         &self,
         world: &'w mut World,
         world_entity: &Entity,
     ) -> Option<ReplicaDynMutWrapper<'w>>;
-    fn remove_component(&self, world: &mut World, world_entity: &Entity) -> Option<Box<dyn Replicate>>;
+    fn remove_component(
+        &self,
+        world: &mut World,
+        world_entity: &Entity,
+    ) -> Option<Box<dyn Replicate>>;
     fn mirror_components(
         &self,
         world: &mut World,
@@ -82,7 +93,11 @@ impl<R: Replicate + Component> ComponentAccess for ComponentAccessor<R> {
         );
     }
 
-    fn component<'w>(&self, world: &'w World, world_entity: &Entity) -> Option<ReplicaDynRefWrapper<'w>> {
+    fn component<'w>(
+        &self,
+        world: &'w World,
+        world_entity: &Entity,
+    ) -> Option<ReplicaDynRefWrapper<'w>> {
         if let Some(component_ref) = world.get::<R>(*world_entity) {
             let wrapper = ComponentDynRef(component_ref);
             let component_dyn_ref = ReplicaDynRefWrapper::new(wrapper);
@@ -104,7 +119,11 @@ impl<R: Replicate + Component> ComponentAccess for ComponentAccessor<R> {
         None
     }
 
-    fn remove_component(&self, world: &mut World, world_entity: &Entity) -> Option<Box<dyn Replicate>> {
+    fn remove_component(
+        &self,
+        world: &mut World,
+        world_entity: &Entity,
+    ) -> Option<Box<dyn Replicate>> {
         let result: Option<R> = world.entity_mut(*world_entity).take::<R>();
         let casted: Option<Box<dyn Replicate>> = result.map(|inner: R| {
             let boxed_r: Box<R> = Box::new(inner);
@@ -124,7 +143,8 @@ impl<R: Replicate + Component> ComponentAccess for ComponentAccessor<R> {
         unsafe {
             let world = world.as_unsafe_world_cell();
             if let Ok(immutable_component) = query.get_unchecked(world, *immutable_world_entity) {
-                if let Ok(mut mutable_component) = query.get_unchecked(world, *mutable_world_entity) {
+                if let Ok(mut mutable_component) = query.get_unchecked(world, *mutable_world_entity)
+                {
                     let some_r: &R = &immutable_component;
                     mutable_component.mirror(some_r);
                 }
@@ -186,8 +206,11 @@ impl<R: Replicate + Component> ComponentAccess for ComponentAccessor<R> {
             if global_manager.entity_needs_mutator_for_delegation(&global_entity) {
                 let component_kind = component_mut.kind();
                 let diff_mask_size = component_mut.diff_mask_size();
-                let mutator =
-                    global_manager.register_component(&global_entity, &component_kind, diff_mask_size);
+                let mutator = global_manager.register_component(
+                    &global_entity,
+                    &component_kind,
+                    diff_mask_size,
+                );
                 component_mut.enable_delegation(&accessor, Some(&mutator));
             } else {
                 component_mut.enable_delegation(&accessor, None);

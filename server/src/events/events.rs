@@ -1,14 +1,23 @@
-use std::{hash::Hash, collections::HashMap};
+use std::{collections::HashMap, hash::Hash};
 
-use naia_shared::{Channel, ChannelKind, ComponentKind, GlobalResponseId, Message, MessageContainer, MessageKind, Replicate, Request};
+use naia_shared::{
+    Channel, ChannelKind, ComponentKind, GlobalResponseId, Message, MessageContainer, MessageKind,
+    Replicate, Request,
+};
 
 use crate::{
-    events::{main_events::{MainEvent, MainEvents, AuthEvent, ConnectEvent, DisconnectEvent, ErrorEvent}, world_events::{TickEvent, WorldEvent, WorldEvents,     DelegateEntityEvent, DespawnEntityEvent,
-                                                                  EntityAuthGrantEvent, EntityAuthResetEvent, InsertComponentEvent,
-                                                                  MessageEvent, PublishEntityEvent, RemoveComponentEvent, RequestEvent, SpawnEntityEvent,
-                                                                  UnpublishEntityEvent, UpdateComponentEvent},},
+    events::{
+        main_events::{
+            AuthEvent, ConnectEvent, DisconnectEvent, ErrorEvent, MainEvent, MainEvents,
+        },
+        world_events::{
+            DelegateEntityEvent, DespawnEntityEvent, EntityAuthGrantEvent, EntityAuthResetEvent,
+            InsertComponentEvent, MessageEvent, PublishEntityEvent, RemoveComponentEvent,
+            RequestEvent, SpawnEntityEvent, TickEvent, UnpublishEntityEvent, UpdateComponentEvent,
+            WorldEvent, WorldEvents,
+        },
+    },
     user::UserKey,
-
 };
 
 pub struct Events<E: Hash + Copy + Eq + Sync + Send> {
@@ -17,9 +26,7 @@ pub struct Events<E: Hash + Copy + Eq + Sync + Send> {
 }
 
 impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
-
     pub(crate) fn new(mut main_events: MainEvents, mut world_events: WorldEvents<E>) -> Self {
-
         if main_events.has::<ConnectEvent>() {
             panic!("When using combined Main and World events, MainEvents should not contain ConnectEvent");
         }

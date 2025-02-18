@@ -6,9 +6,8 @@ use naia_serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde, SerdeErr};
 use crate::{
     world::entity::{
         entity_converters::{
-            LocalEntityAndGlobalEntityConverter,
+            EntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverter,
             LocalEntityAndGlobalEntityConverterMut,
-            EntityAndGlobalEntityConverter,
         },
         global_entity::GlobalEntity,
         local_entity::OwnedLocalEntity,

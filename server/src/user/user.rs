@@ -1,12 +1,11 @@
-use std::{
-    collections::hash_set::Iter,
-    hash::Hash,
-    net::SocketAddr,
-};
+use std::{collections::hash_set::Iter, hash::Hash, net::SocketAddr};
 
 use naia_shared::BigMapKey;
 
-use crate::{server::{MainServer, WorldServer}, MainUserMut, MainUserRef, RoomKey, WorldUserMut, WorldUserRef};
+use crate::{
+    server::{MainServer, WorldServer},
+    MainUserMut, MainUserRef, RoomKey, WorldUserMut, WorldUserRef,
+};
 
 // UserKey
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
@@ -31,7 +30,6 @@ pub struct UserRef<'s, E: Copy + Eq + Hash + Send + Sync> {
 
 impl<'s, E: Copy + Eq + Hash + Send + Sync> UserRef<'s, E> {
     pub(crate) fn new(main: &'s MainServer, world: &'s WorldServer<E>, key: &UserKey) -> Self {
-
         let main_user_ref = MainUserRef::new(main, key);
         let world_user_ref = WorldUserRef::new(world, key);
 
@@ -66,8 +64,11 @@ pub struct UserMut<'s, E: Copy + Eq + Hash + Send + Sync> {
 }
 
 impl<'s, E: Copy + Eq + Hash + Send + Sync> UserMut<'s, E> {
-    pub(crate) fn new(main: &'s mut MainServer, world: &'s mut WorldServer<E>, key: &UserKey) -> Self {
-
+    pub(crate) fn new(
+        main: &'s mut MainServer,
+        world: &'s mut WorldServer<E>,
+        key: &UserKey,
+    ) -> Self {
         let main_user_mut = MainUserMut::new(main, key);
         let world_user_mut = WorldUserMut::new(world, key);
 

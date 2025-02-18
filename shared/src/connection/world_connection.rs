@@ -3,12 +3,19 @@ use std::{hash::Hash, net::SocketAddr};
 use naia_serde::{BitReader, BitWriter, Serde, SerdeErr};
 use naia_socket_shared::Instant;
 
-use crate::{messages::{channels::channel_kinds::ChannelKinds, message_manager::MessageManager}, types::{HostType, PacketIndex}, world::{
-    entity::entity_converters::GlobalWorldManagerType,
-    host::{host_world_manager::HostWorldEvents, host_world_writer::HostWorldWriter},
-    local_world_manager::LocalWorldManager,
-    remote::remote_world_reader::RemoteWorldReader,
-}, AckManager, ComponentKinds, ConnectionConfig, EntityAndGlobalEntityConverter, EntityConverterMut, GlobalEntity, HostWorldManager, MessageKinds, PacketType, RemoteWorldManager, StandardHeader, Tick, Timer, WorldRefType};
+use crate::{
+    messages::{channels::channel_kinds::ChannelKinds, message_manager::MessageManager},
+    types::{HostType, PacketIndex},
+    world::{
+        entity::entity_converters::GlobalWorldManagerType,
+        host::{host_world_manager::HostWorldEvents, host_world_writer::HostWorldWriter},
+        local_world_manager::LocalWorldManager,
+        remote::remote_world_reader::RemoteWorldReader,
+    },
+    AckManager, ComponentKinds, ConnectionConfig, EntityAndGlobalEntityConverter,
+    EntityConverterMut, GlobalEntity, HostWorldManager, MessageKinds, PacketType,
+    RemoteWorldManager, StandardHeader, Tick, Timer, WorldRefType,
+};
 
 use super::packet_notifiable::PacketNotifiable;
 
@@ -44,7 +51,6 @@ impl WorldConnection {
             heartbeat_timer: Timer::new(connection_config.heartbeat_interval),
         }
     }
-
 
     // Heartbeats
 
@@ -118,7 +124,8 @@ impl WorldConnection {
         packet_index: PacketIndex,
         has_written: &mut bool,
     ) {
-        let mut converter = EntityConverterMut::new(global_world_manager, &mut self.local_world_manager);
+        let mut converter =
+            EntityConverterMut::new(global_world_manager, &mut self.local_world_manager);
         self.message_manager.write_messages(
             channel_kinds,
             message_kinds,
@@ -181,7 +188,6 @@ impl WorldConnection {
         read_world_events: bool,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
-
         // read messages
         self.message_manager.read_messages(
             channel_kinds,
@@ -211,7 +217,9 @@ impl WorldConnection {
 
 impl PacketNotifiable for WorldConnection {
     fn notify_packet_delivered(&mut self, sent_packet_index: PacketIndex) {
-        self.message_manager.notify_packet_delivered(sent_packet_index);
-        self.host_world_manager.notify_packet_delivered(sent_packet_index, &mut self.local_world_manager);
+        self.message_manager
+            .notify_packet_delivered(sent_packet_index);
+        self.host_world_manager
+            .notify_packet_delivered(sent_packet_index, &mut self.local_world_manager);
     }
 }

@@ -5,7 +5,12 @@ use bevy_ecs::{
     world::{Mut, World},
 };
 
-use naia_shared::{ComponentFieldUpdate, ComponentKind, ComponentUpdate, EntityAndGlobalEntityConverter, GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter, ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicatedComponent, SerdeErr, WorldMutType, WorldRefType};
+use naia_shared::{
+    ComponentFieldUpdate, ComponentKind, ComponentUpdate, EntityAndGlobalEntityConverter,
+    GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter, ReplicaDynMutWrapper,
+    ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicatedComponent,
+    SerdeErr, WorldMutType, WorldRefType,
+};
 
 use super::{
     component_ref::{ComponentMut, ComponentRef},
@@ -385,7 +390,12 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
                 let Some(accessor) = data.component_access(component_kind) else {
                     panic!("ComponentKind has not been registered?");
                 };
-                accessor.component_enable_delegation(converter, global_world_manager, world, entity);
+                accessor.component_enable_delegation(
+                    converter,
+                    global_world_manager,
+                    world,
+                    entity,
+                );
             });
     }
 

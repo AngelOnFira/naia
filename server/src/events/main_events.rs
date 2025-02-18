@@ -1,4 +1,4 @@
-use std::{collections::HashMap, marker::PhantomData, mem, vec::IntoIter, net::SocketAddr};
+use std::{collections::HashMap, marker::PhantomData, mem, net::SocketAddr, vec::IntoIter};
 
 use naia_shared::{Message, MessageContainer, MessageKind};
 

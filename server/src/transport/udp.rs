@@ -194,10 +194,7 @@ impl AuthIo {
                         .unwrap();
                     let auth_bytes = base64::decode(auth_bytes).unwrap();
                     self.buffer[0..auth_bytes.len()].copy_from_slice(&auth_bytes);
-                    return Ok(Some((
-                        addr,
-                        &self.buffer[..auth_bytes.len()],
-                    )));
+                    return Ok(Some((addr, &self.buffer[..auth_bytes.len()])));
                 } else {
                     return Ok(None);
                 }

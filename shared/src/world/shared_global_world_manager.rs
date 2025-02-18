@@ -1,6 +1,8 @@
 use std::hash::Hash;
 
-use crate::{EntityAndGlobalEntityConverter, EntityEvent, GlobalEntity, GlobalWorldManagerType, WorldMutType};
+use crate::{
+    EntityAndGlobalEntityConverter, EntityEvent, GlobalEntity, GlobalWorldManagerType, WorldMutType,
+};
 
 pub struct SharedGlobalWorldManager;
 
@@ -14,7 +16,6 @@ impl SharedGlobalWorldManager {
         let mut output = Vec::new();
 
         for global_entity in entities {
-
             // Get world entity
             let world_entity = converter.global_entity_to_entity(&global_entity).unwrap();
 

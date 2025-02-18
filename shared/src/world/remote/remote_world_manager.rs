@@ -6,15 +6,20 @@ use std::{
 use log::{info, warn};
 use naia_socket_shared::Instant;
 
-use crate::{world::{
-    entity::local_entity::RemoteEntity,
-    local_world_manager::LocalWorldManager,
-    remote::{
-        entity_event::EntityEvent,
-        entity_waitlist::{EntityWaitlist, WaitlistHandle, WaitlistStore},
-        remote_world_reader::RemoteWorldEvents,
+use crate::{
+    world::{
+        entity::local_entity::RemoteEntity,
+        local_world_manager::LocalWorldManager,
+        remote::{
+            entity_event::EntityEvent,
+            entity_waitlist::{EntityWaitlist, WaitlistHandle, WaitlistStore},
+            remote_world_reader::RemoteWorldEvents,
+        },
     },
-}, ComponentFieldUpdate, ComponentKind, ComponentKinds, ComponentUpdate, EntityAction, EntityAndGlobalEntityConverter, GlobalEntity, GlobalEntitySpawner, GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter, Replicate, Tick, WorldMutType};
+    ComponentFieldUpdate, ComponentKind, ComponentKinds, ComponentUpdate, EntityAction,
+    EntityAndGlobalEntityConverter, GlobalEntity, GlobalEntitySpawner, GlobalWorldManagerType,
+    LocalEntityAndGlobalEntityConverter, Replicate, Tick, WorldMutType,
+};
 
 pub struct RemoteWorldManager {
     pub entity_waitlist: EntityWaitlist,
@@ -99,7 +104,12 @@ impl RemoteWorldManager {
             incoming_components,
         );
         let world_converter = spawner.to_converter();
-        self.process_waitlist_actions(local_world_manager.entity_converter(), world_converter, world, now);
+        self.process_waitlist_actions(
+            local_world_manager.entity_converter(),
+            world_converter,
+            world,
+            now,
+        );
     }
 
     /// For each [`EntityAction`] that can be executed now,
@@ -122,7 +132,8 @@ impl RemoteWorldManager {
                     let global_entity = spawner.spawn(world_entity);
                     local_world_manager.insert_remote_entity(&global_entity, remote_entity);
 
-                    self.outgoing_events.push(EntityEvent::SpawnEntity(global_entity));
+                    self.outgoing_events
+                        .push(EntityEvent::SpawnEntity(global_entity));
 
                     // read component list
                     for component_kind in components {
@@ -130,7 +141,13 @@ impl RemoteWorldManager {
                             .remove(&(remote_entity, component_kind))
                             .unwrap();
 
-                        self.process_insert(world, global_entity, world_entity, component, &component_kind);
+                        self.process_insert(
+                            world,
+                            global_entity,
+                            world_entity,
+                            component,
+                            &component_kind,
+                        );
                     }
                 }
                 EntityAction::DespawnEntity(remote_entity) => {
@@ -164,14 +181,21 @@ impl RemoteWorldManager {
                             local_world_manager.global_entity_from_remote(&remote_entity);
                         let world_entity = spawner.global_entity_to_entity(&global_entity).unwrap();
 
-                        self.process_insert(world, global_entity, world_entity, component, &component_kind);
+                        self.process_insert(
+                            world,
+                            global_entity,
+                            world_entity,
+                            component,
+                            &component_kind,
+                        );
                     } else {
                         // entity may have despawned on disconnect or something similar?
                         warn!("received InsertComponent message for nonexistant entity");
                     }
                 }
                 EntityAction::RemoveComponent(remote_entity, component_kind) => {
-                    let global_entity = local_world_manager.global_entity_from_remote(&remote_entity);
+                    let global_entity =
+                        local_world_manager.global_entity_from_remote(&remote_entity);
                     let world_entity = spawner.global_entity_to_entity(&global_entity).unwrap();
                     self.process_remove(world, global_entity, world_entity, component_kind);
                 }
@@ -199,7 +223,13 @@ impl RemoteWorldManager {
             self.insert_waitlist_map
                 .insert((global_entity, *component_kind), handle);
         } else {
-            self.finish_insert(world, global_entity, world_entity, component, component_kind);
+            self.finish_insert(
+                world,
+                global_entity,
+                world_entity,
+                component,
+                component_kind,
+            );
         }
     }
 
@@ -213,10 +243,8 @@ impl RemoteWorldManager {
     ) {
         world.insert_boxed_component(&world_entity, component);
 
-        self.outgoing_events.push(EntityEvent::InsertComponent(
-            global_entity,
-            *component_kind,
-        ));
+        self.outgoing_events
+            .push(EntityEvent::InsertComponent(global_entity, *component_kind));
     }
 
     fn process_remove<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
@@ -278,7 +306,13 @@ impl RemoteWorldManager {
                 let world_entity = world_converter
                     .global_entity_to_entity(&global_entity)
                     .unwrap();
-                self.finish_insert(world, global_entity, world_entity, component, &component_kind);
+                self.finish_insert(
+                    world,
+                    global_entity,
+                    world_entity,
+                    component,
+                    &component_kind,
+                );
             }
         }
     }
@@ -423,7 +457,9 @@ impl RemoteWorldManager {
                     self.update_waitlist_map.remove(&component_key);
                 }
 
-                let world_entity = world_converter.global_entity_to_entity(&global_entity).unwrap();
+                let world_entity = world_converter
+                    .global_entity_to_entity(&global_entity)
+                    .unwrap();
 
                 if world
                     .component_apply_field_update(

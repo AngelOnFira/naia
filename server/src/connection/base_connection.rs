@@ -1,4 +1,3 @@
-
 use naia_shared::{BaseConnection, ConnectionConfig};
 
 use crate::user::UserKey;
@@ -10,15 +9,10 @@ pub struct ServerBaseConnection {
 }
 
 impl ServerBaseConnection {
-    pub fn new(
-        connection_config: &ConnectionConfig,
-        user_key: &UserKey,
-    ) -> Self {
+    pub fn new(connection_config: &ConnectionConfig, user_key: &UserKey) -> Self {
         Self {
             user_key: *user_key,
-            base: BaseConnection::new(
-                connection_config,
-            ),
+            base: BaseConnection::new(connection_config),
             manual_disconnect: false,
         }
     }

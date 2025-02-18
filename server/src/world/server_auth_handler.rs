@@ -59,7 +59,11 @@ impl ServerAuthHandler {
             .map(|host_status| host_status.status())
     }
 
-    pub(crate) fn client_request_authority(&mut self, entity: &GlobalEntity, requester: &AuthOwner) -> bool {
+    pub(crate) fn client_request_authority(
+        &mut self,
+        entity: &GlobalEntity,
+        requester: &AuthOwner,
+    ) -> bool {
         let Some(owner) = self.entity_auth_map.get_mut(entity) else {
             panic!("Entity not registered with ServerAuthHandler");
         };
@@ -90,7 +94,11 @@ impl ServerAuthHandler {
         }
     }
 
-    pub(crate) fn client_release_authority(&mut self, entity: &GlobalEntity, releaser: &AuthOwner) -> bool {
+    pub(crate) fn client_release_authority(
+        &mut self,
+        entity: &GlobalEntity,
+        releaser: &AuthOwner,
+    ) -> bool {
         let Some(owner) = self.entity_auth_map.get_mut(entity) else {
             panic!("Entity not registered with ServerAuthHandler");
         };
@@ -142,7 +150,10 @@ impl ServerAuthHandler {
         return true;
     }
 
-    pub(crate) fn user_all_owned_entities(&self, user_key: &UserKey) -> Option<&HashSet<GlobalEntity>> {
+    pub(crate) fn user_all_owned_entities(
+        &self,
+        user_key: &UserKey,
+    ) -> Option<&HashSet<GlobalEntity>> {
         if let Some(entities) = self.user_to_entity_map.get(user_key) {
             return Some(entities);
         }

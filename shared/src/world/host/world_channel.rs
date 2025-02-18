@@ -10,7 +10,12 @@ use super::{
     entity_action_event::EntityActionEvent, host_world_manager::ActionId,
     user_diff_handler::UserDiffHandler,
 };
-use crate::{world::{host::entity_channel::EntityChannel, local_world_manager::LocalWorldManager}, ChannelSender, ComponentKind, EntityAction, EntityActionReceiver, EntityAndGlobalEntityConverter, GlobalEntity, GlobalWorldManagerType, HostEntity, Instant, ReliableSender, WorldRefType};
+use crate::{
+    world::{host::entity_channel::EntityChannel, local_world_manager::LocalWorldManager},
+    ChannelSender, ComponentKind, EntityAction, EntityActionReceiver,
+    EntityAndGlobalEntityConverter, GlobalEntity, GlobalWorldManagerType, HostEntity, Instant,
+    ReliableSender, WorldRefType,
+};
 
 const RESEND_ACTION_RTT_FACTOR: f32 = 1.5;
 
@@ -195,7 +200,11 @@ impl WorldChannel {
         }
     }
 
-    pub fn host_remove_component(&mut self, world_entity: &GlobalEntity, component_kind: &ComponentKind) {
+    pub fn host_remove_component(
+        &mut self,
+        world_entity: &GlobalEntity,
+        component_kind: &ComponentKind,
+    ) {
         let Some(components) = self.host_world.get_mut(world_entity) else {
             panic!("World Channel: cannot remove component from non-existent entity");
         };
@@ -269,7 +278,11 @@ impl WorldChannel {
             .untrack_hosts_redundant_remote_entity(entity);
     }
 
-    pub fn track_remote_component(&mut self, entity: &GlobalEntity, component_kind: &ComponentKind) {
+    pub fn track_remote_component(
+        &mut self,
+        entity: &GlobalEntity,
+        component_kind: &ComponentKind,
+    ) {
         if !self.host_world.contains_key(entity) {
             panic!("World Channel: cannot insert component into entity that doesn't exist");
         }
@@ -412,7 +425,11 @@ impl WorldChannel {
         self.remote_world.remove(entity);
     }
 
-    pub fn on_remote_insert_component(&mut self, entity: &GlobalEntity, component_kind: &ComponentKind) {
+    pub fn on_remote_insert_component(
+        &mut self,
+        entity: &GlobalEntity,
+        component_kind: &ComponentKind,
+    ) {
         if !self.remote_world.contains_key(entity) {
             panic!("World Channel: cannot insert component into non-existent entity");
         }
@@ -465,7 +482,11 @@ impl WorldChannel {
         }
     }
 
-    pub fn on_remote_remove_component(&mut self, entity: &GlobalEntity, component_kind: &ComponentKind) {
+    pub fn on_remote_remove_component(
+        &mut self,
+        entity: &GlobalEntity,
+        component_kind: &ComponentKind,
+    ) {
         if !self.remote_world.contains_key(entity) {
             panic!("World Channel: cannot remove component from non-existent entity");
         }
@@ -538,12 +559,20 @@ impl WorldChannel {
         local_world_manager.remove_by_world_entity(entity);
     }
 
-    fn on_component_channel_opened(&mut self, entity: &GlobalEntity, component_kind: &ComponentKind) {
+    fn on_component_channel_opened(
+        &mut self,
+        entity: &GlobalEntity,
+        component_kind: &ComponentKind,
+    ) {
         self.diff_handler
             .register_component(&self.address, entity, component_kind);
     }
 
-    fn on_component_channel_closing(&mut self, entity: &GlobalEntity, component_kind: &ComponentKind) {
+    fn on_component_channel_closing(
+        &mut self,
+        entity: &GlobalEntity,
+        component_kind: &ComponentKind,
+    ) {
         self.diff_handler
             .deregister_component(entity, component_kind);
     }
@@ -607,7 +636,6 @@ impl WorldChannel {
         let mut output = HashMap::new();
 
         for (global_entity, entity_channel) in self.entity_channels.iter() {
-
             let world_entity = converter.global_entity_to_entity(global_entity).unwrap();
 
             if entity_channel.is_spawned() && world.has_entity(&world_entity) {
@@ -618,8 +646,10 @@ impl WorldChannel {
                     {
                         continue;
                     }
-                    let entity_is_replicating = global_world_manager.entity_is_replicating(global_entity);
-                    let world_has_component = world.has_component_of_kind(&world_entity, &component_kind);
+                    let entity_is_replicating =
+                        global_world_manager.entity_is_replicating(global_entity);
+                    let world_has_component =
+                        world.has_component_of_kind(&world_entity, &component_kind);
                     if entity_is_replicating && world_has_component {
                         if !output.contains_key(global_entity) {
                             output.insert(*global_entity, HashSet::new());

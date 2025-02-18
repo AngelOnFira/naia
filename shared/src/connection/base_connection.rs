@@ -1,4 +1,3 @@
-
 use crate::backends::Timer;
 
 use super::connection_config::ConnectionConfig;

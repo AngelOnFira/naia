@@ -27,7 +27,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityAndGlobalEntityConverter<E> for Gl
         }
     }
 
-    fn entity_to_global_entity(&self, world_entity: &E) -> Result<GlobalEntity, EntityDoesNotExistError> {
+    fn entity_to_global_entity(
+        &self,
+        world_entity: &E,
+    ) -> Result<GlobalEntity, EntityDoesNotExistError> {
         match self.entity_to_global_map.get(world_entity) {
             Some(global_entity) => Ok(*global_entity),
             None => Err(EntityDoesNotExistError),
@@ -35,7 +38,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityAndGlobalEntityConverter<E> for Gl
     }
 }
 
-pub trait GlobalEntitySpawner<E: Copy + Eq + Hash + Send + Sync>: EntityAndGlobalEntityConverter<E> {
+pub trait GlobalEntitySpawner<E: Copy + Eq + Hash + Send + Sync>:
+    EntityAndGlobalEntityConverter<E>
+{
     fn spawn(&mut self, world_entity: E) -> GlobalEntity;
     fn despawn_by_global(&mut self, global_entity: &GlobalEntity);
     fn despawn_by_world(&mut self, world_entity: &E);
@@ -44,9 +49,9 @@ pub trait GlobalEntitySpawner<E: Copy + Eq + Hash + Send + Sync>: EntityAndGloba
 
 impl<E: Copy + Eq + Hash + Send + Sync> GlobalEntitySpawner<E> for GlobalEntityMap<E> {
     fn spawn(&mut self, world_entity: E) -> GlobalEntity {
-
         let global_entity = self.global_to_entity_map.insert(world_entity);
-        self.entity_to_global_map.insert(world_entity, global_entity);
+        self.entity_to_global_map
+            .insert(world_entity, global_entity);
 
         global_entity
     }

@@ -1,4 +1,3 @@
-
 use log::warn;
 
 use naia_shared::{
@@ -60,11 +59,7 @@ impl BaseTimeManager {
         Ok(ping_index)
     }
 
-    pub(crate) fn send_pong(
-        connection: &mut Connection,
-        io: &mut Io,
-        ping_index: PingIndex,
-    ) {
+    pub(crate) fn send_pong(connection: &mut Connection, io: &mut Io, ping_index: PingIndex) {
         // write pong payload
         let mut writer = BitWriter::new();
 

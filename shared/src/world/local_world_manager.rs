@@ -5,10 +5,13 @@ use std::{
 
 use naia_socket_shared::Instant;
 
-use crate::{world::{
-    entity::local_entity::{HostEntity, RemoteEntity},
-    local_entity_map::LocalEntityMap,
-}, GlobalEntity, KeyGenerator, LocalEntityAndGlobalEntityConverter};
+use crate::{
+    world::{
+        entity::local_entity::{HostEntity, RemoteEntity},
+        local_entity_map::LocalEntityMap,
+    },
+    GlobalEntity, KeyGenerator, LocalEntityAndGlobalEntityConverter,
+};
 
 pub struct LocalWorldManager {
     user_key: u64,
@@ -67,7 +70,10 @@ impl LocalWorldManager {
         }
     }
 
-    pub fn remove_reserved_host_entity(&mut self, global_entity: &GlobalEntity) -> Option<HostEntity> {
+    pub fn remove_reserved_host_entity(
+        &mut self,
+        global_entity: &GlobalEntity,
+    ) -> Option<HostEntity> {
         self.reserved_entities.remove(global_entity)
     }
 
@@ -75,7 +81,11 @@ impl LocalWorldManager {
         HostEntity::new(self.host_entity_generator.generate())
     }
 
-    pub(crate) fn insert_host_entity(&mut self, world_entity: GlobalEntity, host_entity: HostEntity) {
+    pub(crate) fn insert_host_entity(
+        &mut self,
+        world_entity: GlobalEntity,
+        host_entity: HostEntity,
+    ) {
         if self.entity_map.contains_host_entity(&host_entity) {
             panic!("Local Entity already exists!");
         }
@@ -84,12 +94,17 @@ impl LocalWorldManager {
             .insert_with_host_entity(world_entity, host_entity);
     }
 
-    pub fn insert_remote_entity(&mut self, global_entity: &GlobalEntity, remote_entity: RemoteEntity) {
+    pub fn insert_remote_entity(
+        &mut self,
+        global_entity: &GlobalEntity,
+        remote_entity: RemoteEntity,
+    ) {
         if self.entity_map.contains_remote_entity(&remote_entity) {
             panic!("Remote Entity `{:?}` already exists!", remote_entity);
         }
 
-        self.entity_map.insert_with_remote_entity(*global_entity, remote_entity);
+        self.entity_map
+            .insert_with_remote_entity(*global_entity, remote_entity);
     }
 
     pub(crate) fn remove_by_world_entity(&mut self, world_entity: &GlobalEntity) {

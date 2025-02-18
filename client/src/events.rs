@@ -1,6 +1,12 @@
-use std::{hash::Hash, collections::HashMap, marker::PhantomData, mem, net::SocketAddr, vec::IntoIter};
+use std::{
+    collections::HashMap, hash::Hash, marker::PhantomData, mem, net::SocketAddr, vec::IntoIter,
+};
 
-use naia_shared::{Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter, EntityEvent, EntityResponseEvent, GlobalResponseId, Message, MessageContainer, MessageKind, Replicate, Request, ResponseSendKey, Tick};
+use naia_shared::{
+    Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter, EntityEvent,
+    EntityResponseEvent, GlobalResponseId, Message, MessageContainer, MessageKind, Replicate,
+    Request, ResponseSendKey, Tick,
+};
 
 use crate::NaiaClientError;
 
@@ -237,7 +243,12 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
         self.empty = false;
     }
 
-    pub(crate) fn push_update(&mut self, tick: Tick, world_entity: E, component_kind: ComponentKind) {
+    pub(crate) fn push_update(
+        &mut self,
+        tick: Tick,
+        world_entity: E,
+        component_kind: ComponentKind,
+    ) {
         if !self.updates.contains_key(&component_kind) {
             self.updates.insert(component_kind, Vec::new());
         }
@@ -280,8 +291,10 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
                     if let Ok(world_entity) = converter.global_entity_to_entity(&global_entity) {
                         self.push_insert(world_entity, component_kind);
                     }
-                    response_events
-                        .push(EntityResponseEvent::InsertComponent(global_entity, component_kind));
+                    response_events.push(EntityResponseEvent::InsertComponent(
+                        global_entity,
+                        component_kind,
+                    ));
                 }
                 EntityEvent::RemoveComponent(global_entity, component_box) => {
                     let kind = component_box.kind();

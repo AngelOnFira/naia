@@ -5,5 +5,5 @@ pub mod entity_auth_event;
 pub mod entity_converters;
 pub mod error;
 pub mod global_entity;
-pub mod local_entity;
 pub mod global_entity_map;
+pub mod local_entity;

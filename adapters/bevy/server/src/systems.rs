@@ -6,7 +6,7 @@ use bevy_ecs::{
     world::{Mut, World},
 };
 
-use log::{warn, info};
+use log::warn;
 
 use naia_bevy_shared::{HostOwned, HostSyncEvent, WorldMutType, WorldProxy, WorldProxyMut};
 use naia_server::EntityOwner;

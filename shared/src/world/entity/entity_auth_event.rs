@@ -3,7 +3,10 @@ use std::hash::Hash;
 use naia_derive::MessageInternal;
 use naia_serde::SerdeInternal;
 
-use crate::{world::entity::entity_converters::EntityAndGlobalEntityConverter, EntityAuthStatus, EntityProperty, EntityResponseEvent, GlobalEntity, HostEntity, RemoteEntity};
+use crate::{
+    world::entity::entity_converters::EntityAndGlobalEntityConverter, EntityAuthStatus,
+    EntityProperty, EntityResponseEvent, GlobalEntity, HostEntity, RemoteEntity,
+};
 
 #[derive(MessageInternal)]
 pub struct EntityEventMessage {
@@ -28,7 +31,9 @@ impl EntityEventMessageAction {
     pub fn to_response_event(&self, global_entity: &GlobalEntity) -> EntityResponseEvent {
         match self {
             EntityEventMessageAction::Publish => EntityResponseEvent::PublishEntity(*global_entity),
-            EntityEventMessageAction::Unpublish => EntityResponseEvent::UnpublishEntity(*global_entity),
+            EntityEventMessageAction::Unpublish => {
+                EntityResponseEvent::UnpublishEntity(*global_entity)
+            }
             EntityEventMessageAction::EnableDelegation => {
                 EntityResponseEvent::EnableDelegationEntity(*global_entity)
             }

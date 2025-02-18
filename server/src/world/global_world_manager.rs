@@ -6,9 +6,8 @@ use std::{
 use log::warn;
 
 use naia_shared::{
-    BigMapKey, ComponentKind, EntityAuthAccessor,
-    EntityAuthStatus, GlobalDiffHandler, GlobalEntity,
-    GlobalWorldManagerType, MutChannelType, PropertyMutator, Replicate,
+    BigMapKey, ComponentKind, EntityAuthAccessor, EntityAuthStatus, GlobalDiffHandler,
+    GlobalEntity, GlobalWorldManagerType, MutChannelType, PropertyMutator, Replicate,
 };
 
 use super::global_entity_record::GlobalEntityRecord;
@@ -50,14 +49,16 @@ impl GlobalWorldManager {
     }
 
     // Spawn
-    pub fn insert_entity_record(&mut self, global_entity: &GlobalEntity, entity_owner: EntityOwner) {
+    pub fn insert_entity_record(
+        &mut self,
+        global_entity: &GlobalEntity,
+        entity_owner: EntityOwner,
+    ) {
         if self.entity_records.contains_key(global_entity) {
             panic!("entity already initialized!");
         }
-        self.entity_records.insert(
-            *global_entity,
-            GlobalEntityRecord::new(entity_owner),
-        );
+        self.entity_records
+            .insert(*global_entity, GlobalEntityRecord::new(entity_owner));
     }
 
     // Despawn
@@ -69,8 +70,7 @@ impl GlobalWorldManager {
     }
 
     pub fn remove_entity_record(&mut self, global_entity: &GlobalEntity) {
-        self
-            .entity_records
+        self.entity_records
             .remove(global_entity)
             .expect("Cannot despawn non-existant entity!");
     }
@@ -81,28 +81,52 @@ impl GlobalWorldManager {
             return None;
         }
 
-        let component_kind_set = &self.entity_records.get(global_entity).unwrap().component_kinds;
+        let component_kind_set = &self
+            .entity_records
+            .get(global_entity)
+            .unwrap()
+            .component_kinds;
         return Some(component_kind_set.iter().copied().collect());
     }
 
     // Insert Component
-    pub fn insert_component_record(&mut self, global_entity: &GlobalEntity, component_kind: &ComponentKind) {
+    pub fn insert_component_record(
+        &mut self,
+        global_entity: &GlobalEntity,
+        component_kind: &ComponentKind,
+    ) {
         if !self.entity_records.contains_key(global_entity) {
             panic!("entity does not exist!");
         }
-        let component_kind_set = &mut self.entity_records.get_mut(global_entity).unwrap().component_kinds;
+        let component_kind_set = &mut self
+            .entity_records
+            .get_mut(global_entity)
+            .unwrap()
+            .component_kinds;
         component_kind_set.insert(*component_kind);
     }
 
-    pub fn has_component_record(&self, global_entity: &GlobalEntity, component_kind: &ComponentKind) -> bool {
+    pub fn has_component_record(
+        &self,
+        global_entity: &GlobalEntity,
+        component_kind: &ComponentKind,
+    ) -> bool {
         if !self.entity_records.contains_key(global_entity) {
             return false;
         }
-        let component_kind_set = &self.entity_records.get(global_entity).unwrap().component_kinds;
+        let component_kind_set = &self
+            .entity_records
+            .get(global_entity)
+            .unwrap()
+            .component_kinds;
         return component_kind_set.contains(component_kind);
     }
 
-    pub fn insert_component_diff_handler(&mut self, global_entity: &GlobalEntity, component: &mut dyn Replicate) {
+    pub fn insert_component_diff_handler(
+        &mut self,
+        global_entity: &GlobalEntity,
+        component: &mut dyn Replicate,
+    ) {
         let kind = component.kind();
         let diff_mask_length: u8 = component.diff_mask_size();
         let prop_mutator = self.register_component(global_entity, &kind, diff_mask_length);
@@ -110,17 +134,29 @@ impl GlobalWorldManager {
     }
 
     // Remove Component
-    pub fn remove_component_record(&mut self, global_entity: &GlobalEntity, component_kind: &ComponentKind) {
+    pub fn remove_component_record(
+        &mut self,
+        global_entity: &GlobalEntity,
+        component_kind: &ComponentKind,
+    ) {
         if !self.entity_records.contains_key(global_entity) {
             panic!("entity does not exist!");
         }
-        let component_kind_set = &mut self.entity_records.get_mut(global_entity).unwrap().component_kinds;
+        let component_kind_set = &mut self
+            .entity_records
+            .get_mut(global_entity)
+            .unwrap()
+            .component_kinds;
         if !component_kind_set.remove(component_kind) {
             panic!("component does not exist!");
         }
     }
 
-    pub fn remove_component_diff_handler(&mut self, global_entity: &GlobalEntity, component_kind: &ComponentKind) {
+    pub fn remove_component_diff_handler(
+        &mut self,
+        global_entity: &GlobalEntity,
+        component_kind: &ComponentKind,
+    ) {
         self.diff_handler
             .as_ref()
             .write()
@@ -203,7 +239,10 @@ impl GlobalWorldManager {
         }
     }
 
-    pub(crate) fn entity_replication_config(&self, global_entity: &GlobalEntity) -> Option<ReplicationConfig> {
+    pub(crate) fn entity_replication_config(
+        &self,
+        global_entity: &GlobalEntity,
+    ) -> Option<ReplicationConfig> {
         if let Some(record) = self.entity_records.get(global_entity) {
             return Some(record.replication_config);
         }
@@ -253,7 +292,10 @@ impl GlobalWorldManager {
         self.auth_handler.deregister_entity(global_entity);
     }
 
-    pub(crate) fn entity_authority_status(&self, global_entity: &GlobalEntity) -> Option<EntityAuthStatus> {
+    pub(crate) fn entity_authority_status(
+        &self,
+        global_entity: &GlobalEntity,
+    ) -> Option<EntityAuthStatus> {
         self.auth_handler.authority_status(global_entity)
     }
 
@@ -262,16 +304,28 @@ impl GlobalWorldManager {
         self.auth_handler.server_take_authority(global_entity)
     }
 
-    pub(crate) fn client_request_authority(&mut self, global_entity: &GlobalEntity, requester: &AuthOwner) -> bool {
+    pub(crate) fn client_request_authority(
+        &mut self,
+        global_entity: &GlobalEntity,
+        requester: &AuthOwner,
+    ) -> bool {
         self.auth_handler
             .client_request_authority(global_entity, requester)
     }
 
-    pub(crate) fn client_release_authority(&mut self, global_entity: &GlobalEntity, releaser: &AuthOwner) -> bool {
-        self.auth_handler.client_release_authority(global_entity, releaser)
+    pub(crate) fn client_release_authority(
+        &mut self,
+        global_entity: &GlobalEntity,
+        releaser: &AuthOwner,
+    ) -> bool {
+        self.auth_handler
+            .client_release_authority(global_entity, releaser)
     }
 
-    pub(crate) fn user_all_owned_entities(&self, user_key: &UserKey) -> Option<&HashSet<GlobalEntity>> {
+    pub(crate) fn user_all_owned_entities(
+        &self,
+        user_key: &UserKey,
+    ) -> Option<&HashSet<GlobalEntity>> {
         self.auth_handler.user_all_owned_entities(user_key)
     }
 
