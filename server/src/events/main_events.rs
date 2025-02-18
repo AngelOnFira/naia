@@ -2,7 +2,7 @@ use std::{collections::HashMap, marker::PhantomData, mem, vec::IntoIter, net::So
 
 use naia_shared::{Message, MessageContainer, MessageKind};
 
-use crate::{world_events, user::UserKey, NaiaServerError};
+use crate::{events::world_events, user::UserKey, NaiaServerError};
 
 pub struct MainEvents {
     auths: HashMap<MessageKind, Vec<(UserKey, MessageContainer)>>,

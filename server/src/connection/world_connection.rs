@@ -13,7 +13,7 @@ use crate::{
     user::UserKey,
     world::global_world_manager::GlobalWorldManager,
     request::{GlobalRequestManager, GlobalResponseManager},
-    world_events::WorldEvents,
+    events::WorldEvents,
 };
 
 pub struct ServerWorldConnection {

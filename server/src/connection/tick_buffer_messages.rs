@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use naia_shared::{Channel, ChannelKind, Message, MessageContainer, MessageKind};
 
-use crate::{world_events, UserKey};
+use crate::{events::world_events, UserKey};
 
 pub struct TickBufferMessages {
     messages: HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, MessageContainer)>>>,

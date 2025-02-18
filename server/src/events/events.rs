@@ -3,12 +3,12 @@ use std::{hash::Hash, collections::HashMap};
 use naia_shared::{Channel, ChannelKind, ComponentKind, GlobalResponseId, Message, MessageContainer, MessageKind, Replicate, Request};
 
 use crate::{
-    main_events::{MainEvent, MainEvents},
-    user::UserKey, world_events::{WorldEvent, WorldEvents,     DelegateEntityEvent, DespawnEntityEvent,
-                                  EntityAuthGrantEvent, EntityAuthResetEvent, InsertComponentEvent,
-                                  MessageEvent, PublishEntityEvent, RemoveComponentEvent, RequestEvent, SpawnEntityEvent,
-                                  UnpublishEntityEvent, UpdateComponentEvent},
-    AuthEvent, ConnectEvent, DisconnectEvent, ErrorEvent, TickEvent,
+    events::{main_events::{MainEvent, MainEvents, AuthEvent, ConnectEvent, DisconnectEvent, ErrorEvent}, world_events::{TickEvent, WorldEvent, WorldEvents,     DelegateEntityEvent, DespawnEntityEvent,
+                                                                  EntityAuthGrantEvent, EntityAuthResetEvent, InsertComponentEvent,
+                                                                  MessageEvent, PublishEntityEvent, RemoveComponentEvent, RequestEvent, SpawnEntityEvent,
+                                                                  UnpublishEntityEvent, UpdateComponentEvent},},
+    user::UserKey,
+
 };
 
 pub struct Events<E: Hash + Copy + Eq + Sync + Send> {

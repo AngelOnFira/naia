@@ -12,7 +12,7 @@ use naia_shared::{BigMap, BitReader, CompressionConfig,
                   Serde, SocketConfig, StandardHeader,
                   Timer};
 
-use crate::{main_events::MainEvents, connection::{base_connection::ServerBaseConnection, io::Io},
+use crate::{events::main_events::MainEvents, connection::{base_connection::ServerBaseConnection, io::Io},
             handshake::{HandshakeAction, HandshakeManager, Handshaker},
             transport::{PacketSender, AuthReceiver, AuthSender, Socket},
             MainUser, MainUserMut, MainUserRef, NaiaServerError, ServerConfig, UserKey};

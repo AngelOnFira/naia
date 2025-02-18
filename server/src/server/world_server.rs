@@ -13,7 +13,7 @@ use naia_shared::{BigMap, BitReader, BitWriter, Channel, ChannelKind, ChannelKin
 
 use crate::{
     transport::{PacketReceiver, PacketSender},
-    world_events::WorldEvents,
+    events::world_events::WorldEvents,
     room::Room,
     connection::{
         world_connection::ServerWorldConnection, io::Io, tick_buffer_messages::TickBufferMessages},

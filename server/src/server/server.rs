@@ -7,7 +7,7 @@ use std::{
 use log::info;
 use naia_shared::{Channel, ComponentKind, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityDoesNotExistError, GlobalEntity, Message, Protocol, RemoteEntity, Replicate, Request, Response, ResponseReceiveKey, ResponseSendKey, SocketConfig, Tick, WorldMutType, WorldRefType};
 
-use crate::{transport::{PacketChannel, PacketSender}, main_events::WorldPacketEvent, server::{world_server::WorldServer, main_server::MainServer}, connection::tick_buffer_messages::TickBufferMessages, transport::Socket, world::{
+use crate::{transport::{PacketChannel, PacketSender}, events::main_events::WorldPacketEvent, server::{world_server::WorldServer, main_server::MainServer}, connection::tick_buffer_messages::TickBufferMessages, transport::Socket, world::{
     entity_mut::EntityMut, entity_owner::EntityOwner, entity_ref::EntityRef,
 }, Events, ReplicationConfig, ServerConfig, UserKey, NaiaServerError, RoomKey, UserRef, UserMut, UserScopeRef, UserScopeMut, RoomMut, RoomRef, ConnectEvent, DisconnectEvent};
 
