@@ -28,7 +28,7 @@ use crate::{constants::FRAGMENTATION_LIMIT_BITS, messages::{
 }, types::{HostType, MessageIndex, PacketIndex}, world::{
     entity::entity_converters::LocalEntityAndGlobalEntityConverterMut,
     remote::entity_waitlist::EntityWaitlist,
-}, LocalEntityAndGlobalEntityConverter, MessageKinds, PacketNotifiable, Protocol};
+}, LocalEntityAndGlobalEntityConverter, MessageKinds, PacketNotifiable};
 
 /// Handles incoming/outgoing messages, tracks the delivery status of Messages
 /// so that guaranteed Messages can be re-transmitted to the remote host
@@ -235,7 +235,8 @@ impl MessageManager {
 
     pub fn write_messages(
         &mut self,
-        protocol: &Protocol,
+        channel_kinds: &ChannelKinds,
+        message_kinds: &MessageKinds,
         converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
         writer: &mut BitWriter,
         packet_index: PacketIndex,
@@ -263,10 +264,10 @@ impl MessageManager {
             // write ChannelContinue bit
             true.ser(writer);
             // write ChannelIndex
-            channel_kind.ser(&protocol.channel_kinds, writer);
+            channel_kind.ser(channel_kinds, writer);
             // write Messages
             if let Some(message_indices) =
-                channel.write_messages(&protocol.message_kinds, converter, writer, has_written)
+                channel.write_messages(message_kinds, converter, writer, has_written)
             {
                 self.packet_to_message_map
                     .entry(packet_index)

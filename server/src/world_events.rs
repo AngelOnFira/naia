@@ -1,4 +1,4 @@
-use std::{hash::Hash, any::Any, collections::HashMap, marker::PhantomData, mem, vec::IntoIter};
+use std::{net::SocketAddr, hash::Hash, any::Any, collections::HashMap, marker::PhantomData, mem, vec::IntoIter};
 
 use log::warn;
 
@@ -6,9 +6,12 @@ use naia_shared::{
     Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter, EntityEvent, EntityResponseEvent,
     GlobalResponseId, Message, MessageContainer, MessageKind, Replicate, Request, ResponseSendKey, Tick};
 
-use crate::user::UserKey;
+use crate::{NaiaServerError, user::UserKey, ConnectEvent, DisconnectEvent, ErrorEvent};
 
 pub struct WorldEvents<E: Hash + Copy + Eq + Sync + Send> {
+    connections: Vec<UserKey>,
+    disconnections: Vec<(UserKey, SocketAddr)>,
+    errors: Vec<NaiaServerError>,
     ticks: Vec<Tick>,
     messages: HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, MessageContainer)>>>,
     requests: HashMap<
@@ -31,6 +34,9 @@ pub struct WorldEvents<E: Hash + Copy + Eq + Sync + Send> {
 impl<E: Hash + Copy + Eq + Sync + Send> WorldEvents<E> {
     pub(crate) fn new() -> Self {
         Self {
+            connections: Vec::new(),
+            disconnections: Vec::new(),
+            errors: Vec::new(),
             ticks: Vec::new(),
             messages: HashMap::new(),
             requests: HashMap::new(),
@@ -124,6 +130,21 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvents<E> {
     }
 
     // Crate-public
+
+    pub(crate) fn push_connection(&mut self, user_key: &UserKey) {
+        self.connections.push(*user_key);
+        self.empty = false;
+    }
+
+    pub(crate) fn push_disconnection(&mut self, user_key: &UserKey, addr: SocketAddr) {
+        self.disconnections.push((*user_key, addr));
+        self.empty = false;
+    }
+
+    pub(crate) fn push_error(&mut self, error: NaiaServerError) {
+        self.errors.push(error);
+        self.empty = false;
+    }
 
     pub(crate) fn push_tick(&mut self, tick: Tick) {
         self.ticks.push(tick);
@@ -313,6 +334,48 @@ pub trait WorldEvent<E: Hash + Copy + Eq + Sync + Send> {
     fn iter(events: &mut WorldEvents<E>) -> Self::Iter;
 
     fn has(events: &WorldEvents<E>) -> bool;
+}
+
+// ConnectEvent
+impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for ConnectEvent {
+    type Iter = IntoIter<UserKey>;
+
+    fn iter(events: &mut WorldEvents<E>) -> Self::Iter {
+        let list = std::mem::take(&mut events.connections);
+        return IntoIterator::into_iter(list);
+    }
+
+    fn has(events: &WorldEvents<E>) -> bool {
+        !events.connections.is_empty()
+    }
+}
+
+// DisconnectEvent
+impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for DisconnectEvent {
+    type Iter = IntoIter<(UserKey, SocketAddr)>;
+
+    fn iter(events: &mut WorldEvents<E>) -> Self::Iter {
+        let list = std::mem::take(&mut events.disconnections);
+        return IntoIterator::into_iter(list);
+    }
+
+    fn has(events: &WorldEvents<E>) -> bool {
+        !events.disconnections.is_empty()
+    }
+}
+
+// Error Event
+impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for ErrorEvent {
+    type Iter = IntoIter<NaiaServerError>;
+
+    fn iter(events: &mut WorldEvents<E>) -> Self::Iter {
+        let list = std::mem::take(&mut events.errors);
+        return IntoIterator::into_iter(list);
+    }
+
+    fn has(events: &WorldEvents<E>) -> bool {
+        !events.errors.is_empty()
+    }
 }
 
 // Tick Event

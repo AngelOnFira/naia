@@ -14,18 +14,17 @@ use naia_shared::{BigMap, BitReader, CompressionConfig,
 
 use crate::{main_events::MainEvents, connection::{base_connection::ServerBaseConnection, io::Io},
             handshake::{HandshakeAction, HandshakeManager, Handshaker},
-            transport::{AuthReceiver, AuthSender, Socket},
+            transport::{PacketSender, AuthReceiver, AuthSender, Socket},
             MainUser, MainUserMut, MainUserRef, NaiaServerError, ServerConfig, UserKey};
 
 /// A server that uses either UDP or WebRTC communication to send/receive
 /// messages to/from connected clients, and syncs registered entities to
 /// clients to whom they are in-scope
-pub(crate) struct MainServer {
+pub struct MainServer {
     // Config
     server_config: ServerConfig,
     // Protocol
     socket_config: SocketConfig,
-    compression_config: Option<CompressionConfig>,
     message_kinds: MessageKinds,
     // cont
     io: Io,
@@ -57,7 +56,6 @@ impl MainServer {
             // Config
             server_config: server_config.clone(),
             socket_config,
-            compression_config,
             message_kinds,
             // Connection
             io,
@@ -80,6 +78,10 @@ impl MainServer {
         self.io.load(packet_sender, packet_receiver);
 
         self.auth_io = Some((auth_sender, auth_receiver));
+    }
+
+    pub fn sender_cloned(&self) -> Box<dyn PacketSender> {
+        self.io.sender_cloned()
     }
 
     /// Returns whether or not the Server has initialized correctly and is
@@ -166,14 +168,11 @@ impl MainServer {
         user.set_address(user_address);
         let new_connection = ServerBaseConnection::new(
             &self.server_config.connection,
-            &user.address(),
             user_key,
         );
 
         self.user_connections.insert(user.address(), new_connection);
-        // if self.io.bandwidth_monitor_enabled() {
-        //     self.io.register_client(&user.address());
-        // }
+
         self.incoming_events.push_connection(user_key);
     }
 
@@ -240,7 +239,7 @@ impl MainServer {
         user_key: &UserKey,
     ) {
         let user = self.user_delete(user_key);
-        self.incoming_events.push_disconnection(user_key, user);
+        self.incoming_events.push_disconnection(user_key, user.address());
     }
 
     pub(crate) fn user_queue_disconnect(&mut self, user_key: &UserKey) {
@@ -268,11 +267,6 @@ impl MainServer {
 
         self.handshake_manager
             .delete_user(user_key, user.address_opt());
-
-        // remove from bandwidth monitor
-        if self.io.bandwidth_monitor_enabled() {
-            self.io.deregister_client(&user.address());
-        }
 
         return user;
     }
@@ -332,62 +326,12 @@ impl MainServer {
                     };
 
                     match header.packet_type {
-                        PacketType::Data => {
-
-                            todo!(); // queue to send to WorldServer
-
-                            // addresses.insert(address);
-                            //
-                            // if self
-                            //     .read_data_packet(&address, &header, &mut reader)
-                            //     .is_err()
-                            // {
-                            //     warn!("Server Error: cannot read malformed packet");
-                            //     continue;
-                            // }
-                        }
-                        PacketType::Ping => {
-
-                            todo!(); // queue to send to WorldServer
-
-                            // let response = self.time_manager.process_ping(&mut reader).unwrap();
-                            // // send packet
-                            // if self.io.send_packet(&address, response.to_packet()).is_err() {
-                            //     // TODO: pass this on and handle above
-                            //     warn!("Server Error: Cannot send pong packet to {}", address);
-                            //     continue;
-                            // };
-                            //
-                            // if let Some(connection) = self.user_connections.get_mut(&address) {
-                            //     connection.process_incoming_header(&header);
-                            //     connection.base.mark_heard();
-                            // }
-                            //
-                            // continue;
-                        }
-                        PacketType::Heartbeat => {
-
-                            todo!(); // queue to send to WorldServer
-
+                        PacketType::Data | PacketType::Heartbeat | PacketType::Pong | PacketType::Ping => {
                             if let Some(connection) = self.user_connections.get_mut(&address) {
                                 connection.base.mark_heard();
+                                info!("main received packet from {}", &address);
+                                self.incoming_events.push_world_packet(address, owned_reader.take_buffer());
                             }
-
-                            continue;
-                        }
-                        PacketType::Pong => {
-
-                            todo!(); // queue to send to WorldServer
-
-                            // if let Some(connection) = self.user_connections.get_mut(&address) {
-                            //     connection.process_incoming_header(&header);
-                            //     connection.base.mark_heard();
-                            //     connection
-                            //         .ping_manager
-                            //         .process_pong(&self.time_manager, &mut reader);
-                            // }
-                            //
-                            // continue;
                         }
                         PacketType::Handshake => {
                             match self.handshake_manager.maintain_handshake(
@@ -400,6 +344,7 @@ impl MainServer {
                                     user_key,
                                     validate_packet,
                                 )) => {
+                                    info!("main finalizing connection for {}", &address);
                                     self.finalize_connection(&user_key, &address);
                                     if self.io.send_packet(&address, validate_packet).is_err() {
                                         // TODO: pass this on and handle above
@@ -410,6 +355,7 @@ impl MainServer {
                                     }
                                 }
                                 Ok(HandshakeAction::SendPacket(packet)) => {
+                                    info!("main sending packet to {}", &address);
                                     if self.io.send_packet(&address, packet).is_err() {
                                         // TODO: pass this on and handle above
                                         warn!("Server Error: Cannot send packet to {}", &address);
@@ -435,12 +381,6 @@ impl MainServer {
                 }
             }
         }
-
-        todo!(); // pass data packets to WorldServer here?
-
-        // for address in addresses {
-        //     self.process_packets(&address, &mut world, now);
-        // }
     }
 
     fn handle_disconnects(&mut self) {

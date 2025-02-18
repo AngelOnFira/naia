@@ -5,7 +5,7 @@ mod server_config;
 pub use server_config::ServerConfig;
 
 mod main_server;
-pub(crate) use main_server::MainServer;
+pub use main_server::MainServer;
 mod world_server;
-pub(crate) use world_server::WorldServer;
+pub use world_server::WorldServer;
 

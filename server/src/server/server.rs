@@ -4,12 +4,12 @@ use std::{
     panic,
     time::Duration,
 };
-
+use log::info;
 use naia_shared::{Channel, ComponentKind, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityDoesNotExistError, GlobalEntity, Message, Protocol, RemoteEntity, Replicate, Request, Response, ResponseReceiveKey, ResponseSendKey, SocketConfig, Tick, WorldMutType, WorldRefType};
 
-use crate::{server::{world_server::WorldServer, main_server::MainServer}, connection::tick_buffer_messages::TickBufferMessages, transport::Socket, world::{
+use crate::{transport::{PacketChannel, PacketSender}, main_events::WorldPacketEvent, server::{world_server::WorldServer, main_server::MainServer}, connection::tick_buffer_messages::TickBufferMessages, transport::Socket, world::{
     entity_mut::EntityMut, entity_owner::EntityOwner, entity_ref::EntityRef,
-}, Events, ReplicationConfig, ServerConfig, UserKey, NaiaServerError, RoomKey, UserRef, UserMut, UserScopeRef, UserScopeMut, RoomMut, RoomRef};
+}, Events, ReplicationConfig, ServerConfig, UserKey, NaiaServerError, RoomKey, UserRef, UserMut, UserScopeRef, UserScopeMut, RoomMut, RoomRef, ConnectEvent, DisconnectEvent};
 
 /// A server that uses either UDP or WebRTC communication to send/receive
 /// messages to/from connected clients, and syncs registered entities to
@@ -17,6 +17,7 @@ use crate::{server::{world_server::WorldServer, main_server::MainServer}, connec
 pub struct Server<E: Copy + Eq + Hash + Send + Sync> {
     main_server: MainServer,
     world_server: WorldServer<E>,
+    to_world_sender_opt: Option<Box<dyn PacketSender>>,
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
@@ -38,13 +39,20 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
         Self {
             main_server: MainServer::new(server_config.clone(), socket, compression.clone(), message_kinds.clone()),
-            world_server: WorldServer::new(server_config, compression, channel_kinds, message_kinds.clone(), component_kinds, tick_interval, client_authoritative_entities),
+            world_server: WorldServer::new(server_config, compression, channel_kinds, message_kinds.clone(), component_kinds, client_authoritative_entities, tick_interval),
+            to_world_sender_opt: None,
         }
     }
 
     /// Listen at the given addresses
     pub fn listen<S: Into<Box<dyn Socket>>>(&mut self, socket: S) {
         self.main_server.listen(socket);
+
+        // load world io
+        let world_io_sender = self.main_server.sender_cloned();
+        let (to_world_sender, world_io_receiver) = PacketChannel::unbounded();
+        self.to_world_sender_opt = Some(to_world_sender);
+        self.world_server.io_load(world_io_sender, world_io_receiver);
     }
 
     /// Returns whether or not the Server has initialized correctly and is
@@ -60,24 +68,39 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
     /// Must be called regularly, maintains connection to and receives messages
     /// from all Clients
-    pub fn receive<W: WorldMutType<E>>(&mut self, world: W) -> Events<E> {
-
-        todo!()
-
-        // let now = Instant::now();
-        //
-        // // Need to run this to maintain connection with all clients, and receive packets
-        // // until none left
-        // self.maintain_socket(world, &now);
-        //
-        // // tick event
-        // if self.time_manager.recv_server_tick(&now) {
-        //     self.incoming_events
-        //         .push_tick(self.time_manager.current_tick());
+    pub fn receive<W: WorldMutType<E>>(&mut self, mut world: W) -> Events<E> {
+        // if !self.main_server.is_listening() {
+        //     return Events::empty();
         // }
-        //
-        // // return all received messages and reset the buffer
-        // std::mem::replace(&mut self.incoming_events, Events::<E>::new())
+
+        let mut main_events = self.main_server.receive();
+
+        // handle connects
+        for user_key in main_events.read::<ConnectEvent>() {
+            let user_address = self.main_server.user_address(&user_key).unwrap();
+            self.world_server.receive_connection(user_key, user_address);
+        }
+
+        // handle disconnects
+        for (user_key, _) in main_events.read::<DisconnectEvent>() {
+            self.world_server.receive_disconnection(user_key, &mut world);
+        }
+
+        // handle world packets
+        let to_world_sender = self.to_world_sender_opt.as_mut().unwrap();
+        for (addr, payload) in main_events.read::<WorldPacketEvent>() {
+            info!("Received world packet from: {}", addr);
+            if let Err(_e) = to_world_sender.send(&addr, &payload) {
+                main_events.push_error(NaiaServerError::SendError(addr));
+            }
+
+        }
+
+        // world server process
+        let world_events = self.world_server.receive(world);
+
+        // combine events
+        Events::<E>::new(main_events, world_events)
     }
 
     // Connections
@@ -155,33 +178,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// method, the Server will never communicate with it's connected
     /// Clients
     pub fn send_all_updates<W: WorldRefType<E>>(&mut self, world: W) {
-
-        todo!();
-
-        // let now = Instant::now();
-        //
-        // // update entity scopes
-        // self.update_entity_scopes(&world);
-        //
-        // // loop through all connections, send packet
-        // let mut user_addresses: Vec<SocketAddr> = self.user_connections.keys().copied().collect();
-        //
-        // // shuffle order of connections in order to avoid priority among users
-        // fastrand::shuffle(&mut user_addresses);
-        //
-        // for user_address in user_addresses {
-        //     let connection = self.user_connections.get_mut(&user_address).unwrap();
-        //
-        //     connection.send_packets(
-        //         &self.protocol,
-        //         &now,
-        //         &mut self.io,
-        //         &world,
-        //         &self.global_entity_map,
-        //         &self.global_world_manager,
-        //         &self.time_manager,
-        //     );
-        // }
+        self.world_server.send_all_updates(world);
     }
 
     // Entities

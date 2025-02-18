@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use log::warn;
+use log::{info, warn};
 
 use naia_shared::{
     handshake::HandshakeHeader, BitReader, BitWriter, IdentityToken, OutgoingPacket, PacketType,
@@ -105,10 +105,12 @@ impl Handshaker for HandshakeManager {
                 };
                 match handshake_header {
                     HandshakeHeader::ServerIdentifyResponse => {
+                        info!("Received ServerIdentifyResponse");
                         self.recv_identify_response(reader);
                         return None;
                     }
                     HandshakeHeader::ServerConnectResponse => {
+                        info!("Received ServerConnectResponse");
                         return self.recv_connect_response();
                     }
                     HandshakeHeader::ClientIdentifyRequest

@@ -10,32 +10,20 @@ use crate::{server::WorldServer, RoomKey, UserKey};
 
 #[derive(Clone)]
 pub struct WorldUser {
-    data_addr: Option<SocketAddr>,
+    data_addr: SocketAddr,
     rooms_cache: HashSet<RoomKey>,
 }
 
 impl WorldUser {
-    pub fn new() -> Self {
+    pub fn new(address: SocketAddr) -> Self {
         Self {
+            data_addr: address,
             rooms_cache: HashSet::new(),
-            data_addr: None,
         }
     }
 
-    pub fn has_address(&self) -> bool {
-        self.data_addr.is_some()
-    }
-
     pub fn address(&self) -> SocketAddr {
-        self.data_addr.unwrap()
-    }
-
-    pub fn address_opt(&self) -> Option<SocketAddr> {
         self.data_addr
-    }
-
-    pub(crate) fn set_address(&mut self, addr: &SocketAddr) {
-        self.data_addr = Some(*addr);
     }
 
     // Rooms
@@ -73,6 +61,10 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync> WorldUserRef<'s, E> {
         self.key
     }
 
+    pub fn address(&self) -> SocketAddr {
+        self.server.user_address(&self.key).unwrap()
+    }
+
     pub fn room_count(&self) -> usize {
         self.server.user_rooms_count(&self.key).unwrap()
     }
@@ -98,8 +90,12 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync> WorldUserMut<'s, E> {
         self.key
     }
 
+    pub fn address(&self) -> SocketAddr {
+        self.server.user_address(&self.key).unwrap()
+    }
+
     pub fn disconnect(&mut self) {
-        todo!();
+        self.server.user_queue_disconnect(&self.key);
     }
 
     // Rooms

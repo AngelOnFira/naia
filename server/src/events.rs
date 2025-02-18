@@ -1,6 +1,6 @@
 use std::{hash::Hash, collections::HashMap};
 
-use naia_shared::{Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter, EntityEvent, EntityResponseEvent, GlobalResponseId, Message, MessageContainer, MessageKind, Replicate, Request, Tick};
+use naia_shared::{Channel, ChannelKind, ComponentKind, GlobalResponseId, Message, MessageContainer, MessageKind, Replicate, Request};
 
 use crate::{
     main_events::{MainEvent, MainEvents},
@@ -8,7 +8,7 @@ use crate::{
                                   EntityAuthGrantEvent, EntityAuthResetEvent, InsertComponentEvent,
                                   MessageEvent, PublishEntityEvent, RemoveComponentEvent, RequestEvent, SpawnEntityEvent,
                                   UnpublishEntityEvent, UpdateComponentEvent},
-    AuthEvent, ConnectEvent, DisconnectEvent, ErrorEvent, MainUser, NaiaServerError, TickEvent,
+    AuthEvent, ConnectEvent, DisconnectEvent, ErrorEvent, TickEvent,
 };
 
 pub struct Events<E: Hash + Copy + Eq + Sync + Send> {
@@ -17,10 +17,26 @@ pub struct Events<E: Hash + Copy + Eq + Sync + Send> {
 }
 
 impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
-    pub(crate) fn new() -> Self {
+
+    pub(crate) fn new(mut main_events: MainEvents, mut world_events: WorldEvents<E>) -> Self {
+
+        if main_events.has::<ConnectEvent>() {
+            panic!("When using combined Main and World events, MainEvents should not contain ConnectEvent");
+        }
+        if main_events.has::<DisconnectEvent>() {
+            panic!("When using combined Main and World events, MainEvents should not contain DisconnectEvent");
+        }
+
+        // combine error events
+        if main_events.has::<ErrorEvent>() {
+            for error in main_events.read::<ErrorEvent>() {
+                world_events.push_error(error);
+            }
+        }
+
         Self {
-            main_events: MainEvents::new(),
-            world_events: WorldEvents::new(),
+            main_events,
+            world_events,
         }
     }
 
@@ -94,111 +110,6 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
     ) -> Option<HashMap<ComponentKind, Vec<(UserKey, E, Box<dyn Replicate>)>>> {
         self.world_events.take_removes()
     }
-
-    // Crate-public
-
-    pub(crate) fn push_connection(&mut self, user_key: &UserKey) {
-        self.main_events.push_connection(user_key);
-    }
-
-    pub(crate) fn push_disconnection(&mut self, user_key: &UserKey, user: MainUser) {
-        self.main_events.push_disconnection(user_key, user);
-    }
-
-    pub(crate) fn push_auth(&mut self, user_key: &UserKey, auth_message: MessageContainer) {
-        self.main_events.push_auth(user_key, auth_message);
-    }
-
-    pub(crate) fn push_message(
-        &mut self,
-        user_key: &UserKey,
-        channel_kind: &ChannelKind,
-        message: MessageContainer,
-    ) {
-        self.world_events.push_message(user_key, channel_kind, message);
-    }
-
-    pub(crate) fn push_request(
-        &mut self,
-        user_key: &UserKey,
-        channel_kind: &ChannelKind,
-        global_response_id: GlobalResponseId,
-        request: MessageContainer,
-    ) {
-        self.world_events.push_request(user_key, channel_kind, global_response_id, request);
-    }
-
-    pub(crate) fn push_tick(&mut self, tick: Tick) {
-        self.world_events.push_tick(tick);
-    }
-
-    pub(crate) fn push_error(&mut self, error: NaiaServerError) {
-        self.main_events.push_error(error);
-    }
-
-    pub(crate) fn push_spawn(&mut self, user_key: &UserKey, world_entity: &E) {
-        self.world_events.push_spawn(user_key, world_entity);
-    }
-
-    pub(crate) fn push_despawn(&mut self, user_key: &UserKey, world_entity: &E) {
-        self.world_events.push_despawn(user_key, world_entity);
-    }
-
-    pub(crate) fn push_publish(&mut self, user_key: &UserKey, world_entity: &E) {
-        self.world_events.push_publish(user_key, world_entity);
-    }
-
-    pub(crate) fn push_unpublish(&mut self, user_key: &UserKey, world_entity: &E) {
-        self.world_events.push_unpublish(user_key, world_entity);
-    }
-
-    pub(crate) fn push_delegate(&mut self, user_key: &UserKey, world_entity: &E) {
-        self.world_events.push_delegate(user_key, world_entity);
-    }
-
-    pub(crate) fn push_auth_grant(&mut self, user_key: &UserKey, world_entity: &E) {
-        self.world_events.push_auth_grant(user_key, world_entity);
-    }
-
-    pub(crate) fn push_auth_reset(&mut self, world_entity: &E) {
-        self.world_events.push_auth_reset(world_entity);
-    }
-
-    pub(crate) fn push_insert(
-        &mut self,
-        user_key: &UserKey,
-        world_entity: &E,
-        component_kind: &ComponentKind,
-    ) {
-        self.world_events.push_insert(user_key, world_entity, component_kind);
-    }
-
-    pub(crate) fn push_remove(
-        &mut self,
-        user_key: &UserKey,
-        world_entity: &E,
-        component: Box<dyn Replicate>,
-    ) {
-        self.world_events.push_remove(user_key, world_entity, component);
-    }
-
-    pub(crate) fn push_update(
-        &mut self,
-        user_key: &UserKey,
-        world_entity: &E,
-        component_kind: &ComponentKind,
-    ) {
-        self.world_events.push_update(user_key, world_entity, component_kind);
-    }
-
-    pub(crate) fn receive_entity_events(
-        &mut self,
-        converter: &dyn EntityAndGlobalEntityConverter<E>,
-        user_key: &UserKey,
-        entity_events: Vec<EntityEvent>,
-    ) -> Vec<EntityResponseEvent> {
-        self.world_events.receive_entity_events(converter, user_key, entity_events)
-    }
 }
 
 // Event Trait
@@ -212,27 +123,27 @@ pub trait Event<E: Hash + Copy + Eq + Sync + Send> {
 
 // Connect Event
 impl<E: Hash + Copy + Eq + Sync + Send> Event<E> for ConnectEvent {
-    type Iter = <ConnectEvent as MainEvent>::Iter;
+    type Iter = <ConnectEvent as WorldEvent<E>>::Iter;
 
     fn iter(events: &mut Events<E>) -> Self::Iter {
-        <ConnectEvent as MainEvent>::iter(&mut events.main_events)
+        <ConnectEvent as WorldEvent<E>>::iter(&mut events.world_events)
     }
 
     fn has(events: &Events<E>) -> bool {
-        <ConnectEvent as MainEvent>::has(&events.main_events)
+        <ConnectEvent as WorldEvent<E>>::has(&events.world_events)
     }
 }
 
 // Disconnect Event
 impl<E: Hash + Copy + Eq + Sync + Send> Event<E> for DisconnectEvent {
-    type Iter = <DisconnectEvent as MainEvent>::Iter;
+    type Iter = <DisconnectEvent as WorldEvent<E>>::Iter;
 
     fn iter(events: &mut Events<E>) -> Self::Iter {
-        <DisconnectEvent as MainEvent>::iter(&mut events.main_events)
+        <DisconnectEvent as WorldEvent<E>>::iter(&mut events.world_events)
     }
 
     fn has(events: &Events<E>) -> bool {
-        <DisconnectEvent as MainEvent>::has(&events.main_events)
+        <DisconnectEvent as WorldEvent<E>>::has(&events.world_events)
     }
 }
 
@@ -251,14 +162,14 @@ impl<E: Hash + Copy + Eq + Sync + Send> Event<E> for TickEvent {
 
 // Error Event
 impl<E: Hash + Copy + Eq + Sync + Send> Event<E> for ErrorEvent {
-    type Iter = <ErrorEvent as MainEvent>::Iter;
+    type Iter = <ErrorEvent as WorldEvent<E>>::Iter;
 
     fn iter(events: &mut Events<E>) -> Self::Iter {
-        <ErrorEvent as MainEvent>::iter(&mut events.main_events)
+        <ErrorEvent as WorldEvent<E>>::iter(&mut events.world_events)
     }
 
     fn has(events: &Events<E>) -> bool {
-        <ErrorEvent as MainEvent>::has(&events.main_events)
+        <ErrorEvent as WorldEvent<E>>::has(&events.world_events)
     }
 }
 

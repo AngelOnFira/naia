@@ -10,6 +10,9 @@ cfg_if! {
     } else {}
 }
 
+mod channel;
+pub use channel::PacketChannel;
+
 pub use inner::{
     AuthReceiver, AuthSender, PacketReceiver, PacketSender, RecvError, SendError, Socket,
 };

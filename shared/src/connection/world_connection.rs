@@ -8,7 +8,7 @@ use crate::{messages::{channels::channel_kinds::ChannelKinds, message_manager::M
     host::{host_world_manager::HostWorldEvents, host_world_writer::HostWorldWriter},
     local_world_manager::LocalWorldManager,
     remote::remote_world_reader::RemoteWorldReader,
-}, AckManager, ComponentKinds, ConnectionConfig, EntityAndGlobalEntityConverter, EntityConverterMut, GlobalEntity, HostWorldManager, MessageKinds, PacketType, Protocol, RemoteWorldManager, StandardHeader, Tick, Timer, WorldRefType};
+}, AckManager, ComponentKinds, ConnectionConfig, EntityAndGlobalEntityConverter, EntityConverterMut, GlobalEntity, HostWorldManager, MessageKinds, PacketType, RemoteWorldManager, StandardHeader, Tick, Timer, WorldRefType};
 
 use super::packet_notifiable::PacketNotifiable;
 
@@ -111,7 +111,8 @@ impl WorldConnection {
 
     fn write_messages(
         &mut self,
-        protocol: &Protocol,
+        channel_kinds: &ChannelKinds,
+        message_kinds: &MessageKinds,
         global_world_manager: &dyn GlobalWorldManagerType,
         writer: &mut BitWriter,
         packet_index: PacketIndex,
@@ -119,7 +120,8 @@ impl WorldConnection {
     ) {
         let mut converter = EntityConverterMut::new(global_world_manager, &mut self.local_world_manager);
         self.message_manager.write_messages(
-            protocol,
+            channel_kinds,
+            message_kinds,
             &mut converter,
             writer,
             packet_index,
@@ -129,7 +131,9 @@ impl WorldConnection {
 
     pub fn write_packet<E: Copy + Eq + Hash + Sync + Send, W: WorldRefType<E>>(
         &mut self,
-        protocol: &Protocol,
+        channel_kinds: &ChannelKinds,
+        message_kinds: &MessageKinds,
+        component_kinds: &ComponentKinds,
         now: &Instant,
         writer: &mut BitWriter,
         packet_index: PacketIndex,
@@ -142,7 +146,8 @@ impl WorldConnection {
     ) {
         // write messages
         self.write_messages(
-            &protocol,
+            channel_kinds,
+            message_kinds,
             global_world_manager,
             writer,
             packet_index,
@@ -152,7 +157,7 @@ impl WorldConnection {
         // write world events
         if write_world_events {
             HostWorldWriter::write_into_packet(
-                &protocol.component_kinds,
+                component_kinds,
                 now,
                 writer,
                 &packet_index,

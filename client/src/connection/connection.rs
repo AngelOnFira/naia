@@ -325,7 +325,9 @@ impl Connection {
 
         // write common parts of packet (messages & world events)
         self.world.write_packet(
-            protocol,
+            &protocol.channel_kinds,
+            &protocol.message_kinds,
+            &protocol.component_kinds,
             now,
             &mut writer,
             next_packet_index,

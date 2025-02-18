@@ -1149,13 +1149,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         if !self.io.is_authenticated() {
             match self.io.recv_auth() {
                 IdentityReceiverResult::Success(id_token) => {
+                    info!("Authentication success!");
                     self.handshake_manager.set_identity_token(id_token);
                 }
                 IdentityReceiverResult::Waiting => {
                     return;
                 }
                 IdentityReceiverResult::ErrorResponseCode(code) => {
-                    // warn!("Authentication error status code: {}", code);
+                    warn!("Authentication error status code: {}", code);
 
                     let old_socket_addr_result = self.io.server_addr();
 
@@ -1192,6 +1193,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 Ok(Some(mut reader)) => {
                     match self.handshake_manager.recv(&mut reader) {
                         Some(HandshakeResult::Connected(time_manager)) => {
+                            info!("Connected to Server!");
                             // new connect!
                             self.server_connection = Some(Connection::new(
                                 &self.client_config.connection,

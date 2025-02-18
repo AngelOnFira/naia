@@ -91,6 +91,10 @@ impl OwnedBitReader {
             buffer: &self.buffer,
         }
     }
+
+    pub fn take_buffer(self) -> Box<[u8]> {
+        self.buffer
+    }
 }
 
 // BitReaderState

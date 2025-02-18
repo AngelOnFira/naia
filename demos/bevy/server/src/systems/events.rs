@@ -27,9 +27,11 @@ pub fn auth_events(mut server: Server, mut event_reader: EventReader<AuthEvents>
         for (user_key, auth) in events.read::<Auth>() {
             if auth.username == "charlie" && auth.password == "12345" {
                 // Accept incoming connection
+                info!("Naia Server accepted connection from: {:?}", user_key);
                 server.accept_connection(&user_key);
             } else {
                 // Reject incoming connection
+                info!("Naia Server rejected connection from: {:?}", user_key);
                 server.reject_connection(&user_key);
             }
         }
@@ -96,8 +98,8 @@ pub fn disconnect_events(
     mut global: ResMut<Global>,
     mut event_reader: EventReader<DisconnectEvent>,
 ) {
-    for DisconnectEvent(user_key, user) in event_reader.read() {
-        info!("Naia Server disconnected from: {:?}", user.address());
+    for DisconnectEvent(user_key, address) in event_reader.read() {
+        info!("Naia Server disconnected from: {:?}", address);
 
         if let Some(entity) = global.user_to_square_map.remove(user_key) {
             global.square_to_user_map.remove(&entity);

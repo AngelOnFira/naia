@@ -66,6 +66,14 @@ impl Io {
         self.packet_sender.is_some()
     }
 
+    pub fn sender_cloned(&self) -> Box<dyn PacketSender> {
+        if self.packet_sender.is_none() {
+            panic!("Cannot call Server.sender_cloned() until you call Server.listen()!");
+        }
+
+        self.packet_sender.as_ref().unwrap().clone()
+    }
+
     pub fn send_packet(
         &mut self,
         address: &SocketAddr,

@@ -1,24 +1,28 @@
-use std::{collections::HashMap, marker::PhantomData, mem, vec::IntoIter};
+use std::{collections::HashMap, marker::PhantomData, mem, vec::IntoIter, net::SocketAddr};
 
 use naia_shared::{Message, MessageContainer, MessageKind};
 
-use crate::{world_events, user::UserKey, MainUser, NaiaServerError};
+use crate::{world_events, user::UserKey, NaiaServerError};
 
 pub struct MainEvents {
-    connections: Vec<UserKey>,
-    disconnections: Vec<(UserKey, MainUser)>,
-    errors: Vec<NaiaServerError>,
     auths: HashMap<MessageKind, Vec<(UserKey, MessageContainer)>>,
+    connections: Vec<UserKey>,
+    disconnections: Vec<(UserKey, SocketAddr)>,
+    errors: Vec<NaiaServerError>,
+    world_packets: Vec<(SocketAddr, Box<[u8]>)>,
+
     empty: bool,
 }
 
 impl MainEvents {
     pub(crate) fn new() -> Self {
         Self {
+            auths: HashMap::new(),
             connections: Vec::new(),
             disconnections: Vec::new(),
             errors: Vec::new(),
-            auths: HashMap::new(),
+            world_packets: Vec::new(),
+
             empty: true,
         }
     }
@@ -37,7 +41,7 @@ impl MainEvents {
         return V::has(self);
     }
 
-    // This method is exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
+    // These methods are exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
     pub fn has_auths(&self) -> bool {
         !self.auths.is_empty()
     }
@@ -52,8 +56,8 @@ impl MainEvents {
         self.empty = false;
     }
 
-    pub(crate) fn push_disconnection(&mut self, user_key: &UserKey, user: MainUser) {
-        self.disconnections.push((*user_key, user));
+    pub(crate) fn push_disconnection(&mut self, user_key: &UserKey, addr: SocketAddr) {
+        self.disconnections.push((*user_key, addr));
         self.empty = false;
     }
 
@@ -69,6 +73,11 @@ impl MainEvents {
 
     pub(crate) fn push_error(&mut self, error: NaiaServerError) {
         self.errors.push(error);
+        self.empty = false;
+    }
+
+    pub(crate) fn push_world_packet(&mut self, addr: SocketAddr, payload: Box<[u8]>) {
+        self.world_packets.push((addr, payload));
         self.empty = false;
     }
 }
@@ -100,7 +109,7 @@ impl MainEvent for ConnectEvent {
 // DisconnectEvent
 pub struct DisconnectEvent;
 impl MainEvent for DisconnectEvent {
-    type Iter = IntoIter<(UserKey, MainUser)>;
+    type Iter = IntoIter<(UserKey, SocketAddr)>;
 
     fn iter(events: &mut MainEvents) -> Self::Iter {
         let list = std::mem::take(&mut events.disconnections);
@@ -146,5 +155,20 @@ impl<M: Message> MainEvent for AuthEvent<M> {
     fn has(events: &MainEvents) -> bool {
         let message_kind: MessageKind = MessageKind::of::<M>();
         return events.auths.contains_key(&message_kind);
+    }
+}
+
+// WorldPacketEvent
+pub struct WorldPacketEvent;
+impl MainEvent for WorldPacketEvent {
+    type Iter = IntoIter<(SocketAddr, Box<[u8]>)>;
+
+    fn iter(events: &mut MainEvents) -> Self::Iter {
+        let list = std::mem::take(&mut events.world_packets);
+        return IntoIterator::into_iter(list);
+    }
+
+    fn has(events: &MainEvents) -> bool {
+        !events.world_packets.is_empty()
     }
 }

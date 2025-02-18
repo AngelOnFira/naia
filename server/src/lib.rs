@@ -54,7 +54,7 @@ pub use world_events::{
     UnpublishEntityEvent, UpdateComponentEvent, TickEvent,
 };
 pub use room::{RoomKey, RoomMut, RoomRef};
-pub use server::{Server, ServerConfig};
+pub use server::{Server, ServerConfig, WorldServer, MainServer};
 pub use user::{UserKey, UserMut, UserRef};
 pub use world_user::{WorldUser, WorldUserRef, WorldUserMut};
 pub use main_user::{MainUser, MainUserRef, MainUserMut};

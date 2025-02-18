@@ -36,3 +36,4 @@ ring = { version = "0.16.15", optional = true }
 http = { version = "1.2", optional = true }
 base64 = { version = "0.13", optional = true }
 url = { version = "2.2.2", optional = true }
+smol = { version = "1.3" }

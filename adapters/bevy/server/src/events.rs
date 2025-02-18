@@ -1,4 +1,4 @@
-use std::{hash::Hash, any::Any, collections::HashMap};
+use std::{net::SocketAddr, hash::Hash, any::Any, collections::HashMap};
 
 use bevy_ecs::{
     entity::Entity,
@@ -11,7 +11,7 @@ use naia_bevy_shared::{
     Channel, ChannelKind, ComponentKind, Message, MessageContainer, MessageKind, Replicate,
     Request, ResponseSendKey, Tick,
 };
-use naia_server::{shared::GlobalResponseId, Events, MainUser, NaiaServerError, UserKey};
+use naia_server::{shared::GlobalResponseId, Events, NaiaServerError, UserKey};
 
 // ConnectEvent
 #[derive(Event)]
@@ -19,7 +19,7 @@ pub struct ConnectEvent(pub UserKey);
 
 // DisconnectEvent
 #[derive(Event)]
-pub struct DisconnectEvent(pub UserKey, pub MainUser);
+pub struct DisconnectEvent(pub UserKey, pub SocketAddr);
 
 // ErrorEvent
 #[derive(Event)]

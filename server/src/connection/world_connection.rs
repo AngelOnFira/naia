@@ -2,7 +2,7 @@ use std::{any::Any, hash::Hash, net::SocketAddr};
 
 use log::warn;
 
-use naia_shared::{BigMapKey, BitReader, BitWriter, ChannelKind, ChannelKinds, ComponentKinds, ConnectionConfig, EntityAndGlobalEntityConverter, EntityEventMessage, EntityResponseEvent, GlobalEntitySpawner, HostType, HostWorldEvents, Instant, MessageKinds, PacketType, Protocol, Serde, SerdeErr, StandardHeader, SystemChannel, Tick, WorldConnection, WorldMutType, WorldRefType};
+use naia_shared::{BigMapKey, BitReader, BitWriter, ChannelKind, ChannelKinds, ComponentKinds, ConnectionConfig, EntityAndGlobalEntityConverter, EntityEventMessage, EntityResponseEvent, GlobalEntitySpawner, HostType, HostWorldEvents, Instant, MessageKinds, PacketType, Serde, SerdeErr, StandardHeader, SystemChannel, Tick, WorldConnection, WorldMutType, WorldRefType};
 
 use crate::{
     connection::{
@@ -22,6 +22,7 @@ pub struct ServerWorldConnection {
     pub world: WorldConnection,
     pub ping_manager: PingManager,
     tick_buffer: TickBufferReceiver,
+    pub manual_disconnect: bool,
 }
 
 impl ServerWorldConnection {
@@ -46,6 +47,7 @@ impl ServerWorldConnection {
             ),
             ping_manager: PingManager::new(ping_config),
             tick_buffer: TickBufferReceiver::new(channel_kinds),
+            manual_disconnect: false,
         }
     }
 
@@ -194,7 +196,9 @@ impl ServerWorldConnection {
     // Outgoing data
     pub fn send_packets<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
         &mut self,
-        protocol: &Protocol,
+        channel_kinds: &ChannelKinds,
+        message_kinds: &MessageKinds,
+        component_kinds: &ComponentKinds,
         now: &Instant,
         io: &mut Io,
         world: &W,
@@ -215,7 +219,9 @@ impl ServerWorldConnection {
         let mut any_sent = false;
         loop {
             if self.send_packet(
-                protocol,
+                channel_kinds,
+                message_kinds,
+                component_kinds,
                 now,
                 io,
                 world,
@@ -238,7 +244,9 @@ impl ServerWorldConnection {
     /// Will split the data into multiple packets.
     fn send_packet<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
         &mut self,
-        protocol: &Protocol,
+        channel_kinds: &ChannelKinds,
+        message_kinds: &MessageKinds,
+        component_kinds: &ComponentKinds,
         now: &Instant,
         io: &mut Io,
         world: &W,
@@ -249,7 +257,9 @@ impl ServerWorldConnection {
     ) -> bool {
         if host_world_events.has_events() || self.world.message_manager.has_outgoing_messages() {
             let writer = self.write_packet(
-                protocol,
+                channel_kinds,
+                message_kinds,
+                component_kinds,
                 now,
                 world,
                 entity_converter,
@@ -272,7 +282,9 @@ impl ServerWorldConnection {
 
     fn write_packet<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
         &mut self,
-        protocol: &Protocol,
+        channel_kinds: &ChannelKinds,
+        message_kinds: &MessageKinds,
+        component_kinds: &ComponentKinds,
         now: &Instant,
         world: &W,
         entity_converter: &dyn EntityAndGlobalEntityConverter<E>,
@@ -303,7 +315,9 @@ impl ServerWorldConnection {
         // write common data packet
         let mut has_written = false;
         self.world.write_packet(
-            &protocol,
+            channel_kinds,
+            message_kinds,
+            component_kinds,
             now,
             &mut writer,
             next_packet_index,
