@@ -78,18 +78,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         // handle connects
         for user_key in main_events.read::<ConnectEvent>() {
             let user_address = self.main_server.user_address(&user_key).unwrap();
-            self.world_server.receive_connection(user_key, user_address);
+            self.world_server.receive_user(user_key, user_address);
         }
 
         // handle disconnects
         for (user_key, _) in main_events.read::<DisconnectEvent>() {
-            self.world_server.receive_disconnection(user_key, &mut world);
+            self.world_server.disconnect_user(user_key, &mut world);
         }
 
         // handle world packets
         let to_world_sender = self.to_world_sender_opt.as_mut().unwrap();
         for (addr, payload) in main_events.read::<WorldPacketEvent>() {
-            info!("Received world packet from: {}", addr);
             if let Err(_e) = to_world_sender.send(&addr, &payload) {
                 main_events.push_error(NaiaServerError::SendError(addr));
             }

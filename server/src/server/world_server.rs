@@ -9,9 +9,10 @@ use std::{
 
 use log::{info, warn};
 
-use naia_shared::{BigMap, BitReader, BitWriter, Channel, ChannelKind, ChannelKinds, ComponentKind, ComponentKinds, CompressionConfig, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityConverterMut, EntityDoesNotExistError, EntityEventMessage, EntityResponseEvent, GlobalEntity, GlobalEntityMap, GlobalEntitySpawner, GlobalRequestId, GlobalResponseId, GlobalWorldManagerType, Instant, Message, MessageContainer, MessageKinds, PacketType, RemoteEntity, Replicate, ReplicatedComponent, Request, Response, ResponseReceiveKey, ResponseSendKey, Serde, SerdeErr, SharedGlobalWorldManager, StandardHeader, SystemChannel, Tick, Timer, WorldMutType, WorldRefType};
+use naia_shared::{handshake::HandshakeHeader, BigMap, BitReader, BitWriter, Channel, ChannelKind, ChannelKinds, ComponentKind, ComponentKinds, CompressionConfig, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityConverterMut, EntityDoesNotExistError, EntityEventMessage, EntityResponseEvent, GlobalEntity, GlobalEntityMap, GlobalEntitySpawner, GlobalRequestId, GlobalResponseId, GlobalWorldManagerType, Instant, Message, MessageContainer, MessageKinds, PacketType, RemoteEntity, Replicate, ReplicatedComponent, Request, Response, ResponseReceiveKey, ResponseSendKey, Serde, SerdeErr, SharedGlobalWorldManager, StandardHeader, SystemChannel, Tick, Timer, WorldMutType, WorldRefType};
 
 use crate::{
+    handshake::HandshakeManager,
     transport::{PacketReceiver, PacketSender},
     events::world_events::WorldEvents,
     room::Room,
@@ -43,6 +44,7 @@ pub struct WorldServer<E: Copy + Eq + Hash + Send + Sync> {
     timeout_timer: Timer,
     // Users
     users: HashMap<UserKey, WorldUser>,
+    disconnected_users: HashMap<SocketAddr, UserKey>,
     user_connections: HashMap<SocketAddr, ServerWorldConnection>,
     // Rooms
     rooms: BigMap<RoomKey, Room>,
@@ -97,6 +99,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             // Users
             users: HashMap::new(),
             user_connections: HashMap::new(),
+            disconnected_users: HashMap::new(),
             // Rooms
             rooms: BigMap::new(),
             // Entities
@@ -121,34 +124,36 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         self.io.load(sender, receiver);
     }
 
-    pub fn receive_connection(&mut self, user_key: UserKey, user_addr: SocketAddr) {
-
-        info!("User connected: {:?}", user_addr);
-
+    pub fn receive_user(&mut self, user_key: UserKey, user_addr: SocketAddr) {
         self.users.insert(user_key, WorldUser::new(user_addr));
+        self.disconnected_users.insert(user_addr, user_key);
+    }
+
+    fn finalize_connection(&mut self, user_key: &UserKey, user_address: &SocketAddr) {
+        if !self.users.contains_key(user_key) {
+            warn!("unknown user is finalizing connection...");
+            return;
+        };
 
         let new_connection = ServerWorldConnection::new(
             &self.server_config.connection,
             &self.server_config.ping,
-            &user_addr,
+            user_address,
             &user_key,
             &self.channel_kinds,
             &self.global_world_manager,
         );
 
-        self.user_connections.insert(user_addr, new_connection);
+        self.user_connections.insert(*user_address, new_connection);
 
         if self.io.bandwidth_monitor_enabled() {
-            self.io.register_client(&user_addr);
+            self.io.register_client(user_address);
         }
 
         self.incoming_events.push_connection(&user_key);
     }
 
-    pub fn receive_disconnection<W: WorldMutType<E>>(&mut self, user_key: UserKey, world: &mut W) {
-
-        info!("User disconnected: {:?}", user_key);
-
+    pub fn disconnect_user<W: WorldMutType<E>>(&mut self, user_key: UserKey, world: &mut W) {
         self.user_disconnect(&user_key, world);
     }
 
@@ -197,21 +202,25 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             panic!("Cannot send message to Client on this Channel");
         }
 
-        if let Some(user) = self.users.get(user_key) {
-            if let Some(connection) = self.user_connections.get_mut(&user.address()) {
-                let mut converter = EntityConverterMut::new(
-                    &self.global_world_manager,
-                    &mut connection.world.local_world_manager,
-                );
-                let message = MessageContainer::from_write(message_box, &mut converter);
-                connection.world.message_manager.send_message(
-                    &self.message_kinds,
-                    &mut converter,
-                    channel_kind,
-                    message,
-                );
-            }
-        }
+        let Some(user) = self.users.get(user_key) else {
+            warn!("user: {:?} does not exist", user_key);
+            return;
+        };
+        let Some(connection) = self.user_connections.get_mut(&user.address()) else {
+            warn!("currently not connected to user: {:?}", user_key);
+            return;
+        };
+        let mut converter = EntityConverterMut::new(
+            &self.global_world_manager,
+            &mut connection.world.local_world_manager,
+        );
+        let message = MessageContainer::from_write(message_box, &mut converter);
+        connection.world.message_manager.send_message(
+            &self.message_kinds,
+            &mut converter,
+            channel_kind,
+            message,
+        );
     }
 
     /// Sends a message to all connected users using a given channel
@@ -1666,6 +1675,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
                     match header.packet_type {
                         PacketType::Data => {
+
                             addresses.insert(address);
 
                             if self
@@ -1709,8 +1719,29 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
                             continue;
                         }
-                        packet_type => {
-                            panic!("Unexpected packet type: {:?}!", packet_type);
+                        PacketType::Handshake => {
+                            let handshake_header_result = HandshakeHeader::de(&mut reader);
+                            let Ok(HandshakeHeader::ClientConnectRequest) = handshake_header_result else {
+                                warn!("Server Error: received invalid handshake packet: {:?}", handshake_header_result);
+                                continue;
+                            };
+                            let has_connection = self.user_connections.contains_key(&address);
+                            if !has_connection {
+                                let Some(user_key) = self.disconnected_users.remove(&address) else {
+                                    warn!("Server Error: received handshake packet from unknown address: {:?}", address);
+                                    continue;
+                                };
+                                self.finalize_connection(&user_key, &address);
+                            }
+
+                            // Send Connect Response
+                            let packet = HandshakeManager::write_connect_response().to_packet();
+                            if self.io.send_packet(&address, packet).is_err() {
+                                warn!("Server Error: Cannot send handshake response to {}", address);
+                                continue;
+                            }
+
+                            continue;
                         }
                     }
                 }

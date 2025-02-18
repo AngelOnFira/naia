@@ -277,8 +277,6 @@ impl MainServer {
     fn maintain_socket(&mut self) {
         self.handle_disconnects();
 
-        // let mut addresses: HashSet<SocketAddr> = HashSet::new();
-
         // receive auth events
         if let Some((_, auth_receiver)) = self.auth_io.as_mut() {
             loop {
@@ -329,7 +327,6 @@ impl MainServer {
                         PacketType::Data | PacketType::Heartbeat | PacketType::Pong | PacketType::Ping => {
                             if let Some(connection) = self.user_connections.get_mut(&address) {
                                 connection.base.mark_heard();
-                                info!("main received packet from {}", &address);
                                 self.incoming_events.push_world_packet(address, owned_reader.take_buffer());
                             }
                         }
@@ -339,12 +336,24 @@ impl MainServer {
                                 &mut reader,
                                 self.user_connections.contains_key(&address),
                             ) {
-                                Ok(HandshakeAction::None) => {}
+                                Ok(HandshakeAction::ForwardPacket) => {
+                                    if let Some(connection) = self.user_connections.get_mut(&address) {
+                                        connection.base.mark_heard();
+                                        self.incoming_events.push_world_packet(address, owned_reader.take_buffer());
+                                    } else {
+                                        warn!("Server Error: Cannot forward packet to unknown user..");
+                                    }
+                                }
+                                Ok(HandshakeAction::SendPacket(packet)) => {
+                                    if self.io.send_packet(&address, packet).is_err() {
+                                        // TODO: pass this on and handle above
+                                        warn!("Server Error: Cannot send packet to {}", &address);
+                                    }
+                                }
                                 Ok(HandshakeAction::FinalizeConnection(
                                     user_key,
                                     validate_packet,
                                 )) => {
-                                    info!("main finalizing connection for {}", &address);
                                     self.finalize_connection(&user_key, &address);
                                     if self.io.send_packet(&address, validate_packet).is_err() {
                                         // TODO: pass this on and handle above
@@ -354,16 +363,10 @@ impl MainServer {
                                         );
                                     }
                                 }
-                                Ok(HandshakeAction::SendPacket(packet)) => {
-                                    info!("main sending packet to {}", &address);
-                                    if self.io.send_packet(&address, packet).is_err() {
-                                        // TODO: pass this on and handle above
-                                        warn!("Server Error: Cannot send packet to {}", &address);
-                                    }
-                                }
                                 Ok(HandshakeAction::DisconnectUser(user_key)) => {
                                     self.user_disconnect(&user_key);
                                 }
+                                Ok(HandshakeAction::None) => {}
                                 Err(_err) => {
                                     warn!("Server Error: cannot read malformed packet");
                                 }
