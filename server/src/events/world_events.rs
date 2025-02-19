@@ -11,7 +11,7 @@ use naia_shared::{
     Request, ResponseSendKey, Tick,
 };
 
-use crate::{user::UserKey, ConnectEvent, DisconnectEvent, ErrorEvent, NaiaServerError};
+use crate::{user::UserKey, ConnectEvent, ErrorEvent, NaiaServerError};
 
 pub struct WorldEvents<E: Hash + Copy + Eq + Sync + Send> {
     connections: Vec<UserKey>,
@@ -358,6 +358,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for ConnectEvent {
 }
 
 // DisconnectEvent
+pub struct DisconnectEvent;
 impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for DisconnectEvent {
     type Iter = IntoIter<(UserKey, SocketAddr)>;
 

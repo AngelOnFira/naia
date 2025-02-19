@@ -1,5 +1,4 @@
 pub mod bandwidth_monitor;
-pub mod base_connection;
 pub mod io;
 pub mod ping_config;
 pub mod ping_manager;

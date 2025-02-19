@@ -59,27 +59,3 @@ impl<'s> MainUserRef<'s> {
         self.server.user_address(&self.key).unwrap()
     }
 }
-
-// MainUserMut
-pub struct MainUserMut<'s> {
-    server: &'s mut MainServer,
-    key: UserKey,
-}
-
-impl<'s> MainUserMut<'s> {
-    pub(crate) fn new(server: &'s mut MainServer, key: &UserKey) -> Self {
-        Self { server, key: *key }
-    }
-
-    pub fn key(&self) -> UserKey {
-        self.key
-    }
-
-    pub fn address(&self) -> SocketAddr {
-        self.server.user_address(&self.key).unwrap()
-    }
-
-    pub fn disconnect(&mut self) {
-        self.server.user_queue_disconnect(&self.key);
-    }
-}

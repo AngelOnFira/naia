@@ -7,7 +7,6 @@ use crate::{events::world_events, user::UserKey, NaiaServerError};
 pub struct MainEvents {
     auths: HashMap<MessageKind, Vec<(UserKey, MessageContainer)>>,
     connections: Vec<UserKey>,
-    disconnections: Vec<(UserKey, SocketAddr)>,
     errors: Vec<NaiaServerError>,
     world_packets: Vec<(SocketAddr, Box<[u8]>)>,
 
@@ -19,7 +18,6 @@ impl MainEvents {
         Self {
             auths: HashMap::new(),
             connections: Vec::new(),
-            disconnections: Vec::new(),
             errors: Vec::new(),
             world_packets: Vec::new(),
 
@@ -53,11 +51,6 @@ impl MainEvents {
 
     pub(crate) fn push_connection(&mut self, user_key: &UserKey) {
         self.connections.push(*user_key);
-        self.empty = false;
-    }
-
-    pub(crate) fn push_disconnection(&mut self, user_key: &UserKey, addr: SocketAddr) {
-        self.disconnections.push((*user_key, addr));
         self.empty = false;
     }
 
@@ -103,21 +96,6 @@ impl MainEvent for ConnectEvent {
 
     fn has(events: &MainEvents) -> bool {
         !events.connections.is_empty()
-    }
-}
-
-// DisconnectEvent
-pub struct DisconnectEvent;
-impl MainEvent for DisconnectEvent {
-    type Iter = IntoIter<(UserKey, SocketAddr)>;
-
-    fn iter(events: &mut MainEvents) -> Self::Iter {
-        let list = std::mem::take(&mut events.disconnections);
-        return IntoIterator::into_iter(list);
-    }
-
-    fn has(events: &MainEvents) -> bool {
-        !events.disconnections.is_empty()
     }
 }
 

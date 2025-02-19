@@ -34,6 +34,5 @@ pub enum HandshakeAction {
     None,
     FinalizeConnection(UserKey, OutgoingPacket),
     SendPacket(OutgoingPacket),
-    DisconnectUser(UserKey),
     ForwardPacket,
 }

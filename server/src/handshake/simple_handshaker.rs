@@ -81,11 +81,7 @@ impl Handshaker for HandshakeManager {
             }
             HandshakeHeader::Disconnect => {
                 if self.verify_disconnect_request(address, reader) {
-                    let user_key = *self
-                        .authenticated_and_identified_users
-                        .get(address)
-                        .expect("Server Error: User not authenticated for disconnect request. Shouldn't be possible.");
-                    return Ok(HandshakeAction::DisconnectUser(user_key));
+                    return Ok(HandshakeAction::ForwardPacket);
                 } else {
                     return Ok(HandshakeAction::None);
                 }

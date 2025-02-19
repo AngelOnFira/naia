@@ -2,36 +2,30 @@ use std::{collections::HashMap, net::SocketAddr, panic};
 
 use log::{info, warn};
 
-use naia_shared::{
-    BigMap, BitReader, CompressionConfig, FakeEntityConverter, MessageKinds, PacketType, Serde,
-    SocketConfig, StandardHeader, Timer,
-};
+use naia_shared::{BigMap, BitReader, CompressionConfig, FakeEntityConverter, MessageKinds, PacketType, Serde, SocketConfig, StandardHeader};
 
 use crate::{
-    connection::{base_connection::ServerBaseConnection, io::Io},
+    connection::io::Io,
     events::main_events::MainEvents,
     handshake::{HandshakeAction, HandshakeManager, Handshaker},
     transport::{AuthReceiver, AuthSender, PacketSender, Socket},
-    MainUser, MainUserMut, MainUserRef, NaiaServerError, ServerConfig, UserKey,
+    MainUser, MainUserRef, NaiaServerError, ServerConfig, UserKey,
 };
 
 /// A server that uses either UDP or WebRTC communication to send/receive
 /// messages to/from connected clients, and syncs registered entities to
 /// clients to whom they are in-scope
 pub struct MainServer {
-    // Config
-    server_config: ServerConfig,
     // Protocol
     socket_config: SocketConfig,
     message_kinds: MessageKinds,
     // cont
     io: Io,
     auth_io: Option<(Box<dyn AuthSender>, Box<dyn AuthReceiver>)>,
-    timeout_timer: Timer,
     handshake_manager: Box<dyn Handshaker>,
     // Users
     users: BigMap<UserKey, MainUser>,
-    user_connections: HashMap<SocketAddr, ServerBaseConnection>,
+    user_connections: HashMap<SocketAddr, UserKey>,
     // Events
     incoming_events: MainEvents,
 }
@@ -51,13 +45,11 @@ impl MainServer {
 
         Self {
             // Config
-            server_config: server_config.clone(),
             socket_config,
             message_kinds,
             // Connection
             io,
             auth_io: None,
-            timeout_timer: Timer::new(server_config.connection.disconnection_timeout_duration),
             handshake_manager: Box::new(HandshakeManager::new()),
             // Users
             users: BigMap::new(),
@@ -162,9 +154,8 @@ impl MainServer {
             return;
         };
         user.set_address(user_address);
-        let new_connection = ServerBaseConnection::new(&self.server_config.connection, user_key);
 
-        self.user_connections.insert(user.address(), new_connection);
+        self.user_connections.insert(user.address(), *user_key);
 
         self.incoming_events.push_connection(user_key);
     }
@@ -182,16 +173,6 @@ impl MainServer {
     pub fn user(&self, user_key: &UserKey) -> MainUserRef {
         if self.users.contains_key(user_key) {
             return MainUserRef::new(self, user_key);
-        }
-        panic!("No User exists for given Key!");
-    }
-
-    /// Retrieves an UserMut that exposes read and write operations for the User
-    /// associated with the given UserKey.
-    /// Returns None if the user does not exist.
-    pub fn user_mut(&mut self, user_key: &UserKey) -> MainUserMut {
-        if self.users.contains_key(user_key) {
-            return MainUserMut::new(self, user_key);
         }
         panic!("No User exists for given Key!");
     }
@@ -227,23 +208,8 @@ impl MainServer {
         None
     }
 
-    pub(crate) fn user_disconnect(&mut self, user_key: &UserKey) {
-        let user = self.user_delete(user_key);
-        self.incoming_events
-            .push_disconnection(user_key, user.address());
-    }
-
-    pub(crate) fn user_queue_disconnect(&mut self, user_key: &UserKey) {
-        let Some(user) = self.users.get(user_key) else {
-            panic!("Attempting to disconnect a nonexistent user");
-        };
-        if !user.has_address() {
-            panic!("Attempting to disconnect a nonexistent connection");
-        }
-        let Some(connection) = self.user_connections.get_mut(&user.address()) else {
-            panic!("Attempting to disconnect a nonexistent connection");
-        };
-        connection.manual_disconnect = true;
+    pub fn disconnect_user(&mut self, user_key: &UserKey) {
+        self.user_delete(user_key);
     }
 
     pub(crate) fn user_delete(&mut self, user_key: &UserKey) -> MainUser {
@@ -266,7 +232,6 @@ impl MainServer {
 
     /// Maintain connection with a client and read all incoming packet data
     fn maintain_socket(&mut self) {
-        self.handle_disconnects();
 
         // receive auth events
         if let Some((_, auth_receiver)) = self.auth_io.as_mut() {
@@ -318,10 +283,8 @@ impl MainServer {
                         | PacketType::Heartbeat
                         | PacketType::Pong
                         | PacketType::Ping => {
-                            if let Some(connection) = self.user_connections.get_mut(&address) {
-                                connection.base.mark_heard();
-                                self.incoming_events
-                                    .push_world_packet(address, owned_reader.take_buffer());
+                            if self.user_connections.contains_key(&address) {
+                                self.incoming_events.push_world_packet(address, owned_reader.take_buffer());
                             }
                         }
                         PacketType::Handshake => {
@@ -331,10 +294,7 @@ impl MainServer {
                                 self.user_connections.contains_key(&address),
                             ) {
                                 Ok(HandshakeAction::ForwardPacket) => {
-                                    if let Some(connection) =
-                                        self.user_connections.get_mut(&address)
-                                    {
-                                        connection.base.mark_heard();
+                                    if self.user_connections.contains_key(&address) {
                                         self.incoming_events
                                             .push_world_packet(address, owned_reader.take_buffer());
                                     } else {
@@ -362,9 +322,6 @@ impl MainServer {
                                         );
                                     }
                                 }
-                                Ok(HandshakeAction::DisconnectUser(user_key)) => {
-                                    self.user_disconnect(&user_key);
-                                }
                                 Ok(HandshakeAction::None) => {}
                                 Err(_err) => {
                                     warn!("Server Error: cannot read malformed packet");
@@ -381,27 +338,6 @@ impl MainServer {
                     self.incoming_events
                         .push_error(NaiaServerError::Wrapped(Box::new(error)));
                 }
-            }
-        }
-    }
-
-    fn handle_disconnects(&mut self) {
-        // disconnects
-        if self.timeout_timer.ringing() {
-            self.timeout_timer.reset();
-
-            let mut user_disconnects: Vec<UserKey> = Vec::new();
-
-            for (_, connection) in &mut self.user_connections.iter_mut() {
-                // user disconnects
-                if connection.base.should_drop() || connection.manual_disconnect {
-                    user_disconnects.push(connection.user_key);
-                    continue;
-                }
-            }
-
-            for user_key in user_disconnects {
-                self.user_disconnect(&user_key);
             }
         }
     }

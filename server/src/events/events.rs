@@ -5,20 +5,17 @@ use naia_shared::{
     Replicate, Request,
 };
 
-use crate::{
-    events::{
-        main_events::{
-            AuthEvent, ConnectEvent, DisconnectEvent, ErrorEvent, MainEvent, MainEvents,
-        },
-        world_events::{
-            DelegateEntityEvent, DespawnEntityEvent, EntityAuthGrantEvent, EntityAuthResetEvent,
-            InsertComponentEvent, MessageEvent, PublishEntityEvent, RemoveComponentEvent,
-            RequestEvent, SpawnEntityEvent, TickEvent, UnpublishEntityEvent, UpdateComponentEvent,
-            WorldEvent, WorldEvents,
-        },
+use crate::{events::{
+    main_events::{
+        AuthEvent, ConnectEvent, ErrorEvent, MainEvent, MainEvents,
     },
-    user::UserKey,
-};
+    world_events::{
+        DelegateEntityEvent, DespawnEntityEvent, EntityAuthGrantEvent, EntityAuthResetEvent,
+        InsertComponentEvent, MessageEvent, PublishEntityEvent, RemoveComponentEvent,
+        RequestEvent, SpawnEntityEvent, TickEvent, UnpublishEntityEvent, UpdateComponentEvent,
+        WorldEvent, WorldEvents,
+    },
+}, user::UserKey, DisconnectEvent};
 
 pub struct Events<E: Hash + Copy + Eq + Sync + Send> {
     main_events: MainEvents,
@@ -35,9 +32,6 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
     pub(crate) fn new(mut main_events: MainEvents, mut world_events: WorldEvents<E>) -> Self {
         if main_events.has::<ConnectEvent>() {
             panic!("When using combined Main and World events, MainEvents should not contain ConnectEvent");
-        }
-        if main_events.has::<DisconnectEvent>() {
-            panic!("When using combined Main and World events, MainEvents should not contain DisconnectEvent");
         }
 
         // combine error events

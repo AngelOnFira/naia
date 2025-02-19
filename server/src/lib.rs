@@ -48,7 +48,7 @@ pub use events::{
 pub use room::{RoomKey, RoomMut, RoomRef};
 pub use server::{MainServer, Server, ServerConfig, WorldServer};
 pub use user::{
-    MainUser, MainUserMut, MainUserRef, UserKey, UserMut, UserRef, WorldUser, WorldUserMut,
+    MainUser, MainUserRef, UserKey, UserMut, UserRef, WorldUser,
 };
 pub use user_scope::{UserScopeMut, UserScopeRef};
 pub use world::{

@@ -86,7 +86,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
     /// Must be called regularly, maintains connection to and receives messages
     /// from all Clients
-    pub fn receive<W: WorldMutType<E>>(&mut self, mut world: W) -> Events<E> {
+    pub fn receive<W: WorldMutType<E>>(&mut self, world: W) -> Events<E> {
         // if !self.main_server.is_listening() {
         //     return Events::empty();
         // }
@@ -99,11 +99,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             self.world_server.receive_user(user_key, user_address);
         }
 
-        // handle disconnects
-        for (user_key, _) in main_events.read::<DisconnectEvent>() {
-            self.world_server.disconnect_user(user_key, &mut world);
-        }
-
         // handle world packets
         let to_world_sender = self.to_world_sender_opt.as_mut().unwrap();
         for (addr, payload) in main_events.read::<WorldPacketEvent>() {
@@ -113,7 +108,20 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         }
 
         // world server process
-        let world_events = self.world_server.receive(world);
+        let mut world_events = self.world_server.receive(world);
+
+        // handle disconnects
+        {
+            let mut disconnects = Vec::new();
+            for (user_key, addr) in world_events.read::<DisconnectEvent>() {
+                self.main_server.disconnect_user(&user_key);
+                disconnects.push((user_key, addr));
+            }
+            // put back into world events
+            for (user_key, addr) in disconnects {
+                world_events.push_disconnection(&user_key, addr);
+            }
+        }
 
         // combine events
         Events::<E>::new(main_events, world_events)
@@ -310,7 +318,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Returns None if the user does not exist.
     pub fn user_mut(&mut self, user_key: &UserKey) -> UserMut<E> {
         if self.user_exists(user_key) {
-            return UserMut::new(Some(&mut self.main_server), &mut self.world_server, user_key);
+            return UserMut::new(&mut self.world_server, user_key);
         }
         panic!("No User exists for given Key!");
     }

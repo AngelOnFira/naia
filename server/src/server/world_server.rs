@@ -20,24 +20,13 @@ use naia_shared::{
     SystemChannel, Tick, Timer, WorldMutType, WorldRefType,
 };
 
-use crate::{
-    connection::{
-        io::Io, tick_buffer_messages::TickBufferMessages, world_connection::ServerWorldConnection,
-    },
-    events::world_events::WorldEvents,
-    handshake::HandshakeManager,
-    request::{GlobalRequestManager, GlobalResponseManager},
-    room::Room,
-    time_manager::TimeManager,
-    transport::{PacketReceiver, PacketSender},
-    world::{
-        entity_mut::EntityMut, entity_owner::EntityOwner, entity_ref::EntityRef,
-        entity_room_map::EntityRoomMap, entity_scope_map::EntityScopeMap,
-        global_world_manager::GlobalWorldManager, server_auth_handler::AuthOwner,
-    },
-    NaiaServerError, ReplicationConfig, RoomKey, RoomMut, RoomRef, ServerConfig, UserKey,
-    UserScopeMut, UserScopeRef, WorldUser, WorldUserMut, UserRef,
-};
+use crate::{connection::{
+    io::Io, tick_buffer_messages::TickBufferMessages, world_connection::ServerWorldConnection,
+}, events::world_events::WorldEvents, handshake::HandshakeManager, request::{GlobalRequestManager, GlobalResponseManager}, room::Room, time_manager::TimeManager, transport::{PacketReceiver, PacketSender}, world::{
+    entity_mut::EntityMut, entity_owner::EntityOwner, entity_ref::EntityRef,
+    entity_room_map::EntityRoomMap, entity_scope_map::EntityScopeMap,
+    global_world_manager::GlobalWorldManager, server_auth_handler::AuthOwner,
+}, NaiaServerError, ReplicationConfig, RoomKey, RoomMut, RoomRef, ServerConfig, UserKey, UserScopeMut, UserScopeRef, WorldUser, UserRef, UserMut};
 
 /// A server that uses either UDP or WebRTC communication to send/receive
 /// messages to/from connected clients, and syncs registered entities to
@@ -163,10 +152,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         }
 
         self.incoming_events.push_connection(&user_key);
-    }
-
-    pub fn disconnect_user<W: WorldMutType<E>>(&mut self, user_key: UserKey, world: &mut W) {
-        self.user_disconnect(&user_key, world);
     }
 
     /// Must be called regularly, maintains connection to and receives messages
@@ -869,9 +854,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// Retrieves an UserMut that exposes read and write operations for the User
     /// associated with the given UserKey.
     /// Returns None if the user does not exist.
-    pub fn user_mut(&mut self, user_key: &UserKey) -> WorldUserMut<E> {
+    pub fn user_mut(&mut self, user_key: &UserKey) -> UserMut<E> {
         if self.users.contains_key(user_key) {
-            return WorldUserMut::new(self, user_key);
+            return UserMut::new(self, user_key);
         }
         panic!("No User exists for given Key!");
     }

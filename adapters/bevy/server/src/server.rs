@@ -228,7 +228,7 @@ impl<'w> Server<'w> {
 
     pub fn user_mut(&mut self, user_key: &UserKey) -> UserMut<Entity> {
         match &mut *self.server_impl {
-            ServerImpl::WorldOnly(server) => server.user_mut(user_key).upgrade(),
+            ServerImpl::WorldOnly(server) => server.user_mut(user_key),
             ServerImpl::Full(server) => server.user_mut(user_key),
         }
     }
