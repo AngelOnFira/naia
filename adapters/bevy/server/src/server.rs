@@ -5,9 +5,17 @@ use bevy_ecs::{
     system::{ResMut, Resource, SystemParam},
 };
 
-use naia_server::{shared::SocketConfig, transport::Socket, NaiaServerError, ReplicationConfig, RoomKey, RoomMut, RoomRef, Server as NaiaServer, WorldServer as NaiaWorldServer, TickBufferMessages, UserKey, UserMut, UserRef, UserScopeMut, UserScopeRef, EntityOwner, Events};
+use naia_server::{
+    shared::SocketConfig, transport::Socket, EntityOwner, Events, NaiaServerError,
+    ReplicationConfig, RoomKey, RoomMut, RoomRef, Server as NaiaServer, TickBufferMessages,
+    UserKey, UserMut, UserRef, UserScopeMut, UserScopeRef, WorldServer as NaiaWorldServer,
+};
 
-use naia_bevy_shared::{Channel, ComponentKind, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityDoesNotExistError, GlobalEntity, Message, Request, Response, ResponseReceiveKey, ResponseSendKey, Tick, WorldMutType, WorldRefType};
+use naia_bevy_shared::{
+    Channel, ComponentKind, EntityAndGlobalEntityConverter, EntityAuthStatus,
+    EntityDoesNotExistError, GlobalEntity, Message, Request, Response, ResponseReceiveKey,
+    ResponseSendKey, Tick, WorldMutType, WorldRefType,
+};
 
 use crate::Replicate;
 
@@ -41,7 +49,7 @@ impl ServerImpl {
             Self::WorldOnly(server) => {
                 let world_events = server.receive(world);
                 Events::<Entity>::from(world_events)
-            },
+            }
         }
     }
 
@@ -73,19 +81,31 @@ impl ServerImpl {
         config: ReplicationConfig,
     ) {
         match self {
-            Self::Full(server) => server.configure_entity_replication::<W>(world, world_entity, config),
-            Self::WorldOnly(server) => server.configure_entity_replication::<W>(world, world_entity, config),
+            Self::Full(server) => {
+                server.configure_entity_replication::<W>(world, world_entity, config)
+            }
+            Self::WorldOnly(server) => {
+                server.configure_entity_replication::<W>(world, world_entity, config)
+            }
         }
     }
 
-    pub(crate) fn insert_component_worldless(&mut self, entity: &Entity, component: &mut dyn Replicate) {
+    pub(crate) fn insert_component_worldless(
+        &mut self,
+        entity: &Entity,
+        component: &mut dyn Replicate,
+    ) {
         match self {
             Self::Full(server) => server.insert_component_worldless(entity, component),
             Self::WorldOnly(server) => server.insert_component_worldless(entity, component),
         }
     }
 
-    pub(crate) fn remove_component_worldless(&mut self, entity: &Entity, component_kind: &ComponentKind) {
+    pub(crate) fn remove_component_worldless(
+        &mut self,
+        entity: &Entity,
+        component_kind: &ComponentKind,
+    ) {
         match self {
             Self::Full(server) => server.remove_component_worldless(entity, component_kind),
             Self::WorldOnly(server) => server.remove_component_worldless(entity, component_kind),
@@ -114,7 +134,9 @@ impl<'w> Server<'w> {
 
     pub fn listen<S: Into<Box<dyn Socket>>>(&mut self, socket: S) {
         match &mut *self.server_impl {
-            ServerImpl::WorldOnly(_server) => panic!("WorldOnly Servers do not support this function"),
+            ServerImpl::WorldOnly(_server) => {
+                panic!("WorldOnly Servers do not support this function")
+            }
             ServerImpl::Full(server) => server.listen(socket),
         }
     }
@@ -125,22 +147,28 @@ impl<'w> Server<'w> {
 
     pub fn accept_connection(&mut self, user_key: &UserKey) {
         match &mut *self.server_impl {
-            ServerImpl::WorldOnly(_server) => panic!("WorldOnly Servers do not support this function"),
+            ServerImpl::WorldOnly(_server) => {
+                panic!("WorldOnly Servers do not support this function")
+            }
             ServerImpl::Full(server) => server.accept_connection(user_key),
         }
     }
 
     pub fn reject_connection(&mut self, user_key: &UserKey) {
         match &mut *self.server_impl {
-            ServerImpl::WorldOnly(_server) => panic!("WorldOnly Servers do not support this function"),
+            ServerImpl::WorldOnly(_server) => {
+                panic!("WorldOnly Servers do not support this function")
+            }
             ServerImpl::Full(server) => server.reject_connection(user_key),
         }
     }
 
     // Config
     pub fn socket_config(&self) -> &SocketConfig {
-        match & *self.server_impl {
-            ServerImpl::WorldOnly(_server) => panic!("WorldOnly Servers do not support this function"),
+        match &*self.server_impl {
+            ServerImpl::WorldOnly(_server) => {
+                panic!("WorldOnly Servers do not support this function")
+            }
             ServerImpl::Full(server) => server.socket_config(),
         }
     }
@@ -204,7 +232,7 @@ impl<'w> Server<'w> {
     //// Updates ////
 
     pub fn scope_checks(&self) -> Vec<(RoomKey, UserKey, Entity)> {
-        match & *self.server_impl {
+        match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.scope_checks(),
             ServerImpl::Full(server) => server.scope_checks(),
         }
@@ -213,14 +241,14 @@ impl<'w> Server<'w> {
     //// Users ////
 
     pub fn user_exists(&self, user_key: &UserKey) -> bool {
-        match & *self.server_impl {
+        match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.user_exists(user_key),
             ServerImpl::Full(server) => server.user_exists(user_key),
         }
     }
 
     pub fn user(&self, user_key: &UserKey) -> UserRef<Entity> {
-        match & *self.server_impl {
+        match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.user(user_key),
             ServerImpl::Full(server) => server.user(user_key),
         }
@@ -234,21 +262,21 @@ impl<'w> Server<'w> {
     }
 
     pub fn user_keys(&self) -> Vec<UserKey> {
-        match & *self.server_impl {
+        match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.user_keys(),
             ServerImpl::Full(server) => server.user_keys(),
         }
     }
 
     pub fn users_count(&self) -> usize {
-        match & *self.server_impl {
+        match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.users_count(),
             ServerImpl::Full(server) => server.users_count(),
         }
     }
 
     pub fn user_scope(&self, user_key: &UserKey) -> UserScopeRef<Entity> {
-        match & *self.server_impl {
+        match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.user_scope(user_key),
             ServerImpl::Full(server) => server.user_scope(user_key),
         }
@@ -271,14 +299,14 @@ impl<'w> Server<'w> {
     }
 
     pub fn room_exists(&self, room_key: &RoomKey) -> bool {
-        match & *self.server_impl {
+        match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.room_exists(room_key),
             ServerImpl::Full(server) => server.room_exists(room_key),
         }
     }
 
     pub fn room(&self, room_key: &RoomKey) -> RoomRef<Entity> {
-        match & *self.server_impl {
+        match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.room(room_key),
             ServerImpl::Full(server) => server.room(room_key),
         }
@@ -292,14 +320,14 @@ impl<'w> Server<'w> {
     }
 
     pub fn room_keys(&self) -> Vec<RoomKey> {
-        match & *self.server_impl {
+        match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.room_keys(),
             ServerImpl::Full(server) => server.room_keys(),
         }
     }
 
     pub fn rooms_count(&self) -> usize {
-        match & *self.server_impl {
+        match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.rooms_count(),
             ServerImpl::Full(server) => server.rooms_count(),
         }
@@ -308,14 +336,14 @@ impl<'w> Server<'w> {
     //// Ticks ////
 
     pub fn current_tick(&self) -> Tick {
-        match & *self.server_impl {
+        match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.current_tick(),
             ServerImpl::Full(server) => server.current_tick(),
         }
     }
 
     pub fn average_tick_duration(&self) -> Duration {
-        match & *self.server_impl {
+        match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.average_tick_duration(),
             ServerImpl::Full(server) => server.average_tick_duration(),
         }
@@ -324,14 +352,14 @@ impl<'w> Server<'w> {
     //// Network Conditions ////
 
     pub fn jitter(&self, user_key: &UserKey) -> Option<f32> {
-        match & *self.server_impl {
+        match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.jitter(user_key),
             ServerImpl::Full(server) => server.jitter(user_key),
         }
     }
 
     pub fn rtt(&self, user_key: &UserKey) -> Option<f32> {
-        match & *self.server_impl {
+        match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.rtt(user_key),
             ServerImpl::Full(server) => server.rtt(user_key),
         }
@@ -368,7 +396,7 @@ impl<'w> Server<'w> {
     }
 
     pub(crate) fn replication_config(&self, entity: &Entity) -> Option<ReplicationConfig> {
-        match & *self.server_impl {
+        match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.entity_replication_config(entity),
             ServerImpl::Full(server) => server.entity_replication_config(entity),
         }
@@ -391,7 +419,7 @@ impl<'w> EntityAndGlobalEntityConverter<Entity> for Server<'w> {
         &self,
         global_entity: &GlobalEntity,
     ) -> Result<Entity, EntityDoesNotExistError> {
-        match & *self.server_impl {
+        match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.global_entity_to_entity(global_entity),
             ServerImpl::Full(server) => server.global_entity_to_entity(global_entity),
         }
@@ -401,7 +429,7 @@ impl<'w> EntityAndGlobalEntityConverter<Entity> for Server<'w> {
         &self,
         entity: &Entity,
     ) -> Result<GlobalEntity, EntityDoesNotExistError> {
-        match & *self.server_impl {
+        match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.entity_to_global_entity(entity),
             ServerImpl::Full(server) => server.entity_to_global_entity(entity),
         }

@@ -2,7 +2,13 @@ use std::{any::Any, hash::Hash};
 
 use log::warn;
 
-use naia_shared::{BitReader, BitWriter, ChannelKind, ChannelKinds, ComponentKinds, ConnectionConfig, EntityAndGlobalEntityConverter, EntityEventMessage, EntityEventMessageAction, EntityResponseEvent, GlobalEntitySpawner, HostType, HostWorldEvents, Instant, MessageKinds, OwnedBitReader, PacketType, Protocol, Serde, SerdeErr, StandardHeader, SystemChannel, Tick, Timer, BaseConnection, WorldMutType, WorldRefType};
+use naia_shared::{
+    BaseConnection, BitReader, BitWriter, ChannelKind, ChannelKinds, ComponentKinds,
+    ConnectionConfig, EntityAndGlobalEntityConverter, EntityEventMessage, EntityEventMessageAction,
+    EntityResponseEvent, GlobalEntitySpawner, HostType, HostWorldEvents, Instant, MessageKinds,
+    OwnedBitReader, PacketType, Protocol, Serde, SerdeErr, StandardHeader, SystemChannel, Tick,
+    Timer, WorldMutType, WorldRefType,
+};
 
 use crate::{
     connection::{
@@ -19,12 +25,12 @@ pub struct Connection {
     pub timeout_timer: Timer,
     pub time_manager: TimeManager,
     pub tick_buffer: TickBufferSender,
-    /// Small buffer when receiving updates (entity actions, entity updates) from the server
-    /// to make sure we receive them in order
-    jitter_buffer: TickQueue<OwnedBitReader>,
     // Request/Response
     pub global_request_manager: GlobalRequestManager,
     pub global_response_manager: GlobalResponseManager,
+    /// Small buffer when receiving updates (entity actions, entity updates) from the server
+    /// to make sure we receive them in order
+    jitter_buffer: TickQueue<OwnedBitReader>,
 }
 
 impl Connection {
@@ -34,8 +40,6 @@ impl Connection {
         time_manager: TimeManager,
         global_world_manager: &GlobalWorldManager,
     ) -> Self {
-        let tick_buffer = TickBufferSender::new(channel_kinds);
-
         let mut connection = Self {
             timeout_timer: Timer::new(connection_config.disconnection_timeout_duration),
             base: BaseConnection::new(
@@ -47,7 +51,7 @@ impl Connection {
                 global_world_manager,
             ),
             time_manager,
-            tick_buffer,
+            tick_buffer: TickBufferSender::new(channel_kinds),
             jitter_buffer: TickQueue::new(),
             global_request_manager: GlobalRequestManager::new(),
             global_response_manager: GlobalResponseManager::new(),

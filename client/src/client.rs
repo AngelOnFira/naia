@@ -1178,10 +1178,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 let Some(connection) = &mut self.server_connection else {
                     return;
                 };
-                connection.base.host_world_manager.untrack_remote_entity(
-                    &mut connection.base.local_world_manager,
-                    global_entity,
-                );
+                connection
+                    .base
+                    .host_world_manager
+                    .untrack_remote_entity(&mut connection.base.local_world_manager, global_entity);
 
                 // push outgoing event
                 self.incoming_events.push_auth_reset(*world_entity);

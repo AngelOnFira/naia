@@ -17,9 +17,9 @@ pub mod transport;
 pub mod shared {
     pub use naia_shared::{
         default_channels, BigMap, BigMapKey, BitReader, BitWrite, BitWriter, ConstBitLength,
-        FileBitWriter, GlobalResponseId, Random, ResponseReceiveKey, Serde, SerdeErr,
+        FileBitWriter, GlobalResponseId, Protocol, Random, ResponseReceiveKey, Serde, SerdeErr,
         SignedInteger, SignedVariableInteger, SocketConfig, UnsignedInteger,
-        UnsignedVariableInteger, Protocol,
+        UnsignedVariableInteger,
     };
 }
 
@@ -47,9 +47,7 @@ pub use events::{
 };
 pub use room::{RoomKey, RoomMut, RoomRef};
 pub use server::{MainServer, Server, ServerConfig, WorldServer};
-pub use user::{
-    MainUser, MainUserRef, UserKey, UserMut, UserRef, WorldUser,
-};
+pub use user::{MainUser, MainUserRef, UserKey, UserMut, UserRef, WorldUser};
 pub use user_scope::{UserScopeMut, UserScopeRef};
 pub use world::{
     entity_mut::EntityMut, entity_owner::EntityOwner, replication_config::ReplicationConfig,

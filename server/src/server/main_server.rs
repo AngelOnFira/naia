@@ -2,7 +2,10 @@ use std::{collections::HashMap, net::SocketAddr, panic};
 
 use log::{info, warn};
 
-use naia_shared::{BigMap, BitReader, CompressionConfig, FakeEntityConverter, MessageKinds, PacketType, Serde, SocketConfig, StandardHeader};
+use naia_shared::{
+    BigMap, BitReader, CompressionConfig, FakeEntityConverter, MessageKinds, PacketType, Serde,
+    SocketConfig, StandardHeader,
+};
 
 use crate::{
     connection::io::Io,
@@ -232,7 +235,6 @@ impl MainServer {
 
     /// Maintain connection with a client and read all incoming packet data
     fn maintain_socket(&mut self) {
-
         // receive auth events
         if let Some((_, auth_receiver)) = self.auth_io.as_mut() {
             loop {
@@ -284,7 +286,8 @@ impl MainServer {
                         | PacketType::Pong
                         | PacketType::Ping => {
                             if self.user_connections.contains_key(&address) {
-                                self.incoming_events.push_world_packet(address, owned_reader.take_buffer());
+                                self.incoming_events
+                                    .push_world_packet(address, owned_reader.take_buffer());
                             }
                         }
                         PacketType::Handshake => {

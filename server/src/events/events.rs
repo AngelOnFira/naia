@@ -5,17 +5,19 @@ use naia_shared::{
     Replicate, Request,
 };
 
-use crate::{events::{
-    main_events::{
-        AuthEvent, ConnectEvent, ErrorEvent, MainEvent, MainEvents,
+use crate::{
+    events::{
+        main_events::{AuthEvent, ConnectEvent, ErrorEvent, MainEvent, MainEvents},
+        world_events::{
+            DelegateEntityEvent, DespawnEntityEvent, EntityAuthGrantEvent, EntityAuthResetEvent,
+            InsertComponentEvent, MessageEvent, PublishEntityEvent, RemoveComponentEvent,
+            RequestEvent, SpawnEntityEvent, TickEvent, UnpublishEntityEvent, UpdateComponentEvent,
+            WorldEvent, WorldEvents,
+        },
     },
-    world_events::{
-        DelegateEntityEvent, DespawnEntityEvent, EntityAuthGrantEvent, EntityAuthResetEvent,
-        InsertComponentEvent, MessageEvent, PublishEntityEvent, RemoveComponentEvent,
-        RequestEvent, SpawnEntityEvent, TickEvent, UnpublishEntityEvent, UpdateComponentEvent,
-        WorldEvent, WorldEvents,
-    },
-}, user::UserKey, DisconnectEvent};
+    user::UserKey,
+    DisconnectEvent,
+};
 
 pub struct Events<E: Hash + Copy + Eq + Sync + Send> {
     main_events: MainEvents,

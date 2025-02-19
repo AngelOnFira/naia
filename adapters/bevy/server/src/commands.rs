@@ -98,11 +98,7 @@ impl ConfigureReplicationCommand {
 impl BevyCommand for ConfigureReplicationCommand {
     fn apply(self, world: &mut World) {
         world.resource_scope(|world, mut server: Mut<ServerImpl>| {
-            server.configure_entity_replication(
-                &mut world.proxy_mut(),
-                &self.entity,
-                self.config,
-            );
+            server.configure_entity_replication(&mut world.proxy_mut(), &self.entity, self.config);
         });
     }
 }

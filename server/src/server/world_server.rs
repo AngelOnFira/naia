@@ -20,13 +20,22 @@ use naia_shared::{
     SystemChannel, Tick, Timer, WorldMutType, WorldRefType,
 };
 
-use crate::{connection::{
-    io::Io, tick_buffer_messages::TickBufferMessages, connection::Connection,
-}, events::world_events::WorldEvents, handshake::HandshakeManager, request::{GlobalRequestManager, GlobalResponseManager}, room::Room, time_manager::TimeManager, transport::{PacketReceiver, PacketSender}, world::{
-    entity_mut::EntityMut, entity_owner::EntityOwner, entity_ref::EntityRef,
-    entity_room_map::EntityRoomMap, entity_scope_map::EntityScopeMap,
-    global_world_manager::GlobalWorldManager, server_auth_handler::AuthOwner,
-}, NaiaServerError, ReplicationConfig, RoomKey, RoomMut, RoomRef, ServerConfig, UserKey, UserScopeMut, UserScopeRef, WorldUser, UserRef, UserMut};
+use crate::{
+    connection::{connection::Connection, io::Io, tick_buffer_messages::TickBufferMessages},
+    events::world_events::WorldEvents,
+    handshake::HandshakeManager,
+    request::{GlobalRequestManager, GlobalResponseManager},
+    room::Room,
+    time_manager::TimeManager,
+    transport::{PacketReceiver, PacketSender},
+    world::{
+        entity_mut::EntityMut, entity_owner::EntityOwner, entity_ref::EntityRef,
+        entity_room_map::EntityRoomMap, entity_scope_map::EntityScopeMap,
+        global_world_manager::GlobalWorldManager, server_auth_handler::AuthOwner,
+    },
+    NaiaServerError, ReplicationConfig, RoomKey, RoomMut, RoomRef, ServerConfig, UserKey, UserMut,
+    UserRef, UserScopeMut, UserScopeRef, WorldUser,
+};
 
 /// A server that uses either UDP or WebRTC communication to send/receive
 /// messages to/from connected clients, and syncs registered entities to

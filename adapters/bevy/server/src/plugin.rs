@@ -4,7 +4,7 @@ use bevy_app::{App, Last, Plugin as PluginType, Startup, Update};
 use bevy_ecs::{entity::Entity, schedule::IntoSystemConfigs};
 
 use naia_bevy_shared::{BeforeReceiveEvents, Protocol, SendPackets, SharedPlugin};
-use naia_server::{Server, WorldServer, ServerConfig, shared::{Protocol as NaiaProtocol}};
+use naia_server::{shared::Protocol as NaiaProtocol, Server, ServerConfig, WorldServer};
 
 use super::{
     events::{
@@ -85,7 +85,7 @@ impl PluginType for Plugin {
                 message_kinds.clone(),
                 component_kinds,
                 client_authoritative_entities,
-                tick_interval
+                tick_interval,
             );
             ServerImpl::world_only(server)
         };

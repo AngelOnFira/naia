@@ -2,10 +2,7 @@ use std::{collections::hash_set::Iter, hash::Hash, net::SocketAddr};
 
 use naia_shared::BigMapKey;
 
-use crate::{
-    server::WorldServer,
-    RoomKey,
-};
+use crate::{server::WorldServer, RoomKey};
 
 // UserKey
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
@@ -20,7 +17,6 @@ impl BigMapKey for UserKey {
         UserKey(value)
     }
 }
-
 
 // UserRef
 
