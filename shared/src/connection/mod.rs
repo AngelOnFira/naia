@@ -1,6 +1,5 @@
 pub mod ack_manager;
 pub mod bandwidth_monitor;
-pub mod base_connection;
 pub mod compression_config;
 pub mod connection_config;
 pub mod decoder;
@@ -10,4 +9,4 @@ pub mod packet_type;
 pub mod ping_store;
 pub mod sequence_buffer;
 pub mod standard_header;
-pub mod world_connection;
+pub mod base_connection;

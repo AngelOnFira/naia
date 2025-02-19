@@ -5,4 +5,4 @@ pub mod ping_manager;
 pub mod tick_buffer_messages;
 pub mod tick_buffer_receiver;
 pub mod tick_buffer_receiver_channel;
-pub mod world_connection;
+pub mod connection;

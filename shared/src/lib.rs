@@ -57,7 +57,6 @@ pub use backends::{Timer, Timestamp};
 pub use connection::{
     ack_manager::AckManager,
     bandwidth_monitor::BandwidthMonitor,
-    base_connection::BaseConnection,
     compression_config::{CompressionConfig, CompressionMode},
     connection_config::ConnectionConfig,
     decoder::Decoder,
@@ -66,7 +65,7 @@ pub use connection::{
     packet_type::PacketType,
     ping_store::{PingIndex, PingStore},
     standard_header::StandardHeader,
-    world_connection::WorldConnection,
+    base_connection::BaseConnection,
 };
 pub use messages::{
     channels::{
