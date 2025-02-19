@@ -2,10 +2,7 @@ use std::{any::TypeId, collections::HashMap};
 
 use naia_serde::{BitReader, BitWrite, ConstBitLength, Serde, SerdeErr};
 
-use crate::{
-    ComponentFieldUpdate, ComponentUpdate, LocalEntityAndGlobalEntityConverter, RemoteEntity,
-    Replicate, ReplicateBuilder,
-};
+use crate::{ComponentFieldUpdate, ComponentUpdate, LocalEntityAndGlobalEntityConverter, RemoteEntity, Replicate, ReplicateBuilder};
 
 type NetId = u16;
 
@@ -54,6 +51,24 @@ pub struct ComponentKinds {
     current_net_id: NetId,
     kind_map: HashMap<ComponentKind, (NetId, Box<dyn ReplicateBuilder>)>,
     net_id_map: HashMap<NetId, ComponentKind>,
+}
+
+impl Clone for ComponentKinds {
+    fn clone(&self) -> Self {
+        let current_net_id = self.current_net_id;
+        let net_id_map = self.net_id_map.clone();
+
+        let mut kind_map = HashMap::new();
+        for (key, value) in self.kind_map.iter() {
+            kind_map.insert(*key, (value.0, value.1.box_clone()));
+        }
+
+        Self {
+            current_net_id,
+            kind_map,
+            net_id_map,
+        }
+    }
 }
 
 impl ComponentKinds {

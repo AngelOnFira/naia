@@ -43,7 +43,7 @@ pub use events::{
     AuthEvent, ConnectEvent, DelegateEntityEvent, DespawnEntityEvent, DisconnectEvent,
     EntityAuthGrantEvent, EntityAuthResetEvent, ErrorEvent, Event, Events, InsertComponentEvent,
     MessageEvent, PublishEntityEvent, RemoveComponentEvent, RequestEvent, SpawnEntityEvent,
-    TickEvent, UnpublishEntityEvent, UpdateComponentEvent,
+    TickEvent, UnpublishEntityEvent, UpdateComponentEvent, MainEvents, WorldEvents, WorldPacketEvent,
 };
 pub use room::{RoomKey, RoomMut, RoomRef};
 pub use server::{MainServer, Server, ServerConfig, WorldServer};

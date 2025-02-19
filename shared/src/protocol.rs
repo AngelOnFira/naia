@@ -25,6 +25,7 @@ pub trait ProtocolPlugin {
 }
 
 // Protocol
+#[derive(Clone)]
 pub struct Protocol {
     pub channel_kinds: ChannelKinds,
     pub message_kinds: MessageKinds,

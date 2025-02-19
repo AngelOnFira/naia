@@ -1,9 +1,10 @@
+use std::{hash::Hash, net::SocketAddr, panic, time::Duration};
+
 use naia_shared::{
     Channel, ComponentKind, EntityAndGlobalEntityConverter, EntityAuthStatus,
     EntityDoesNotExistError, GlobalEntity, Message, Protocol, RemoteEntity, Replicate, Request,
     Response, ResponseReceiveKey, ResponseSendKey, SocketConfig, Tick, WorldMutType, WorldRefType,
 };
-use std::{hash::Hash, net::SocketAddr, panic, time::Duration};
 
 use crate::{
     connection::tick_buffer_messages::TickBufferMessages,
@@ -28,34 +29,17 @@ pub struct Server<E: Copy + Eq + Hash + Send + Sync> {
 impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Create a new Server
     pub fn new<P: Into<Protocol>>(server_config: ServerConfig, protocol: P) -> Self {
-        // split up protocol
+
         let protocol: Protocol = protocol.into();
-        let Protocol {
-            channel_kinds,
-            message_kinds,
-            component_kinds,
-            socket,
-            tick_interval,
-            compression,
-            client_authoritative_entities,
-            ..
-        } = protocol;
 
         Self {
             main_server: MainServer::new(
                 server_config.clone(),
-                socket,
-                compression.clone(),
-                message_kinds.clone(),
+                protocol.clone(),
             ),
             world_server: WorldServer::new(
                 server_config,
-                compression,
-                channel_kinds,
-                message_kinds.clone(),
-                component_kinds,
-                client_authoritative_entities,
-                tick_interval,
+                protocol,
             ),
             to_world_sender_opt: None,
         }
@@ -101,7 +85,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
         // handle world packets
         let to_world_sender = self.to_world_sender_opt.as_mut().unwrap();
-        for (addr, payload) in main_events.read::<WorldPacketEvent>() {
+        for (_, addr, payload) in main_events.read::<WorldPacketEvent>() {
             if let Err(_e) = to_world_sender.send(&addr, &payload) {
                 main_events.push_error(NaiaServerError::SendError(addr));
             }

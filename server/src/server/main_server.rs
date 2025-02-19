@@ -2,10 +2,7 @@ use std::{collections::HashMap, net::SocketAddr, panic};
 
 use log::{info, warn};
 
-use naia_shared::{
-    BigMap, BitReader, CompressionConfig, FakeEntityConverter, MessageKinds, PacketType, Serde,
-    SocketConfig, StandardHeader,
-};
+use naia_shared::{BigMap, BitReader, FakeEntityConverter, MessageKinds, PacketType, Protocol, Serde, SocketConfig, StandardHeader};
 
 use crate::{
     connection::io::Io,
@@ -35,20 +32,28 @@ pub struct MainServer {
 
 impl MainServer {
     /// Create a new MainServer
-    pub fn new(
+    pub fn new<P: Into<Protocol>>(
         server_config: ServerConfig,
-        socket_config: SocketConfig,
-        compression_config: Option<CompressionConfig>,
-        message_kinds: MessageKinds,
+        protocol: P,
     ) -> Self {
+
+        let protocol: Protocol = protocol.into();
+
+        let Protocol {
+            socket,
+            message_kinds,
+            compression,
+            ..
+        } = protocol;
+
         let io = Io::new(
             &server_config.connection.bandwidth_measure_duration,
-            &compression_config,
+            &compression,
         );
 
         Self {
             // Config
-            socket_config,
+            socket_config: socket,
             message_kinds,
             // Connection
             io,
@@ -285,9 +290,9 @@ impl MainServer {
                         | PacketType::Heartbeat
                         | PacketType::Pong
                         | PacketType::Ping => {
-                            if self.user_connections.contains_key(&address) {
+                            if let Some(user_key) = self.user_connections.get(&address) {
                                 self.incoming_events
-                                    .push_world_packet(address, owned_reader.take_buffer());
+                                    .push_world_packet(*user_key, address, owned_reader.take_buffer());
                             }
                         }
                         PacketType::Handshake => {
@@ -297,9 +302,9 @@ impl MainServer {
                                 self.user_connections.contains_key(&address),
                             ) {
                                 Ok(HandshakeAction::ForwardPacket) => {
-                                    if self.user_connections.contains_key(&address) {
+                                    if let Some(user_key) = self.user_connections.get(&address) {
                                         self.incoming_events
-                                            .push_world_packet(address, owned_reader.take_buffer());
+                                            .push_world_packet(*user_key, address, owned_reader.take_buffer());
                                     } else {
                                         warn!(
                                             "Server Error: Cannot forward packet to unknown user.."

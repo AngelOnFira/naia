@@ -9,16 +9,7 @@ use std::{
 
 use log::{info, warn};
 
-use naia_shared::{
-    handshake::HandshakeHeader, BigMap, BitReader, BitWriter, Channel, ChannelKind, ChannelKinds,
-    ComponentKind, ComponentKinds, CompressionConfig, EntityAndGlobalEntityConverter,
-    EntityAuthStatus, EntityConverterMut, EntityDoesNotExistError, EntityEventMessage,
-    EntityResponseEvent, GlobalEntity, GlobalEntityMap, GlobalEntitySpawner, GlobalRequestId,
-    GlobalResponseId, GlobalWorldManagerType, Instant, Message, MessageContainer, MessageKinds,
-    PacketType, RemoteEntity, Replicate, ReplicatedComponent, Request, Response,
-    ResponseReceiveKey, ResponseSendKey, Serde, SerdeErr, SharedGlobalWorldManager, StandardHeader,
-    SystemChannel, Tick, Timer, WorldMutType, WorldRefType,
-};
+use naia_shared::{handshake::HandshakeHeader, BigMap, BitReader, BitWriter, Channel, ChannelKind, ChannelKinds, ComponentKind, ComponentKinds, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityConverterMut, EntityDoesNotExistError, EntityEventMessage, EntityResponseEvent, GlobalEntity, GlobalEntityMap, GlobalEntitySpawner, GlobalRequestId, GlobalResponseId, GlobalWorldManagerType, Instant, Message, MessageContainer, MessageKinds, PacketType, Protocol, RemoteEntity, Replicate, ReplicatedComponent, Request, Response, ResponseReceiveKey, ResponseSendKey, Serde, SerdeErr, SharedGlobalWorldManager, StandardHeader, SystemChannel, Tick, Timer, WorldMutType, WorldRefType};
 
 use crate::{
     connection::{connection::Connection, io::Io, tick_buffer_messages::TickBufferMessages},
@@ -74,23 +65,31 @@ pub struct WorldServer<E: Copy + Eq + Hash + Send + Sync> {
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
-    /// Create a new Server
-    pub fn new(
+    /// Create a new WorldServer
+    pub fn new<P: Into<Protocol>>(
         server_config: ServerConfig,
-        compression_config: Option<CompressionConfig>,
-        channel_kinds: ChannelKinds,
-        message_kinds: MessageKinds,
-        component_kinds: ComponentKinds,
-        client_authoritative_entities: bool,
-        tick_interval: Duration,
+        protocol: P,
     ) -> Self {
+
+        let protocol: Protocol = protocol.into();
+
+        let Protocol {
+            channel_kinds,
+            message_kinds,
+            component_kinds,
+            tick_interval,
+            compression,
+            client_authoritative_entities,
+            ..
+        } = protocol;
+
         let heartbeat_timer = Timer::new(server_config.connection.heartbeat_interval);
         let ping_timer = Timer::new(server_config.ping.ping_interval);
         let timeout_timer = Timer::new(server_config.connection.disconnection_timeout_duration);
 
         let io = Io::new(
             &server_config.connection.bandwidth_measure_duration,
-            &compression_config,
+            &compression,
         );
 
         let time_manager = TimeManager::new(tick_interval);

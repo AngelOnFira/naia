@@ -1,9 +1,6 @@
 use proc_macro2::{Punct, Spacing, Span, TokenStream};
 use quote::{format_ident, quote};
-use syn::{
-    parse_macro_input, Data, DeriveInput, Fields, GenericArgument, Ident, Index, LitStr, Member,
-    PathArguments, Type,
-};
+use syn::{parse_macro_input, Data, DeriveInput, Fields, GenericArgument, GenericParam, Generics, Ident, Index, LitStr, Member, PathArguments, Type};
 
 use crate::{
     message::get_builder_new_method,
@@ -88,6 +85,7 @@ pub fn replicate_impl(
         &untyped_generics,
         &input.generics,
     );
+    let builder_box_clone_method = get_builder_box_clone_method(&input.generics);
     let builder_read_method =
         get_builder_read_method(&replica_name, &properties, &struct_type, &turbofish);
     let read_create_update_method =
@@ -135,6 +133,7 @@ pub fn replicate_impl(
                 #builder_read_method
                 #read_create_update_method
                 #split_update_method
+                #builder_box_clone_method
             }
             impl #typed_generics Named for #builder_name #untyped_generics {
                 fn name(&self) -> String {
@@ -1290,6 +1289,44 @@ fn get_relations_complete_method(fields: &[Property], struct_type: &StructType) 
     quote! {
         fn relations_complete(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter) {
             #body
+        }
+    }
+}
+
+pub fn get_builder_box_clone_method(input_generics: &Generics) -> TokenStream {
+    let fn_impl = if input_generics.gt_token.is_none() {
+        quote! { Self }
+    } else {
+        let mut output = quote! {};
+
+        for param in input_generics.params.iter() {
+            let GenericParam::Type(type_param) = param else {
+                panic!("Only type parameters are supported for now");
+            };
+
+            let field_name =
+                format_ident!("phantom_{}", type_param.ident.to_string().to_lowercase());
+            let new_output_right = quote! {
+                #field_name: std::marker::PhantomData,
+            };
+            let new_output_result = quote! {
+                #output
+                #new_output_right
+            };
+            output = new_output_result;
+        }
+
+        quote! {
+            Self {
+                #output
+            }
+        }
+    };
+
+    quote! {
+        fn box_clone(&self) -> Box<dyn ReplicateBuilder> {
+            let me = #fn_impl ;
+            Box::new(me)
         }
     }
 }

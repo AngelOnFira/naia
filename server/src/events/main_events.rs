@@ -8,7 +8,7 @@ pub struct MainEvents {
     auths: HashMap<MessageKind, Vec<(UserKey, MessageContainer)>>,
     connections: Vec<UserKey>,
     errors: Vec<NaiaServerError>,
-    world_packets: Vec<(SocketAddr, Box<[u8]>)>,
+    world_packets: Vec<(UserKey, SocketAddr, Box<[u8]>)>,
 
     empty: bool,
 }
@@ -69,8 +69,8 @@ impl MainEvents {
         self.empty = false;
     }
 
-    pub(crate) fn push_world_packet(&mut self, addr: SocketAddr, payload: Box<[u8]>) {
-        self.world_packets.push((addr, payload));
+    pub(crate) fn push_world_packet(&mut self, user_key: UserKey, user_addr: SocketAddr, payload: Box<[u8]>) {
+        self.world_packets.push((user_key, user_addr, payload));
         self.empty = false;
     }
 }
@@ -139,7 +139,7 @@ impl<M: Message> MainEvent for AuthEvent<M> {
 // WorldPacketEvent
 pub struct WorldPacketEvent;
 impl MainEvent for WorldPacketEvent {
-    type Iter = IntoIter<(SocketAddr, Box<[u8]>)>;
+    type Iter = IntoIter<(UserKey, SocketAddr, Box<[u8]>)>;
 
     fn iter(events: &mut MainEvents) -> Self::Iter {
         let list = std::mem::take(&mut events.world_packets);
