@@ -2,7 +2,10 @@ use std::{collections::HashMap, net::SocketAddr, panic};
 
 use log::{info, warn};
 
-use naia_shared::{BigMap, BitReader, FakeEntityConverter, MessageKinds, PacketType, Protocol, Serde, SocketConfig, StandardHeader};
+use naia_shared::{
+    BigMap, BitReader, FakeEntityConverter, MessageKinds, PacketType, Protocol, Serde,
+    SocketConfig, StandardHeader,
+};
 
 use crate::{
     connection::io::Io,
@@ -32,11 +35,7 @@ pub struct MainServer {
 
 impl MainServer {
     /// Create a new MainServer
-    pub fn new<P: Into<Protocol>>(
-        server_config: ServerConfig,
-        protocol: P,
-    ) -> Self {
-
+    pub fn new<P: Into<Protocol>>(server_config: ServerConfig, protocol: P) -> Self {
         let protocol: Protocol = protocol.into();
 
         let Protocol {
@@ -291,8 +290,11 @@ impl MainServer {
                         | PacketType::Pong
                         | PacketType::Ping => {
                             if let Some(user_key) = self.user_connections.get(&address) {
-                                self.incoming_events
-                                    .push_world_packet(*user_key, address, owned_reader.take_buffer());
+                                self.incoming_events.push_world_packet(
+                                    *user_key,
+                                    address,
+                                    owned_reader.take_buffer(),
+                                );
                             }
                         }
                         PacketType::Handshake => {
@@ -303,8 +305,11 @@ impl MainServer {
                             ) {
                                 Ok(HandshakeAction::ForwardPacket) => {
                                     if let Some(user_key) = self.user_connections.get(&address) {
-                                        self.incoming_events
-                                            .push_world_packet(*user_key, address, owned_reader.take_buffer());
+                                        self.incoming_events.push_world_packet(
+                                            *user_key,
+                                            address,
+                                            owned_reader.take_buffer(),
+                                        );
                                     } else {
                                         warn!(
                                             "Server Error: Cannot forward packet to unknown user.."

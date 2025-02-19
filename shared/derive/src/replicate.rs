@@ -1,6 +1,9 @@
 use proc_macro2::{Punct, Spacing, Span, TokenStream};
 use quote::{format_ident, quote};
-use syn::{parse_macro_input, Data, DeriveInput, Fields, GenericArgument, GenericParam, Generics, Ident, Index, LitStr, Member, PathArguments, Type};
+use syn::{
+    parse_macro_input, Data, DeriveInput, Fields, GenericArgument, GenericParam, Generics, Ident,
+    Index, LitStr, Member, PathArguments, Type,
+};
 
 use crate::{
     message::get_builder_new_method,

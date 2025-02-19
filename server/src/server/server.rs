@@ -29,18 +29,11 @@ pub struct Server<E: Copy + Eq + Hash + Send + Sync> {
 impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Create a new Server
     pub fn new<P: Into<Protocol>>(server_config: ServerConfig, protocol: P) -> Self {
-
         let protocol: Protocol = protocol.into();
 
         Self {
-            main_server: MainServer::new(
-                server_config.clone(),
-                protocol.clone(),
-            ),
-            world_server: WorldServer::new(
-                server_config,
-                protocol,
-            ),
+            main_server: MainServer::new(server_config.clone(), protocol.clone()),
+            world_server: WorldServer::new(server_config, protocol),
             to_world_sender_opt: None,
         }
     }

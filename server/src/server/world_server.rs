@@ -9,7 +9,16 @@ use std::{
 
 use log::{info, warn};
 
-use naia_shared::{handshake::HandshakeHeader, BigMap, BitReader, BitWriter, Channel, ChannelKind, ChannelKinds, ComponentKind, ComponentKinds, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityConverterMut, EntityDoesNotExistError, EntityEventMessage, EntityResponseEvent, GlobalEntity, GlobalEntityMap, GlobalEntitySpawner, GlobalRequestId, GlobalResponseId, GlobalWorldManagerType, Instant, Message, MessageContainer, MessageKinds, PacketType, Protocol, RemoteEntity, Replicate, ReplicatedComponent, Request, Response, ResponseReceiveKey, ResponseSendKey, Serde, SerdeErr, SharedGlobalWorldManager, StandardHeader, SystemChannel, Tick, Timer, WorldMutType, WorldRefType};
+use naia_shared::{
+    handshake::HandshakeHeader, BigMap, BitReader, BitWriter, Channel, ChannelKind, ChannelKinds,
+    ComponentKind, ComponentKinds, EntityAndGlobalEntityConverter, EntityAuthStatus,
+    EntityConverterMut, EntityDoesNotExistError, EntityEventMessage, EntityResponseEvent,
+    GlobalEntity, GlobalEntityMap, GlobalEntitySpawner, GlobalRequestId, GlobalResponseId,
+    GlobalWorldManagerType, Instant, Message, MessageContainer, MessageKinds, PacketType, Protocol,
+    RemoteEntity, Replicate, ReplicatedComponent, Request, Response, ResponseReceiveKey,
+    ResponseSendKey, Serde, SerdeErr, SharedGlobalWorldManager, StandardHeader, SystemChannel,
+    Tick, Timer, WorldMutType, WorldRefType,
+};
 
 use crate::{
     connection::{connection::Connection, io::Io, tick_buffer_messages::TickBufferMessages},
@@ -66,11 +75,7 @@ pub struct WorldServer<E: Copy + Eq + Hash + Send + Sync> {
 
 impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// Create a new WorldServer
-    pub fn new<P: Into<Protocol>>(
-        server_config: ServerConfig,
-        protocol: P,
-    ) -> Self {
-
+    pub fn new<P: Into<Protocol>>(server_config: ServerConfig, protocol: P) -> Self {
         let protocol: Protocol = protocol.into();
 
         let Protocol {

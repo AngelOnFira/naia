@@ -69,10 +69,7 @@ impl PluginType for Plugin {
             ServerImpl::full(server)
         } else {
             let protocol: NaiaProtocol = config.protocol.into();
-            let server = WorldServer::<Entity>::new(
-                config.server_config,
-                protocol,
-            );
+            let server = WorldServer::<Entity>::new(config.server_config, protocol);
             ServerImpl::world_only(server)
         };
 

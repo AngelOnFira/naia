@@ -69,7 +69,12 @@ impl MainEvents {
         self.empty = false;
     }
 
-    pub(crate) fn push_world_packet(&mut self, user_key: UserKey, user_addr: SocketAddr, payload: Box<[u8]>) {
+    pub(crate) fn push_world_packet(
+        &mut self,
+        user_key: UserKey,
+        user_addr: SocketAddr,
+        payload: Box<[u8]>,
+    ) {
         self.world_packets.push((user_key, user_addr, payload));
         self.empty = false;
     }
