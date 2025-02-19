@@ -1,4 +1,4 @@
-use std::{any::Any, marker::PhantomData};
+use std::{marker::PhantomData};
 
 use bevy_app::{App, Update};
 use bevy_ecs::{component::Component, entity::Entity, schedule::IntoSystemConfigs, world::World};
@@ -77,9 +77,8 @@ impl<R: Replicate + Component> ComponentAccessor<R> {
         }
     }
 
-    pub fn create() -> Box<dyn Any> {
-        let inner_box: Box<dyn ComponentAccess> = Box::new(ComponentAccessor::<R>::new());
-        Box::new(inner_box)
+    pub fn create() -> Box<dyn ComponentAccess> {
+        Box::new(ComponentAccessor::<R>::new())
     }
 }
 

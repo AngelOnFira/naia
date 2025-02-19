@@ -9,6 +9,7 @@ use naia_shared::{
 
 use crate::{ProtocolPlugin, WorldData};
 
+#[derive(Clone)]
 pub struct Protocol {
     inner: InnerProtocol,
     world_data: Option<WorldData>,

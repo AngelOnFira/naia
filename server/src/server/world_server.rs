@@ -130,6 +130,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         }
     }
 
+    /// Returns whether or not the Server has initialized correctly and is
+    /// listening for Clients
+    pub fn is_listening(&self) -> bool {
+        self.io.is_loaded()
+    }
+
     pub(crate) fn entity_converter(&self) -> &dyn EntityAndGlobalEntityConverter<E> {
         &self.global_entity_map
     }

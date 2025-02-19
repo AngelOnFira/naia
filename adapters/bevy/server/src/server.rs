@@ -3,13 +3,10 @@ use std::time::Duration;
 use bevy_ecs::{
     entity::Entity,
     system::{ResMut, Resource, SystemParam},
+    world::{Mut, World},
 };
 
-use naia_server::{
-    shared::SocketConfig, transport::Socket, EntityOwner, Events, NaiaServerError,
-    ReplicationConfig, RoomKey, RoomMut, RoomRef, Server as NaiaServer, TickBufferMessages,
-    UserKey, UserMut, UserRef, UserScopeMut, UserScopeRef, WorldServer as NaiaWorldServer,
-};
+use naia_server::{shared::SocketConfig, transport::Socket, EntityOwner, Events, NaiaServerError, ReplicationConfig, RoomKey, RoomMut, RoomRef, Server as NaiaServer, TickBufferMessages, UserKey, UserMut, UserRef, UserScopeMut, UserScopeRef, WorldServer as NaiaWorldServer, WorldServer};
 
 use naia_bevy_shared::{
     Channel, ComponentKind, EntityAndGlobalEntityConverter, EntityAuthStatus,
@@ -37,9 +34,7 @@ impl ServerImpl {
     pub(crate) fn is_listening(&self) -> bool {
         match self {
             Self::Full(server) => server.is_listening(),
-            Self::WorldOnly(_server) => {
-                panic!("WorldOnly Servers do not support this function");
-            }
+            Self::WorldOnly(server) => server.is_listening(),
         }
     }
 
@@ -411,6 +406,19 @@ impl<'w> Server<'w> {
 
     pub(crate) fn entity_authority_status(&self, entity: &Entity) -> Option<EntityAuthStatus> {
         self.server_impl.entity_authority_status(entity)
+    }
+
+    pub fn world_only_resource_scope(world: &mut World, f: impl FnOnce(&mut World, &mut WorldServer<Entity>)) {
+        world.resource_scope(|world, mut server: Mut<ServerImpl>| {
+            match &mut *server {
+                ServerImpl::WorldOnly(server) => {
+                    f(world, server);
+                }
+                ServerImpl::Full(_) => {
+                    panic!("Expected WorldOnly Server, found Full Server");
+                }
+            }
+        })
     }
 }
 
