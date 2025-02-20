@@ -95,6 +95,12 @@ impl Handshaker for HandshakeManager {
             }
         }
     }
+
+    fn reset(&mut self) {
+        self.authenticated_and_identified_users.clear();
+        self.authenticated_unidentified_users.clear();
+        self.identity_token_map.clear();
+    }
 }
 
 impl HandshakeManager {

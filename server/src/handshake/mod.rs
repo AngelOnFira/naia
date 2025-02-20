@@ -28,6 +28,8 @@ pub trait Handshaker: Send + Sync {
         reader: &mut BitReader,
         has_connection: bool,
     ) -> Result<HandshakeAction, SerdeErr>;
+
+    fn reset(&mut self);
 }
 
 pub enum HandshakeAction {

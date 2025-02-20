@@ -23,8 +23,10 @@ mod inner {
 
     use naia_shared::IdentityToken;
 
+    #[derive(Debug)]
     pub struct SendError;
 
+    #[derive(Debug)]
     pub struct RecvError;
 
     pub trait Socket {

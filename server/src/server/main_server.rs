@@ -80,6 +80,13 @@ impl MainServer {
         self.io.sender_cloned()
     }
 
+    pub fn reset_all(&mut self) {
+        self.handshake_manager.reset();
+        self.users = BigMap::new();
+        self.user_connections.clear();
+        self.incoming_events = MainEvents::new();
+    }
+
     /// Returns whether or not the Server has initialized correctly and is
     /// listening for Clients
     pub fn is_listening(&self) -> bool {
