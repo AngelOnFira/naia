@@ -9,11 +9,12 @@ use naia_server::{shared::Protocol as NaiaProtocol, Server, ServerConfig, WorldS
 use super::{
     events::{
         AuthEvents, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent,
-        InsertComponentEvents, MessageEvents, PublishEntityEvent, RemoveComponentEvents,
-        RequestEvents, SpawnEntityEvent, TickEvent, UnpublishEntityEvent, UpdateComponentEvents,
+        MessageEvents, PublishEntityEvent,
+        RequestEvents, SpawnEntityEvent, TickEvent, UnpublishEntityEvent,
     },
     server::ServerImpl,
     systems::{before_receive_events, send_packets, send_packets_init},
+    component_event_registry::ComponentEventRegistry,
 };
 
 struct PluginConfig {
@@ -78,6 +79,7 @@ impl PluginType for Plugin {
             .add_plugins(SharedPlugin::<Singleton>::new())
             // RESOURCES //
             .insert_resource(server_impl)
+            .init_resource::<ComponentEventRegistry>()
             // EVENTS //
             .add_event::<ConnectEvent>()
             .add_event::<DisconnectEvent>()
@@ -90,9 +92,6 @@ impl PluginType for Plugin {
             .add_event::<DespawnEntityEvent>()
             .add_event::<PublishEntityEvent>()
             .add_event::<UnpublishEntityEvent>()
-            .add_event::<InsertComponentEvents>()
-            .add_event::<UpdateComponentEvents>()
-            .add_event::<RemoveComponentEvents>()
             // SYSTEM SETS //
             .configure_sets(Last, SendPackets)
             // SYSTEMS //

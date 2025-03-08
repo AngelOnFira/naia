@@ -5,8 +5,9 @@ use bevy_core::{FrameCountPlugin, TaskPoolPlugin, TypeRegistrationPlugin};
 use bevy_ecs::schedule::IntoSystemConfigs;
 use bevy_log::{info, LogPlugin};
 
-use naia_bevy_demo_shared::protocol;
-use naia_bevy_server::{Plugin as ServerPlugin, ReceiveEvents, ServerConfig};
+use naia_bevy_demo_shared::{protocol, components::{Color, Position, Shape}};
+
+use naia_bevy_server::{AppRegisterComponentEvents, Plugin as ServerPlugin, ReceiveEvents, ServerConfig};
 
 mod resources;
 mod systems;
@@ -31,6 +32,10 @@ fn main() {
         .add_plugins(ServerPlugin::new(server_config, protocol()))
         // Startup System
         .add_systems(Startup, init)
+        // Add Component Events
+        .add_component_events::<Position>()
+        .add_component_events::<Color>()
+        .add_component_events::<Shape>()
         // Receive Server Events
         .add_systems(
             Update,

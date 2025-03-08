@@ -7,8 +7,8 @@ use bevy_log::info;
 use naia_bevy_server::{
     events::{
         AuthEvents, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent,
-        InsertComponentEvents, PublishEntityEvent, RemoveComponentEvents, RequestEvents,
-        SpawnEntityEvent, TickEvent, UnpublishEntityEvent, UpdateComponentEvents,
+        InsertComponentEvent, PublishEntityEvent, RemoveComponentEvent, RequestEvents,
+        SpawnEntityEvent, TickEvent, UnpublishEntityEvent, UpdateComponentEvent,
     },
     CommandsExt, Random, ReplicationConfig, Server,
 };
@@ -263,38 +263,42 @@ pub fn unpublish_entity_events(mut event_reader: EventReader<UnpublishEntityEven
     }
 }
 
-pub fn insert_component_events(mut event_reader: EventReader<InsertComponentEvents>) {
-    for events in event_reader.read() {
-        for (_user_key, _client_entity) in events.read::<Position>() {
-            info!("insert Position component into client entity");
-        }
-        for (_user_key, _client_entity) in events.read::<Color>() {
-            info!("insert Color component into client entity");
-        }
-        for (_user_key, _client_entity) in events.read::<Shape>() {
-            info!("insert Shape component into client entity");
-        }
+pub fn insert_component_events(
+    mut position_events: EventReader<InsertComponentEvent<Position>>,
+    mut color_events: EventReader<InsertComponentEvent<Color>>,
+    mut shape_events: EventReader<InsertComponentEvent<Shape>>,
+) {
+    for _event in position_events.read() {
+        info!("insert Position component into client entity");
+    }
+    for _event in color_events.read() {
+        info!("insert Color component into client entity");
+    }
+    for _event in shape_events.read() {
+        info!("insert Shape component into client entity");
     }
 }
 
-pub fn update_component_events(mut event_reader: EventReader<UpdateComponentEvents>) {
-    for events in event_reader.read() {
-        for (_user_key, _client_entity) in events.read::<Position>() {
-            // info!("update component in client entity");
-        }
+pub fn update_component_events(
+    mut position_events: EventReader<UpdateComponentEvent<Position>>,
+) {
+    for _events in position_events.read() {
+        // info!("update component in client entity");
     }
 }
 
-pub fn remove_component_events(mut event_reader: EventReader<RemoveComponentEvents>) {
-    for events in event_reader.read() {
-        for (_user_key, _entity, _component) in events.read::<Position>() {
-            info!("removed Position component from client entity");
-        }
-        for (_user_key, _entity, _component) in events.read::<Color>() {
-            info!("removed Color component from client entity");
-        }
-        for (_user_key, _entity, _component) in events.read::<Shape>() {
-            info!("removed Shape component from client entity");
-        }
+pub fn remove_component_events(
+    mut position_events: EventReader<RemoveComponentEvent<Position>>,
+    mut color_events: EventReader<RemoveComponentEvent<Color>>,
+    mut shape_events: EventReader<RemoveComponentEvent<Shape>>,
+) {
+    for _event in position_events.read() {
+        info!("remove Position component from client entity");
+    }
+    for _event in color_events.read() {
+        info!("remove Color component from client entity");
+    }
+    for _event in shape_events.read() {
+        info!("remove Shape component from client entity");
     }
 }
