@@ -1,4 +1,4 @@
-use std::{marker::PhantomData};
+use std::marker::PhantomData;
 
 use bevy_app::{App, Update};
 use bevy_ecs::{component::Component, entity::Entity, schedule::IntoSystemConfigs, world::World};
