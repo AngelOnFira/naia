@@ -24,3 +24,4 @@ pub use commands::CommandsExt;
 pub use components::{ClientOwned, ServerOwned};
 pub use plugin::Plugin;
 pub use app_ext::AppRegisterComponentEvents;
+pub use bundle::ReplicateBundle;
