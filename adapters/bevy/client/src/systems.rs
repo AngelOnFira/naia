@@ -1,5 +1,4 @@
-use std::any::TypeId;
-use std::ops::DerefMut;
+use std::{ops::DerefMut, any::TypeId};
 
 use log::warn;
 
@@ -21,13 +20,13 @@ mod naia_events {
 mod bevy_events {
     pub use crate::events::{
         ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, EntityAuthDeniedEvent,
-        EntityAuthGrantedEvent, EntityAuthResetEvent, ErrorEvent, InsertComponentEvents,
-        MessageEvents, PublishEntityEvent, RejectEvent, RemoveComponentEvents, RequestEvents,
-        ServerTickEvent, SpawnEntityEvent, UnpublishEntityEvent, UpdateComponentEvents,
+        EntityAuthGrantedEvent, EntityAuthResetEvent, ErrorEvent,
+        MessageEvents, PublishEntityEvent, RejectEvent, RequestEvents,
+        ServerTickEvent, SpawnEntityEvent, UnpublishEntityEvent,
     };
 }
 
-use crate::{client::ClientWrapper, ServerOwned};
+use crate::{component_event_registry::ComponentEventRegistry, client::ClientWrapper, ServerOwned};
 
 pub fn before_receive_events<T: Send + Sync + 'static>(world: &mut World) {
     let host_id = TypeId::of::<T>();
@@ -255,33 +254,9 @@ pub fn before_receive_events<T: Send + Sync + 'static>(world: &mut World) {
                 }
             }
 
-            // Insert Component Event
-            if events.has_inserts() {
-                let inserts = events.take_inserts().unwrap();
-                let mut event_writer = world
-                    .get_resource_mut::<Events<bevy_events::InsertComponentEvents<T>>>()
-                    .unwrap();
-                event_writer.send(bevy_events::InsertComponentEvents::<T>::new(inserts));
-            }
-
-            // Update Component Event
-            if events.has_updates() {
-                let updates = events.take_updates().unwrap();
-                let mut event_writer = world
-                    .get_resource_mut::<Events<bevy_events::UpdateComponentEvents<T>>>()
-                    .unwrap();
-                event_writer.send(bevy_events::UpdateComponentEvents::<T>::new(updates));
-            }
-
-            // Remove Component Event
-            if events.has_removes() {
-                let removes = events.take_removes().unwrap();
-                let mut event_writer = world
-                    .get_resource_mut::<Events<bevy_events::RemoveComponentEvents<T>>>()
-                    .unwrap();
-
-                event_writer.send(bevy_events::RemoveComponentEvents::<T>::new(removes));
-            }
+            world.resource_scope(|world, mut registry: Mut<ComponentEventRegistry<T>>| {
+                registry.handle_events(world, &mut events);
+            });
         }
     });
 }

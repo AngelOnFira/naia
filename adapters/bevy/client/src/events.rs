@@ -2,13 +2,14 @@ use std::{any::Any, collections::HashMap, marker::PhantomData};
 
 use bevy_ecs::{entity::Entity, prelude::Event};
 
-use naia_client::{Events, NaiaClientError};
+use naia_client::{shared::GlobalResponseId, Events, NaiaClientError};
 
 use naia_bevy_shared::{
-    Channel, ChannelKind, ComponentKind, Message, MessageContainer, MessageKind, Replicate,
+    Channel, ChannelKind, Message, MessageContainer, MessageKind,
     Request, ResponseSendKey, Tick,
 };
-use naia_client::shared::GlobalResponseId;
+
+use crate::Replicate;
 
 // ConnectEvent
 #[derive(Event)]
@@ -213,6 +214,59 @@ impl<T> DespawnEntityEvent<T> {
     }
 }
 
+#[derive(Event)]
+pub struct InsertComponentEvent<T: Send + Sync + 'static, C: Replicate> {
+    pub entity: Entity,
+    phantom_t: PhantomData<T>,
+    phantom_c: PhantomData<C>,
+}
+
+impl<T: Send + Sync + 'static, C: Replicate> InsertComponentEvent<T, C> {
+    pub fn new(entity: Entity) -> Self {
+        Self {
+            entity,
+            phantom_t: PhantomData,
+            phantom_c: PhantomData,
+        }
+    }
+}
+
+#[derive(Event)]
+pub struct UpdateComponentEvent<T: Send + Sync + 'static, C: Replicate> {
+    pub tick: Tick,
+    pub entity: Entity,
+    phantom_t: PhantomData<T>,
+    phantom_c: PhantomData<C>,
+}
+
+impl<T: Send + Sync + 'static, C: Replicate> UpdateComponentEvent<T, C> {
+    pub fn new(tick: Tick, entity: Entity) -> Self {
+        Self {
+            tick,
+            entity,
+            phantom_t: PhantomData,
+            phantom_c: PhantomData,
+        }
+    }
+}
+
+#[derive(Event)]
+pub struct RemoveComponentEvent<T: Send + Sync + 'static, C: Replicate> {
+    pub entity: Entity,
+    phantom_t: PhantomData<T>,
+    pub component: C,
+}
+
+impl<T: Send + Sync + 'static, C: Replicate> RemoveComponentEvent<T, C> {
+    pub fn new(entity: Entity, component: C) -> Self {
+        Self {
+            entity,
+            phantom_t: PhantomData,
+            component,
+        }
+    }
+}
+
 // PublishEntityEvent
 #[derive(Event)]
 pub struct PublishEntityEvent<T> {
@@ -290,110 +344,5 @@ impl<T> EntityAuthResetEvent<T> {
             entity,
             phantom_t: PhantomData,
         }
-    }
-}
-
-// InsertComponentEvent
-#[derive(Event, Clone)]
-pub struct InsertComponentEvents<T> {
-    inner: HashMap<ComponentKind, Vec<Entity>>,
-    phantom_t: PhantomData<T>,
-}
-
-impl<T> InsertComponentEvents<T> {
-    pub fn new(inner: HashMap<ComponentKind, Vec<Entity>>) -> Self {
-        Self {
-            inner,
-            phantom_t: PhantomData,
-        }
-    }
-    pub fn read<C: Replicate>(&self) -> Vec<Entity> {
-        let component_kind = ComponentKind::of::<C>();
-        if let Some(components) = self.inner.get(&component_kind) {
-            return components.clone();
-        }
-
-        return Vec::new();
-    }
-}
-
-// UpdateComponentEvents
-#[derive(Event, Clone)]
-pub struct UpdateComponentEvents<T> {
-    inner: HashMap<ComponentKind, Vec<(Tick, Entity)>>,
-    phantom_t: PhantomData<T>,
-}
-
-impl<T> UpdateComponentEvents<T> {
-    pub fn new(inner: HashMap<ComponentKind, Vec<(Tick, Entity)>>) -> Self {
-        Self {
-            inner,
-            phantom_t: PhantomData,
-        }
-    }
-
-    pub fn read<C: Replicate>(&self) -> Vec<(Tick, Entity)> {
-        let component_kind = ComponentKind::of::<C>();
-        if let Some(components) = self.inner.get(&component_kind) {
-            return components.clone();
-        }
-
-        return Vec::new();
-    }
-}
-
-// RemoveComponentEvents
-#[derive(Event)]
-pub struct RemoveComponentEvents<T> {
-    inner: HashMap<ComponentKind, Vec<(Entity, Box<dyn Replicate>)>>,
-    phantom_t: PhantomData<T>,
-}
-
-impl<T> RemoveComponentEvents<T> {
-    pub fn new(inner: HashMap<ComponentKind, Vec<(Entity, Box<dyn Replicate>)>>) -> Self {
-        Self {
-            inner,
-            phantom_t: PhantomData,
-        }
-    }
-
-    pub fn clone_new(&self) -> Self {
-        let mut output = HashMap::new();
-
-        for (key, value) in self.inner.iter() {
-            let mut list = Vec::new();
-
-            for item in value {
-                list.push((item.0, item.1.copy_to_box()));
-            }
-
-            output.insert(*key, list);
-        }
-
-        Self::new(output)
-    }
-
-    pub fn read<C: Replicate>(&self) -> Vec<(Entity, C)> {
-        let mut output = Vec::new();
-
-        let component_kind = ComponentKind::of::<C>();
-        if let Some(components) = self.inner.get(&component_kind) {
-            for (entity, boxed_component) in components {
-                let boxed_any = boxed_component.copy_to_box().to_boxed_any();
-                let component: C = Box::<dyn Any + 'static>::downcast::<C>(boxed_any)
-                    .ok()
-                    .map(|boxed_c| *boxed_c)
-                    .unwrap();
-                output.push((*entity, component));
-            }
-        }
-
-        output
-    }
-}
-
-impl<T> Clone for RemoveComponentEvents<T> {
-    fn clone(&self) -> Self {
-        self.clone_new()
     }
 }

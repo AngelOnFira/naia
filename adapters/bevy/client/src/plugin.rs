@@ -3,17 +3,19 @@ use std::{marker::PhantomData, ops::DerefMut, sync::Mutex};
 use bevy_app::{App, Plugin as PluginType, Update};
 use bevy_ecs::{entity::Entity, schedule::IntoSystemConfigs};
 
-use crate::events::RequestEvents;
 use naia_bevy_shared::{BeforeReceiveEvents, Protocol, SharedPlugin, WorldData};
+
 use naia_client::{Client, ClientConfig};
+
+use crate::{component_event_registry::ComponentEventRegistry, events::RequestEvents};
 
 use super::{
     client::ClientWrapper,
     events::{
         ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, EntityAuthDeniedEvent,
-        EntityAuthGrantedEvent, EntityAuthResetEvent, ErrorEvent, InsertComponentEvents,
-        MessageEvents, PublishEntityEvent, RejectEvent, RemoveComponentEvents, ServerTickEvent,
-        SpawnEntityEvent, UnpublishEntityEvent, UpdateComponentEvents,
+        EntityAuthGrantedEvent, EntityAuthResetEvent, ErrorEvent,
+        MessageEvents, PublishEntityEvent, RejectEvent, ServerTickEvent,
+        SpawnEntityEvent, UnpublishEntityEvent,
     },
     systems::before_receive_events,
 };
@@ -25,7 +27,7 @@ struct PluginConfig {
 
 impl PluginConfig {
     pub fn new(client_config: ClientConfig, protocol: Protocol) -> Self {
-        PluginConfig {
+        Self {
             client_config,
             protocol,
         }
@@ -68,6 +70,7 @@ impl<T: Sync + Send + 'static> PluginType for Plugin<T> {
             .add_plugins(SharedPlugin::<T>::new())
             // RESOURCES //
             .insert_resource(client)
+            .init_resource::<ComponentEventRegistry<T>>()
             // EVENTS //
             .add_event::<ConnectEvent<T>>()
             .add_event::<DisconnectEvent<T>>()
@@ -84,9 +87,6 @@ impl<T: Sync + Send + 'static> PluginType for Plugin<T> {
             .add_event::<EntityAuthGrantedEvent<T>>()
             .add_event::<EntityAuthDeniedEvent<T>>()
             .add_event::<EntityAuthResetEvent<T>>()
-            .add_event::<InsertComponentEvents<T>>()
-            .add_event::<UpdateComponentEvents<T>>()
-            .add_event::<RemoveComponentEvents<T>>()
             // SYSTEMS //
             .add_systems(
                 Update,

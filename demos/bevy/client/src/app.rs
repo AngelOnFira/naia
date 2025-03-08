@@ -1,12 +1,13 @@
 use bevy::{
     prelude::{
-        App, ClearColor, Color, IntoSystemConfigs, IntoSystemSetConfigs, Startup, SystemSet, Update,
+        App, ClearColor, Color as BevyColor, IntoSystemConfigs, IntoSystemSetConfigs, Startup, SystemSet, Update,
     },
     DefaultPlugins,
 };
 
-use naia_bevy_client::{ClientConfig, Plugin as ClientPlugin, ReceiveEvents};
-use naia_bevy_demo_shared::protocol;
+use naia_bevy_client::{AppRegisterComponentEvents, ClientConfig, Plugin as ClientPlugin, ReceiveEvents};
+
+use naia_bevy_demo_shared::{protocol, components::{Color, Shape, Position}};
 
 use crate::systems::{events, init, input, sync};
 
@@ -28,8 +29,12 @@ pub fn run() {
             ClientConfig::default(),
             protocol(),
         ))
+        // Register Component Events
+        .add_component_events::<Main, Color>()
+        .add_component_events::<Main, Position>()
+        .add_component_events::<Main, Shape>()
         // Background Color
-        .insert_resource(ClearColor(Color::BLACK))
+        .insert_resource(ClearColor(BevyColor::BLACK))
         // Startup System
         .add_systems(Startup, init)
         // Receive Client Events
