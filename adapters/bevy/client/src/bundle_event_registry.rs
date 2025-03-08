@@ -7,6 +7,7 @@ use naia_bevy_shared::{ComponentKind, WorldProxy, WorldRefType};
 use crate::{events::InsertBundleEvent, bundle::ReplicateBundle};
 
 pub(crate) struct BundleEventRegistry<T: Send + Sync + 'static> {
+    bundle_events_sent: HashMap<BundleId, HashSet<Entity>>,
     bundles: HashMap<BundleId, BundleInfo>,
     components_to_bundle_ids: HashMap<ComponentKind, HashSet<BundleId>>,
     current_bundle_id: BundleId,
@@ -19,6 +20,7 @@ unsafe impl<T: Send + Sync + 'static> Sync for BundleEventRegistry<T> {}
 impl<T: Send + Sync + 'static> Default for BundleEventRegistry<T> {
     fn default() -> Self {
         Self {
+            bundle_events_sent: HashMap::new(),
             bundles: HashMap::new(),
             components_to_bundle_ids: HashMap::new(),
             current_bundle_id: 0,
@@ -59,7 +61,11 @@ impl<T: Send + Sync + 'static> BundleEventRegistry<T> {
         id
     }
 
-    pub(crate) fn receive_inserts(&self, world: &mut World, component_kind: &ComponentKind, entities: &Vec<Entity>) {
+    pub(crate) fn pre_process(&mut self) {
+        self.bundle_events_sent.clear();
+    }
+
+    pub(crate) fn process_inserts(&mut self, world: &mut World, component_kind: &ComponentKind, entities: &Vec<Entity>) {
         let Some(bundle_ids) = self.components_to_bundle_ids.get(&component_kind) else {
             // component is not part of any bundle
             return;
@@ -69,6 +75,14 @@ impl<T: Send + Sync + 'static> BundleEventRegistry<T> {
             let bundle_info = self.bundles.get(bundle_id).unwrap();
 
             for entity in entities {
+
+                // see if we need to skip
+                if let Some(bundle_events_sent) = self.bundle_events_sent.get(bundle_id) {
+                    if bundle_events_sent.contains(entity) {
+                        continue;
+                    }
+                }
+
                 // check if all components are present
                 let mut all_components_present = true;
                 for kind in bundle_info.kinds.iter() {
@@ -80,6 +94,14 @@ impl<T: Send + Sync + 'static> BundleEventRegistry<T> {
 
                 if all_components_present {
                     bundle_info.handler.send_event(world, *entity);
+
+                    // mark as sent
+                    if !self.bundle_events_sent.contains_key(bundle_id) {
+                        self.bundle_events_sent.insert(*bundle_id, HashSet::new());
+                    }
+
+                    let bundle_events_sent = self.bundle_events_sent.get_mut(bundle_id).unwrap();
+                    bundle_events_sent.insert(*entity);
                 }
             }
         }

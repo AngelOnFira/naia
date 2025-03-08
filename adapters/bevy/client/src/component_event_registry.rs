@@ -42,10 +42,13 @@ impl<T: Send + Sync + 'static> ComponentEventRegistry<T> {
         // Insert Component Event
         if events.has_inserts() {
             let inserts = events.take_inserts().unwrap();
+
+            self.bundle_registry.pre_process();
+
             for (kind, entities) in inserts {
 
                 // trigger bundle events
-                self.bundle_registry.receive_inserts(world, &kind, &entities);
+                self.bundle_registry.process_inserts(world, &kind, &entities);
 
                 // trigger component events
                 if let Some(component_handler) = self.component_handlers.get_mut(&kind) {
