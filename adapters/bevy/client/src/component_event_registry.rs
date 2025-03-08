@@ -1,39 +1,17 @@
 use std::{any::Any, marker::PhantomData, collections::HashMap};
 
-use bevy_app::App;
 use bevy_ecs::{entity::Entity, world::World, system::Resource};
 
 use log::warn;
 
 use naia_bevy_shared::{ComponentKind, Replicate, Tick};
 
-use crate::events::{InsertComponentEvent, RemoveComponentEvent, UpdateComponentEvent};
-
-// App Extension Methods
-pub trait AppRegisterComponentEvents {
-    fn add_component_events<T: Send + Sync + 'static, C: Replicate>(&mut self) -> &mut Self;
-}
-
-impl AppRegisterComponentEvents for App {
-    fn add_component_events<T: Send + Sync + 'static, C: Replicate>(&mut self) -> &mut Self {
-
-        // add component type to registry
-        let mut component_event_registry = self.world_mut().resource_mut::<ComponentEventRegistry<T>>();
-        component_event_registry.register_handler::<C>();
-
-        // add events
-        self.add_event::<InsertComponentEvent<T, C>>()
-            .add_event::<UpdateComponentEvent<T, C>>()
-            .add_event::<RemoveComponentEvent<T, C>>();
-
-        self
-    }
-}
+use crate::{bundle_event_registry::BundleEventRegistry, events::{InsertComponentEvent, RemoveComponentEvent, UpdateComponentEvent}};
 
 #[derive(Resource)]
 pub(crate) struct ComponentEventRegistry<T: Send + Sync + 'static> {
-    handlers: HashMap<ComponentKind, Box<dyn ComponentEventHandler>>,
-    phantom_t: PhantomData<T>,
+    bundle_registry: BundleEventRegistry<T>,
+    component_handlers: HashMap<ComponentKind, Box<dyn ComponentEventHandler>>,
 }
 
 unsafe impl<T: Send + Sync + 'static> Send for ComponentEventRegistry<T> {}
@@ -42,29 +20,39 @@ unsafe impl<T: Send + Sync + 'static> Sync for ComponentEventRegistry<T> {}
 impl<T: Send + Sync + 'static> Default for ComponentEventRegistry<T> {
     fn default() -> Self {
         Self {
-            handlers: HashMap::new(),
-            phantom_t: PhantomData::<T>,
+            component_handlers: HashMap::new(),
+            bundle_registry: BundleEventRegistry::default(),
         }
     }
 }
 
 impl<T: Send + Sync + 'static> ComponentEventRegistry<T> {
-    pub fn register_handler<R: Replicate>(
-        &mut self,
-    ) {
-        self.handlers.insert(ComponentKind::of::<R>(), ComponentEventHandlerImpl::<T, R>::new_boxed());
+
+    pub(crate) fn bundle_registry_mut(&mut self) -> &mut BundleEventRegistry<T> {
+        &mut self.bundle_registry
     }
 
-    pub fn handle_events(&mut self, world: &mut World, events: &mut naia_client::Events<Entity>) {
+    pub(crate) fn register_component_handler<R: Replicate>(
+        &mut self,
+    ) {
+        self.component_handlers.insert(ComponentKind::of::<R>(), ComponentEventHandlerImpl::<T, R>::new_boxed());
+    }
+
+    pub(crate) fn receive_events(&mut self, world: &mut World, events: &mut naia_client::Events<Entity>) {
         // Insert Component Event
         if events.has_inserts() {
             let inserts = events.take_inserts().unwrap();
             for (kind, entities) in inserts {
-                let Some(handler) = self.handlers.get_mut(&kind) else {
+
+                // trigger bundle events
+                self.bundle_registry.receive_inserts(world, &kind, &entities);
+
+                // trigger component events
+                if let Some(component_handler) = self.component_handlers.get_mut(&kind) {
+                    component_handler.handle_inserts(world, entities);
+                } else {
                     warn!("No insert event handler for ComponentKind: {:?}", kind);
-                    continue;
-                };
-                handler.handle_inserts(world, entities);
+                }
             }
         }
 
@@ -72,7 +60,7 @@ impl<T: Send + Sync + 'static> ComponentEventRegistry<T> {
         if events.has_updates() {
             let updates = events.take_updates().unwrap();
             for (kind, entities) in updates {
-                let Some(handler) = self.handlers.get_mut(&kind) else {
+                let Some(handler) = self.component_handlers.get_mut(&kind) else {
                     warn!("No update event handler for ComponentKind: {:?}", kind);
                     continue;
                 };
@@ -84,7 +72,7 @@ impl<T: Send + Sync + 'static> ComponentEventRegistry<T> {
         if events.has_removes() {
             let removes = events.take_removes().unwrap();
             for (kind, entities) in removes {
-                let Some(handler) = self.handlers.get_mut(&kind) else {
+                let Some(handler) = self.component_handlers.get_mut(&kind) else {
                     warn!("No remove event handler for ComponentKind: {:?}", kind);
                     continue;
                 };

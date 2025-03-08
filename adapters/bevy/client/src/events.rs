@@ -9,7 +9,7 @@ use naia_bevy_shared::{
     Request, ResponseSendKey, Tick,
 };
 
-use crate::Replicate;
+use crate::{bundle::ReplicateBundle, Replicate};
 
 // ConnectEvent
 #[derive(Event)]
@@ -222,6 +222,23 @@ pub struct InsertComponentEvent<T: Send + Sync + 'static, C: Replicate> {
 }
 
 impl<T: Send + Sync + 'static, C: Replicate> InsertComponentEvent<T, C> {
+    pub fn new(entity: Entity) -> Self {
+        Self {
+            entity,
+            phantom_t: PhantomData,
+            phantom_c: PhantomData,
+        }
+    }
+}
+
+#[derive(Event)]
+pub struct InsertBundleEvent<T: Send + Sync + 'static, B: ReplicateBundle> {
+    pub entity: Entity,
+    phantom_t: PhantomData<T>,
+    phantom_c: PhantomData<B>,
+}
+
+impl<T: Send + Sync + 'static, B: ReplicateBundle> InsertBundleEvent<T, B> {
     pub fn new(entity: Entity) -> Self {
         Self {
             entity,

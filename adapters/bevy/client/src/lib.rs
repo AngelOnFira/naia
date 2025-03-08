@@ -15,9 +15,12 @@ mod components;
 mod plugin;
 mod systems;
 mod component_event_registry;
+mod bundle_event_registry;
+mod bundle;
+mod app_ext;
 
 pub use client::Client;
 pub use commands::CommandsExt;
 pub use components::{ClientOwned, ServerOwned};
 pub use plugin::Plugin;
-pub use component_event_registry::AppRegisterComponentEvents;
+pub use app_ext::AppRegisterComponentEvents;

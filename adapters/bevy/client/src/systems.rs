@@ -255,7 +255,7 @@ pub fn before_receive_events<T: Send + Sync + 'static>(world: &mut World) {
             }
 
             world.resource_scope(|world, mut registry: Mut<ComponentEventRegistry<T>>| {
-                registry.handle_events(world, &mut events);
+                registry.receive_events(world, &mut events);
             });
         }
     });
