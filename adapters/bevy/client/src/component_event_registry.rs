@@ -3,6 +3,8 @@ use std::{any::Any, marker::PhantomData, collections::HashMap};
 use bevy_app::App;
 use bevy_ecs::{entity::Entity, world::World, system::Resource};
 
+use log::warn;
+
 use naia_bevy_shared::{ComponentKind, Replicate, Tick};
 
 use crate::events::{InsertComponentEvent, RemoveComponentEvent, UpdateComponentEvent};
@@ -59,7 +61,8 @@ impl<T: Send + Sync + 'static> ComponentEventRegistry<T> {
             let inserts = events.take_inserts().unwrap();
             for (kind, entities) in inserts {
                 let Some(handler) = self.handlers.get_mut(&kind) else {
-                    panic!("No insert event handler for ComponentKind: {:?}", kind);
+                    warn!("No insert event handler for ComponentKind: {:?}", kind);
+                    continue;
                 };
                 handler.handle_inserts(world, entities);
             }
@@ -70,7 +73,8 @@ impl<T: Send + Sync + 'static> ComponentEventRegistry<T> {
             let updates = events.take_updates().unwrap();
             for (kind, entities) in updates {
                 let Some(handler) = self.handlers.get_mut(&kind) else {
-                    panic!("No update event handler for ComponentKind: {:?}", kind);
+                    warn!("No update event handler for ComponentKind: {:?}", kind);
+                    continue;
                 };
                 handler.handle_updates(world, entities);
             }
@@ -81,7 +85,8 @@ impl<T: Send + Sync + 'static> ComponentEventRegistry<T> {
             let removes = events.take_removes().unwrap();
             for (kind, entities) in removes {
                 let Some(handler) = self.handlers.get_mut(&kind) else {
-                    panic!("No remove event handler for ComponentKind: {:?}", kind);
+                    warn!("No remove event handler for ComponentKind: {:?}", kind);
+                    continue;
                 };
                 handler.handle_removes(world, entities);
             }
