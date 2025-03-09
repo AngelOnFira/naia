@@ -36,6 +36,7 @@ fn main() {
         .add_component_events::<Position>()
         .add_component_events::<Color>()
         .add_component_events::<Shape>()
+        .add_bundle_events::<(Position, Color)>()
         // Receive Server Events
         .add_systems(
             Update,
