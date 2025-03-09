@@ -213,7 +213,7 @@ pub fn before_receive_events(world: &mut World) {
             }
 
             world.resource_scope(|world, mut registry: Mut<ComponentEventRegistry>| {
-                registry.handle_events(world, &mut events);
+                registry.receive_events(world, &mut events);
             });
         }
     });

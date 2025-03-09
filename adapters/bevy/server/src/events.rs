@@ -14,6 +14,8 @@ use naia_bevy_shared::{
 
 use naia_server::{shared::GlobalResponseId, Events, NaiaServerError, UserKey};
 
+use crate::ReplicateBundle;
+
 // ConnectEvent
 #[derive(Event)]
 pub struct ConnectEvent(pub UserKey);
@@ -176,6 +178,23 @@ pub struct InsertComponentEvent<C: Replicate> {
 }
 
 impl<C: Replicate> InsertComponentEvent<C> {
+    pub fn new(user_key: UserKey, entity: Entity) -> Self {
+        Self {
+            user_key,
+            entity,
+            phantom_c: PhantomData,
+        }
+    }
+}
+
+#[derive(Event)]
+pub struct InsertBundleEvent<B: ReplicateBundle> {
+    pub user_key: UserKey,
+    pub entity: Entity,
+    phantom_c: PhantomData<B>,
+}
+
+impl<B: ReplicateBundle> InsertBundleEvent<B> {
     pub fn new(user_key: UserKey, entity: Entity) -> Self {
         Self {
             user_key,
