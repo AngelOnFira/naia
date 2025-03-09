@@ -1,9 +1,9 @@
 
 use bevy_app::App;
 
-use naia_bevy_shared::{Replicate};
+use naia_bevy_shared::{Replicate, ReplicateBundle};
 
-use crate::{events::InsertBundleEvent, bundle::ReplicateBundle, events::{InsertComponentEvent, RemoveComponentEvent, UpdateComponentEvent}, component_event_registry::ComponentEventRegistry};
+use crate::{events::InsertBundleEvent, events::{InsertComponentEvent, RemoveComponentEvent, UpdateComponentEvent}, component_event_registry::ComponentEventRegistry};
 
 // App Extension Methods
 pub trait AppRegisterComponentEvents {

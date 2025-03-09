@@ -9,12 +9,10 @@ use bevy_ecs::{
 
 use naia_bevy_shared::{
     Channel, ChannelKind, Message, MessageContainer, MessageKind, Replicate,
-    Request, ResponseSendKey, Tick,
+    Request, ResponseSendKey, Tick, ReplicateBundle,
 };
 
 use naia_server::{shared::GlobalResponseId, Events, NaiaServerError, UserKey};
-
-use crate::ReplicateBundle;
 
 // ConnectEvent
 #[derive(Event)]

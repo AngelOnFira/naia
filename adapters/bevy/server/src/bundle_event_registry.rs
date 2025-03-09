@@ -2,11 +2,11 @@ use std::{collections::{HashMap, HashSet}, marker::PhantomData};
 
 use bevy_ecs::{world::World, entity::Entity};
 
-use naia_bevy_shared::{ComponentKind, WorldProxy, WorldRefType};
+use naia_bevy_shared::{ComponentKind, ReplicateBundle, WorldProxy, WorldRefType};
 
 use naia_server::UserKey;
 
-use crate::{events::InsertBundleEvent, bundle::ReplicateBundle};
+use crate::{events::InsertBundleEvent};
 
 pub(crate) struct BundleEventRegistry {
     bundle_events_sent: HashMap<BundleId, HashSet<Entity>>,

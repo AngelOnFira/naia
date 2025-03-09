@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use naia_bevy_shared::{ComponentKind, Replicate};
+use crate::{ComponentKind, Replicate};
 
 pub trait ReplicateBundle: Send + Sync + 'static {
     fn kind_set() -> HashSet<ComponentKind>;

@@ -24,6 +24,7 @@ mod protocol_plugin;
 mod system_set;
 mod world_data;
 mod world_proxy;
+mod bundle;
 
 pub use change_detection::HostSyncEvent;
 pub use component_access::{AppTag, ComponentAccess, ComponentAccessor};
@@ -34,3 +35,4 @@ pub use protocol_plugin::ProtocolPlugin;
 pub use system_set::{BeforeReceiveEvents, HostSyncChangeTracking, ReceiveEvents, SendPackets};
 pub use world_data::WorldData;
 pub use world_proxy::{WorldMut, WorldProxy, WorldProxyMut, WorldRef};
+pub use bundle::ReplicateBundle;

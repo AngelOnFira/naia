@@ -6,10 +6,10 @@ use naia_client::{shared::GlobalResponseId, Events, NaiaClientError};
 
 use naia_bevy_shared::{
     Channel, ChannelKind, Message, MessageContainer, MessageKind,
-    Request, ResponseSendKey, Tick,
+    Request, ResponseSendKey, Tick, ReplicateBundle,
 };
 
-use crate::{bundle::ReplicateBundle, Replicate};
+use crate::Replicate;
 
 // ConnectEvent
 #[derive(Event)]
