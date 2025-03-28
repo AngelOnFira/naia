@@ -28,6 +28,8 @@ pub use naia_serde::{
     Serde, SerdeBevyClient, SerdeBevyServer, SerdeBevyShared, SerdeErr, SerdeHecs,
     SerdeIntegerConversion, SerdeInternal, SignedInteger, SignedVariableInteger, UnsignedInteger,
     UnsignedVariableInteger, MTU_SIZE_BITS, MTU_SIZE_BYTES,
+    SerdeFloatConversion, SignedFloat, SignedVariableFloat, UnsignedFloat,
+    UnsignedVariableFloat,
 };
 pub use naia_socket_shared::{
     generate_identity_token, link_condition_logic, IdentityToken, Instant, LinkConditionerConfig,

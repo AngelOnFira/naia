@@ -12,6 +12,8 @@ pub use naia_shared::{
     ResponseSendKey, SerdeBevyShared as Serde, SerdeErr, SerdeIntegerConversion, SignedInteger,
     SignedVariableInteger, Tick, TickBufferSettings, Timer, UnsignedInteger,
     UnsignedVariableInteger, WorldMutType, WorldRefType, MTU_SIZE_BYTES,
+    SerdeFloatConversion, SignedFloat, SignedVariableFloat, UnsignedFloat,
+    UnsignedVariableFloat,
 };
 
 mod change_detection;
