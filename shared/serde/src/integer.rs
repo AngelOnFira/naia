@@ -2,102 +2,108 @@ use crate::{
     bit_reader::BitReader, bit_writer::BitWrite, error::SerdeErr, serde::Serde, ConstBitLength,
 };
 
+pub trait SerdeIntegerConversion<const SIGNED: bool, const VARIABLE: bool, const BITS: u8> {
+    fn from(value: &SerdeInteger<SIGNED, VARIABLE, BITS>) -> Self;
+}
+
 pub type UnsignedInteger<const BITS: u8> = SerdeInteger<false, false, BITS>;
 pub type SignedInteger<const BITS: u8> = SerdeInteger<true, false, BITS>;
 pub type UnsignedVariableInteger<const BITS: u8> = SerdeInteger<false, true, BITS>;
 pub type SignedVariableInteger<const BITS: u8> = SerdeInteger<true, true, BITS>;
 
+// This outer generic type wraps an inner type that is not generic, to reduce code bloat through monomorphization.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub struct SerdeInteger<const SIGNED: bool, const VARIABLE: bool, const BITS: u8> {
-    inner: i128,
+    inner: SerdeIntegerInner,
 }
 
-impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8>
-    SerdeInteger<SIGNED, VARIABLE, BITS>
-{
-    pub fn get(&self) -> i128 {
-        self.inner
-    }
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+struct SerdeIntegerInner {
+    inner_value: i128,
+    signed: bool,
+    variable: bool,
+    bits: u8,
+}
 
-    pub fn set<T: Into<i128>>(&mut self, value: T) {
-        self.inner = value.into();
-    }
-
-    pub fn to<T: SerdeIntegerConversion<SIGNED, VARIABLE, BITS>>(&self) -> T {
-        T::from(self)
-    }
-
-    pub fn new<T: Into<i128>>(value: T) -> Self {
-        let inner = Into::<i128>::into(value);
-
-        if inner < 0 && !SIGNED {
-            panic!("can't encode a negative number with an Unsigned Integer!");
-        }
-
-        if BITS == 0 {
+impl SerdeIntegerInner {
+    fn new(signed: bool, variable: bool, bits: u8, value: i128) -> Self {
+        // replicate your original checks
+        if bits == 0 {
             panic!("can't create an integer with 0 bits...");
         }
-        if BITS > 127 {
+        if bits > 127 {
             panic!("can't create an integer with more than 127 bits...");
         }
 
-        if !VARIABLE {
-            let max_value: i128 = 2_i128.pow(BITS as u32);
-            if inner >= max_value {
+        if !signed && value < 0 {
+            panic!("can't encode a negative number with an Unsigned Integer!");
+        }
+
+        if !variable {
+            let max_value: i128 = 2_i128.pow(bits as u32);
+            if value >= max_value {
                 panic!(
                     "with {} bits, can't encode number greater than {}",
-                    BITS, max_value
+                    bits, max_value
                 );
             }
-            if inner < 0 && SIGNED {
-                let min_value: i128 = -(2_i128.pow(BITS as u32));
-                if inner <= min_value {
+            if signed && value < 0 {
+                let min_value: i128 = -(2_i128.pow(bits as u32));
+                if value <= min_value {
                     panic!(
                         "with {} bits, can't encode number less than {}",
-                        BITS, min_value
+                        bits, min_value
                     );
                 }
             }
         }
 
-        Self { inner }
+        Self {
+            inner_value: value,
+            signed,
+            variable,
+            bits,
+        }
     }
 
-    fn new_unchecked(value: i128) -> Self {
-        Self { inner: value }
+    fn new_unchecked(signed: bool, variable: bool, bits: u8, value: i128) -> Self {
+        Self {
+            inner_value: value,
+            signed,
+            variable,
+            bits,
+        }
     }
-}
 
-impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8> Serde
-    for SerdeInteger<SIGNED, VARIABLE, BITS>
-{
+    fn get(&self) -> i128 {
+        self.inner_value
+    }
+
+    fn set(&mut self, value: i128) {
+        self.inner_value = value;
+    }
+
     fn ser(&self, writer: &mut dyn BitWrite) {
+        // replicate original ser logic
         let mut value: u128;
-        let negative = self.inner < 0;
+        let negative = self.inner_value < 0;
 
-        if SIGNED {
-            // 1 if negative, 0 if positive
+        if self.signed {
             writer.write_bit(negative);
             if negative {
-                value = -self.inner as u128;
+                value = -self.inner_value as u128;
             } else {
-                value = self.inner as u128;
+                value = self.inner_value as u128;
             }
         } else {
-            value = self.inner as u128;
+            value = self.inner_value as u128;
         }
 
-        if VARIABLE {
-            let mut proceed;
+        if self.variable {
             loop {
-                if value >= 2_u128.pow(BITS as u32) {
-                    proceed = true;
-                } else {
-                    proceed = false;
-                }
+                let proceed = value >= 2_u128.pow(self.bits as u32);
                 writer.write_bit(proceed);
-
-                for _ in 0..BITS {
+                for _ in 0..self.bits {
                     writer.write_bit(value & 1 != 0);
                     value >>= 1;
                 }
@@ -106,31 +112,34 @@ impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8> Serde
                 }
             }
         } else {
-            for _ in 0..BITS {
+            for _ in 0..self.bits {
                 writer.write_bit(value & 1 != 0);
                 value >>= 1;
             }
         }
     }
 
-    fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
-        let mut negative: bool = false;
-        if SIGNED {
+    fn de(
+        reader: &mut BitReader,
+        signed: bool,
+        variable: bool,
+        bits: u8,
+    ) -> Result<Self, SerdeErr> {
+        let mut negative = false;
+        if signed {
             negative = reader.read_bit()?;
         }
 
-        if VARIABLE {
+        if variable {
             let mut total_bits: usize = 0;
             let mut output: u128 = 0;
 
             loop {
                 let proceed = reader.read_bit()?;
 
-                for _ in 0..BITS {
+                for _ in 0..bits {
                     total_bits += 1;
-
                     output <<= 1;
-
                     if reader.read_bit()? {
                         output |= 1;
                     }
@@ -139,34 +148,34 @@ impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8> Serde
                 if !proceed {
                     output <<= 128 - total_bits;
                     output = output.reverse_bits();
-
                     let value: i128 = output as i128;
                     if negative {
-                        return Ok(SerdeInteger::new_unchecked(-value));
+                        return Ok(Self::new_unchecked(
+                            signed, variable, bits, -value,
+                        ));
                     } else {
-                        return Ok(SerdeInteger::new_unchecked(value));
+                        return Ok(Self::new_unchecked(
+                            signed, variable, bits, value,
+                        ));
                     }
                 }
             }
         } else {
             let mut output: u128 = 0;
-
-            for _ in 0..BITS {
+            for _ in 0..bits {
                 output <<= 1;
-
                 if reader.read_bit()? {
                     output |= 1;
                 }
             }
-
-            output <<= 128 - BITS;
+            output <<= 128 - bits;
             output = output.reverse_bits();
 
             let value: i128 = output as i128;
             if negative {
-                Ok(SerdeInteger::new_unchecked(-value))
+                Ok(Self::new_unchecked(signed, variable, bits, -value))
             } else {
-                Ok(SerdeInteger::new_unchecked(value))
+                Ok(Self::new_unchecked(signed, variable, bits, value))
             }
         }
     }
@@ -174,22 +183,16 @@ impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8> Serde
     fn bit_length(&self) -> u32 {
         let mut output: u32 = 0;
 
-        if SIGNED {
-            output += 1;
+        if self.signed {
+            output += 1; // sign bit
         }
 
-        if VARIABLE {
-            let mut proceed;
-            let mut value = self.inner.abs() as u128;
+        if self.variable {
+            let mut value = self.inner_value.abs() as u128;
             loop {
-                if value >= 2_u128.pow(BITS as u32) {
-                    proceed = true;
-                } else {
-                    proceed = false;
-                }
-                output += 1;
-
-                for _ in 0..BITS {
+                let proceed = value >= 2_u128.pow(self.bits as u32);
+                output += 1; // proceed bit
+                for _ in 0..self.bits {
                     output += 1;
                     value >>= 1;
                 }
@@ -198,48 +201,70 @@ impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8> Serde
                 }
             }
         } else {
-            output += BITS as u32;
+            output += self.bits as u32;
         }
-
         output
+    }
+}
+
+impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8> SerdeInteger<SIGNED, VARIABLE, BITS> {
+    pub fn new<T: Into<i128>>(value: T) -> Self {
+        Self {
+            inner: SerdeIntegerInner::new(SIGNED, VARIABLE, BITS, value.into())
+        }
+    }
+
+    pub fn get(&self) -> i128 {
+        self.inner.get()
+    }
+
+    pub fn set<T: Into<i128>>(&mut self, value: T) {
+        self.inner.set(value.into());
+    }
+
+    pub fn to<T: SerdeIntegerConversion<SIGNED, VARIABLE, BITS>>(&self) -> T {
+        T::from(self)
+    }
+}
+
+impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8> Serde for SerdeInteger<SIGNED, VARIABLE, BITS> {
+    fn ser(&self, writer: &mut dyn BitWrite) {
+        self.inner.ser(writer);
+    }
+
+    fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
+        let inner = SerdeIntegerInner::de(reader, SIGNED, VARIABLE, BITS)?;
+        Ok(Self { inner })
+    }
+
+    fn bit_length(&self) -> u32 {
+        self.inner.bit_length()
     }
 }
 
 impl<const SIGNED: bool, const BITS: u8> ConstBitLength for SerdeInteger<SIGNED, false, BITS> {
     fn const_bit_length() -> u32 {
         let mut output: u32 = 0;
-
         if SIGNED {
             output += 1;
         }
-
-        output += BITS as u32;
-
-        output
+        output + BITS as u32
     }
 }
 
-impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8, T: Into<i128>> From<T>
-    for SerdeInteger<SIGNED, VARIABLE, BITS>
-{
+impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8, T: Into<i128>> From<T> for SerdeInteger<SIGNED, VARIABLE, BITS> {
     fn from(value: T) -> Self {
         Self::new(value)
     }
 }
 
-impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8, T: TryFrom<i128>>
-    SerdeIntegerConversion<SIGNED, VARIABLE, BITS> for T
-{
+impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8, T: TryFrom<i128>> SerdeIntegerConversion<SIGNED, VARIABLE, BITS> for T {
     fn from(value: &SerdeInteger<SIGNED, VARIABLE, BITS>) -> Self {
-        let Ok(t_value) = T::try_from(value.inner) else {
+        let Ok(t_value) = T::try_from(value.inner.inner_value) else {
             panic!("SerdeInteger's value is out of range to convert to this type.");
         };
         t_value
     }
-}
-
-pub trait SerdeIntegerConversion<const SIGNED: bool, const VARIABLE: bool, const BITS: u8> {
-    fn from(value: &SerdeInteger<SIGNED, VARIABLE, BITS>) -> Self;
 }
 
 // Tests
