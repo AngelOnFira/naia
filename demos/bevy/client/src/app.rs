@@ -5,7 +5,7 @@ use bevy::{
     DefaultPlugins,
 };
 
-use naia_bevy_client::{AppRegisterComponentEvents, ClientConfig, Plugin as ClientPlugin, ReceiveEvents};
+use naia_bevy_client::{AppRegisterComponentEvents, ClientConfig, Plugin as ClientPlugin, HandleWorldEvents};
 
 use naia_bevy_demo_shared::{protocol, components::{Color, Shape, Position}};
 
@@ -56,10 +56,10 @@ pub fn run() {
                 events::response_events,
             )
                 .chain()
-                .in_set(ReceiveEvents),
+                .in_set(HandleWorldEvents),
         )
         // Tick Event
-        .configure_sets(Update, Tick.after(ReceiveEvents))
+        .configure_sets(Update, Tick.after(HandleWorldEvents))
         .add_systems(Update, events::tick_events.in_set(Tick))
         // Realtime Gameplay Loop
         .configure_sets(Update, MainLoop.after(Tick))

@@ -8,7 +8,7 @@ use log::info;
 use crate::{
     change_detection::{on_despawn, on_host_owned_added, HostSyncEvent},
     system_set::{BeforeHostSyncChangeTracking, HostSyncChangeTracking},
-    BeforeReceiveEvents, HostOwnedMap, ReceiveEvents,
+    ReceivePackets, HostOwnedMap, HandleWorldEvents,
 };
 
 pub struct SharedPlugin<T: Send + Sync + 'static> {
@@ -39,8 +39,8 @@ impl<T: Send + Sync + 'static> PluginType for SharedPlugin<T> {
                 Update,
                 BeforeHostSyncChangeTracking.before(HostSyncChangeTracking),
             )
-            .configure_sets(Update, HostSyncChangeTracking.before(BeforeReceiveEvents))
-            .configure_sets(Update, BeforeReceiveEvents.before(ReceiveEvents))
+            .configure_sets(Update, HostSyncChangeTracking.before(ReceivePackets))
+            .configure_sets(Update, ReceivePackets.before(HandleWorldEvents))
             // SYSTEMS //
             .add_systems(
                 Update,

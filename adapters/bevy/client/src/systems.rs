@@ -28,7 +28,7 @@ mod bevy_events {
 
 use crate::{component_event_registry::ComponentEventRegistry, client::ClientWrapper, ServerOwned};
 
-pub fn before_receive_events<T: Send + Sync + 'static>(world: &mut World) {
+pub fn receive_packets<T: Send + Sync + 'static>(world: &mut World) {
     let host_id = TypeId::of::<T>();
 
     world.resource_scope(|world, mut client: Mut<ClientWrapper<T>>| {

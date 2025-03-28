@@ -31,7 +31,7 @@ mod bevy_events {
 
 use crate::events::CachedTickEventsState;
 
-pub fn before_receive_events(world: &mut World) {
+pub fn receive_packets(world: &mut World) {
     world.resource_scope(|world, mut server: Mut<ServerImpl>| {
         if !server.is_listening() {
             return;

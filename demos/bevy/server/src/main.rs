@@ -7,7 +7,7 @@ use bevy_log::{info, LogPlugin};
 
 use naia_bevy_demo_shared::{protocol, components::{Color, Position, Shape}};
 
-use naia_bevy_server::{AppRegisterComponentEvents, Plugin as ServerPlugin, ReceiveEvents, ServerConfig};
+use naia_bevy_server::{AppRegisterComponentEvents, Plugin as ServerPlugin, HandleWorldEvents, ServerConfig};
 
 mod resources;
 mod systems;
@@ -56,7 +56,7 @@ fn main() {
                 events::response_events,
             )
                 .chain()
-                .in_set(ReceiveEvents),
+                .in_set(HandleWorldEvents),
         )
         // Run App
         .run();

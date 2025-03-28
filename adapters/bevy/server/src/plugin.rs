@@ -3,7 +3,7 @@ use std::{ops::DerefMut, sync::Mutex};
 use bevy_app::{App, Last, Plugin as PluginType, Startup, Update};
 use bevy_ecs::{entity::Entity, schedule::IntoSystemConfigs};
 
-use naia_bevy_shared::{BeforeReceiveEvents, Protocol, SendPackets, SharedPlugin};
+use naia_bevy_shared::{ReceivePackets, Protocol, SendPackets, SharedPlugin};
 use naia_server::{shared::Protocol as NaiaProtocol, Server, ServerConfig, WorldServer};
 
 use super::{
@@ -13,7 +13,7 @@ use super::{
         RequestEvents, SpawnEntityEvent, TickEvent, UnpublishEntityEvent,
     },
     server::ServerImpl,
-    systems::{before_receive_events, send_packets, send_packets_init},
+    systems::{receive_packets, send_packets, send_packets_init},
     component_event_registry::ComponentEventRegistry,
 };
 
@@ -95,7 +95,7 @@ impl PluginType for Plugin {
             // SYSTEM SETS //
             .configure_sets(Last, SendPackets)
             // SYSTEMS //
-            .add_systems(Update, before_receive_events.in_set(BeforeReceiveEvents))
+            .add_systems(Update, receive_packets.in_set(ReceivePackets))
             .add_systems(Startup, send_packets_init)
             .add_systems(Update, send_packets.in_set(SendPackets));
     }

@@ -3,7 +3,7 @@ use std::{marker::PhantomData, ops::DerefMut, sync::Mutex};
 use bevy_app::{App, Plugin as PluginType, Update};
 use bevy_ecs::{entity::Entity, schedule::IntoSystemConfigs};
 
-use naia_bevy_shared::{BeforeReceiveEvents, Protocol, SharedPlugin, WorldData};
+use naia_bevy_shared::{ReceivePackets, Protocol, SharedPlugin, WorldData};
 
 use naia_client::{Client, ClientConfig};
 
@@ -17,7 +17,7 @@ use super::{
         MessageEvents, PublishEntityEvent, RejectEvent, ServerTickEvent,
         SpawnEntityEvent, UnpublishEntityEvent,
     },
-    systems::before_receive_events,
+    systems::receive_packets,
 };
 
 struct PluginConfig {
@@ -90,7 +90,7 @@ impl<T: Sync + Send + 'static> PluginType for Plugin<T> {
             // SYSTEMS //
             .add_systems(
                 Update,
-                before_receive_events::<T>.in_set(BeforeReceiveEvents),
+                receive_packets::<T>.in_set(ReceivePackets),
             );
     }
 }
