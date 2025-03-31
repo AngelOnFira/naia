@@ -19,7 +19,7 @@ pub mod shared {
         default_channels, BigMap, BigMapKey, BitReader, BitWrite, BitWriter, ConstBitLength,
         FileBitWriter, GlobalResponseId, Protocol, Random, ResponseReceiveKey, Serde, SerdeErr,
         SignedInteger, SignedVariableInteger, SocketConfig, UnsignedInteger,
-        UnsignedVariableInteger,
+        UnsignedVariableInteger, Instant,
     };
 }
 

@@ -349,16 +349,18 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
 
     fn entity_enable_delegation(
         &mut self,
+        _converter: &dyn EntityAndGlobalEntityConverter<Entity>,
         _global_world_manager: &dyn GlobalWorldManagerType,
-        _entity: &Entity,
+        _world_entity: &Entity,
     ) {
         todo!()
     }
 
     fn component_enable_delegation(
         &mut self,
+        _converter: &dyn EntityAndGlobalEntityConverter<Entity>,
         _global_world_manager: &dyn GlobalWorldManagerType,
-        _entity: &Entity,
+        _world_entity: &Entity,
         _component_kind: &ComponentKind,
     ) {
         todo!()
