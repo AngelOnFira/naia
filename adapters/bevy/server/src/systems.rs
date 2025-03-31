@@ -1,14 +1,13 @@
 use std::ops::DerefMut;
 
 use bevy_ecs::{
-    event::{EventReader, Events},
-    system::SystemState,
+    event::{EventReader, EventWriter, Events},
+    system::{ResMut, SystemState},
     world::{Mut, World},
 };
-
 use log::warn;
 
-use naia_bevy_shared::{HostOwned, HostSyncEvent, WorldMutType, WorldProxy, WorldProxyMut};
+use naia_bevy_shared::{Instant, HostOwned, HostSyncEvent, WorldMutType, WorldProxy, WorldProxyMut};
 use naia_server::EntityOwner;
 
 use crate::{plugin::Singleton, server::ServerImpl, ClientOwned, EntityAuthStatus, component_event_registry::ComponentEventRegistry};
@@ -31,7 +30,7 @@ mod bevy_events {
 
 use crate::events::CachedTickEventsState;
 
-pub fn receive_packets(world: &mut World) {
+pub fn world_to_host_sync(world: &mut World) {
     world.resource_scope(|world, mut server: Mut<ServerImpl>| {
         if !server.is_listening() {
             return;
@@ -72,9 +71,59 @@ pub fn receive_packets(world: &mut World) {
                 }
             }
         }
+    });
+}
+
+pub fn receive_packets(mut server: ResMut<ServerImpl>) {
+    if !server.is_listening() {
+        return;
+    }
+
+    server.receive_all_packets();
+}
+
+pub fn translate_tick_events(
+    mut server: ResMut<ServerImpl>,
+    mut tick_event_writer: EventWriter<bevy_events::TickEvent>,
+) {
+    if !server.is_listening() {
+        return;
+    }
+
+    let now = Instant::now();
+
+    // Receive Events
+    let mut events = server.take_tick_events(&now);
+    if !events.is_empty() {
+
+        // Tick Event
+        if events.has::<naia_events::TickEvent>() {
+            for tick in events.read::<naia_events::TickEvent>() {
+                tick_event_writer.send(bevy_events::TickEvent(tick));
+            }
+        }
+    }
+}
+
+pub fn process_packets(world: &mut World) {
+    world.resource_scope(|world, mut server: Mut<ServerImpl>| {
+        if !server.is_listening() {
+            return;
+        }
+
+        let now = Instant::now();
+        server.process_all_packets(world.proxy_mut(), &now);
+    });
+}
+
+pub fn translate_world_events(world: &mut World) {
+    world.resource_scope(|world, mut server: Mut<ServerImpl>| {
+        if !server.is_listening() {
+            return;
+        }
 
         // Receive Events
-        let mut events = server.receive(world.proxy_mut());
+        let mut events = server.take_world_events();
         if !events.is_empty() {
 
             // Connect Event
@@ -104,16 +153,6 @@ pub fn receive_packets(world: &mut World) {
                     .unwrap();
                 for error in events.read::<naia_events::ErrorEvent>() {
                     event_writer.send(bevy_events::ErrorEvent(error));
-                }
-            }
-
-            // Tick Event
-            if events.has::<naia_events::TickEvent>() {
-                let mut event_writer = world
-                    .get_resource_mut::<Events<bevy_events::TickEvent>>()
-                    .unwrap();
-                for tick in events.read::<naia_events::TickEvent>() {
-                    event_writer.send(bevy_events::TickEvent(tick));
                 }
             }
 
@@ -245,7 +284,7 @@ pub fn send_packets(world: &mut World) {
                 }
 
                 if did_tick {
-                    server.send_all_updates(world.proxy());
+                    server.send_all_packets(world.proxy());
                 }
             },
         );

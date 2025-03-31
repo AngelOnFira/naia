@@ -1,9 +1,9 @@
 use std::{ops::DerefMut, sync::Mutex};
 
-use bevy_app::{App, Last, Plugin as PluginType, Startup, Update};
-use bevy_ecs::{entity::Entity, schedule::IntoSystemConfigs};
+use bevy_app::{App, Plugin as PluginType, Startup, Update};
+use bevy_ecs::{entity::Entity, schedule::{IntoSystemConfigs, IntoSystemSetConfigs}};
 
-use naia_bevy_shared::{ReceivePackets, Protocol, SendPackets, SharedPlugin};
+use naia_bevy_shared::{ReceivePackets, Protocol, SendPackets, SharedPlugin, WorldToHostSync, TranslateTickEvents, ProcessPackets, TranslateWorldEvents, HostSyncOwnedAddedTracking, HostSyncChangeTracking, HandleTickEvents, HandleWorldEvents};
 use naia_server::{shared::Protocol as NaiaProtocol, Server, ServerConfig, WorldServer};
 
 use super::{
@@ -13,7 +13,7 @@ use super::{
         RequestEvents, SpawnEntityEvent, TickEvent, UnpublishEntityEvent,
     },
     server::ServerImpl,
-    systems::{receive_packets, send_packets, send_packets_init},
+    systems::{receive_packets, send_packets, send_packets_init, world_to_host_sync, translate_tick_events, translate_world_events, process_packets},
     component_event_registry::ComponentEventRegistry,
 };
 
@@ -93,9 +93,21 @@ impl PluginType for Plugin {
             .add_event::<PublishEntityEvent>()
             .add_event::<UnpublishEntityEvent>()
             // SYSTEM SETS //
-            .configure_sets(Last, SendPackets)
+            .configure_sets(Update, ReceivePackets.before(ProcessPackets))
+            .configure_sets(Update, ProcessPackets.before(TranslateWorldEvents))
+            .configure_sets(Update, TranslateWorldEvents.before(HandleWorldEvents))
+            .configure_sets(Update, HandleWorldEvents.before(TranslateTickEvents))
+            .configure_sets(Update, TranslateTickEvents.before(HandleTickEvents))
+            .configure_sets(Update, HandleTickEvents.before(HostSyncOwnedAddedTracking))
+            .configure_sets(Update, HostSyncOwnedAddedTracking.before(HostSyncChangeTracking))
+            .configure_sets(Update, HostSyncChangeTracking.before(WorldToHostSync))
+            .configure_sets(Update, WorldToHostSync.before(SendPackets))
             // SYSTEMS //
             .add_systems(Update, receive_packets.in_set(ReceivePackets))
+            .add_systems(Update, process_packets.in_set(ProcessPackets))
+            .add_systems(Update, translate_world_events.in_set(TranslateWorldEvents))
+            .add_systems(Update, translate_tick_events.in_set(TranslateTickEvents))
+            .add_systems(Update, world_to_host_sync.in_set(WorldToHostSync))
             .add_systems(Startup, send_packets_init)
             .add_systems(Update, send_packets.in_set(SendPackets));
     }

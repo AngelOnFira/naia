@@ -13,8 +13,8 @@ pub struct MainEvents {
     empty: bool,
 }
 
-impl MainEvents {
-    pub(crate) fn new() -> Self {
+impl Default for MainEvents {
+    fn default() -> Self {
         Self {
             auths: HashMap::new(),
             connections: Vec::new(),
@@ -24,6 +24,9 @@ impl MainEvents {
             empty: true,
         }
     }
+}
+
+impl MainEvents {
 
     // Public
 
@@ -37,6 +40,17 @@ impl MainEvents {
 
     pub fn has<V: MainEvent>(&self) -> bool {
         return V::has(self);
+    }
+
+    pub fn append(&mut self, other: Self) {
+        self.auths.extend(other.auths);
+        self.connections.extend(other.connections);
+        self.errors.extend(other.errors);
+        self.world_packets.extend(other.world_packets);
+
+        if !other.empty {
+            self.empty = false;
+        }
     }
 
     // These methods are exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.

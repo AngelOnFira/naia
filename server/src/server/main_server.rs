@@ -62,7 +62,7 @@ impl MainServer {
             users: BigMap::new(),
             user_connections: HashMap::new(),
             // Events
-            incoming_events: MainEvents::new(),
+            incoming_events: MainEvents::default(),
         }
     }
 
@@ -84,7 +84,7 @@ impl MainServer {
         self.handshake_manager.reset();
         self.users = BigMap::new();
         self.user_connections.clear();
-        self.incoming_events = MainEvents::new();
+        self.incoming_events = MainEvents::default();
     }
 
     /// Returns whether or not the Server has initialized correctly and is
@@ -106,7 +106,7 @@ impl MainServer {
         self.maintain_socket();
 
         // return all received messages and reset the buffer
-        std::mem::replace(&mut self.incoming_events, MainEvents::new())
+        std::mem::replace(&mut self.incoming_events, MainEvents::default())
     }
 
     // Connections

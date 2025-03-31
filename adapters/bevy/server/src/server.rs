@@ -7,17 +7,13 @@ use bevy_ecs::{
 };
 
 use naia_server::{
-    shared::SocketConfig, transport::Socket, EntityOwner, Events, NaiaServerError,
+    shared::SocketConfig, transport::Socket, EntityOwner, Events, TickEvents, NaiaServerError,
     ReplicationConfig, RoomKey, RoomMut, RoomRef, Server as NaiaServer, TickBufferMessages,
     UserKey, UserMut, UserRef, UserScopeMut, UserScopeRef, WorldServer as NaiaWorldServer,
     WorldServer,
 };
 
-use naia_bevy_shared::{
-    Channel, ComponentKind, EntityAndGlobalEntityConverter, EntityAuthStatus,
-    EntityDoesNotExistError, GlobalEntity, Message, Request, Response, ResponseReceiveKey,
-    ResponseSendKey, Tick, WorldMutType, WorldRefType,
-};
+use naia_bevy_shared::{Channel, ComponentKind, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityDoesNotExistError, GlobalEntity, Instant, Message, Request, Response, ResponseReceiveKey, ResponseSendKey, Tick, WorldMutType, WorldRefType};
 
 use crate::Replicate;
 
@@ -43,20 +39,41 @@ impl ServerImpl {
         }
     }
 
-    pub(crate) fn receive<W: WorldMutType<Entity>>(&mut self, world: W) -> Events<Entity> {
+    pub(crate) fn receive_all_packets(&mut self) {
         match self {
-            Self::Full(server) => server.receive(world),
+            Self::Full(server) => server.receive_all_packets(),
+            Self::WorldOnly(server) => server.receive_all_packets(),
+        }
+    }
+
+    pub(crate) fn process_all_packets<W: WorldMutType<Entity>>(&mut self, world: W, now: &Instant) {
+        match self {
+            Self::Full(server) => server.process_all_packets(world, now),
+            Self::WorldOnly(server) => server.process_all_packets(world, now),
+        }
+    }
+
+    pub(crate) fn take_world_events(&mut self) -> Events<Entity> {
+        match self {
+            Self::Full(server) => server.take_world_events(),
             Self::WorldOnly(server) => {
-                let world_events = server.receive(world);
+                let world_events = server.take_world_events();
                 Events::<Entity>::from(world_events)
             }
         }
     }
 
-    pub(crate) fn send_all_updates<W: WorldRefType<Entity>>(&mut self, world: W) {
+    pub(crate) fn take_tick_events(&mut self, now: &Instant) -> TickEvents {
         match self {
-            Self::Full(server) => server.send_all_updates(world),
-            Self::WorldOnly(server) => server.send_all_updates(world),
+            Self::Full(server) => server.take_tick_events(now),
+            Self::WorldOnly(server) => server.take_tick_events(now),
+        }
+    }
+
+    pub(crate) fn send_all_packets<W: WorldRefType<Entity>>(&mut self, world: W) {
+        match self {
+            Self::Full(server) => server.send_all_packets(world),
+            Self::WorldOnly(server) => server.send_all_packets(world),
         }
     }
 

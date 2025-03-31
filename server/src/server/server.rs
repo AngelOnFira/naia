@@ -3,25 +3,17 @@ use std::{hash::Hash, net::SocketAddr, panic, time::Duration};
 use naia_shared::{
     Channel, ComponentKind, EntityAndGlobalEntityConverter, EntityAuthStatus,
     EntityDoesNotExistError, GlobalEntity, Message, Protocol, RemoteEntity, Replicate, Request,
-    Response, ResponseReceiveKey, ResponseSendKey, SocketConfig, Tick, WorldMutType, WorldRefType,
+    Response, ResponseReceiveKey, ResponseSendKey, SocketConfig, Tick, WorldMutType, WorldRefType, Instant
 };
 
-use crate::{
-    connection::tick_buffer_messages::TickBufferMessages,
-    events::main_events::WorldPacketEvent,
-    server::{main_server::MainServer, world_server::WorldServer},
-    transport::Socket,
-    transport::{PacketChannel, PacketSender},
-    world::{entity_mut::EntityMut, entity_owner::EntityOwner, entity_ref::EntityRef},
-    ConnectEvent, DisconnectEvent, Events, NaiaServerError, ReplicationConfig, RoomKey, RoomMut,
-    RoomRef, ServerConfig, UserKey, UserMut, UserRef, UserScopeMut, UserScopeRef,
-};
+use crate::{connection::tick_buffer_messages::TickBufferMessages, events::main_events::WorldPacketEvent, server::{main_server::MainServer, world_server::WorldServer}, transport::Socket, transport::{PacketChannel, PacketSender}, world::{entity_mut::EntityMut, entity_owner::EntityOwner, entity_ref::EntityRef}, ConnectEvent, DisconnectEvent, Events, MainEvents, NaiaServerError, ReplicationConfig, RoomKey, RoomMut, RoomRef, ServerConfig, TickEvents, UserKey, UserMut, UserRef, UserScopeMut, UserScopeRef};
 
 /// A server that uses either UDP or WebRTC communication to send/receive
 /// messages to/from connected clients, and syncs registered entities to
 /// clients to whom they are in-scope
 pub struct Server<E: Copy + Eq + Hash + Send + Sync> {
     main_server: MainServer,
+    outstanding_main_events: MainEvents,
     world_server: WorldServer<E>,
     to_world_sender_opt: Option<Box<dyn PacketSender>>,
 }
@@ -33,6 +25,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
         Self {
             main_server: MainServer::new(server_config.clone(), protocol.clone()),
+            outstanding_main_events: MainEvents::default(),
             world_server: WorldServer::new(server_config, protocol),
             to_world_sender_opt: None,
         }
@@ -46,8 +39,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         let world_io_sender = self.main_server.sender_cloned();
         let (to_world_sender, world_io_receiver) = PacketChannel::unbounded();
         self.to_world_sender_opt = Some(to_world_sender);
-        self.world_server
-            .io_load(world_io_sender, world_io_receiver);
+        self.world_server.io_load(world_io_sender, world_io_receiver);
     }
 
     /// Returns whether or not the Server has initialized correctly and is
@@ -61,12 +53,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         self.main_server.socket_config()
     }
 
-    /// Must be called regularly, maintains connection to and receives messages
-    /// from all Clients
-    pub fn receive<W: WorldMutType<E>>(&mut self, world: W) -> Events<E> {
-        // if !self.main_server.is_listening() {
-        //     return Events::empty();
-        // }
+    pub fn receive_all_packets(&mut self) {
 
         let mut main_events = self.main_server.receive();
 
@@ -84,8 +71,20 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             }
         }
 
-        // world server process
-        let mut world_events = self.world_server.receive(world);
+        self.outstanding_main_events.append(main_events);
+
+        // Need to run this to maintain connection with all clients, and receive packets
+        // until none left
+        self.world_server.receive_all_packets();
+    }
+
+    pub fn process_all_packets<W: WorldMutType<E>>(&mut self, world: W, now: &Instant) {
+        self.world_server.process_all_packets(world, &now);
+    }
+
+    pub fn take_world_events(&mut self) -> Events<E> {
+
+        let mut world_events = self.world_server.take_world_events();
 
         // handle disconnects
         {
@@ -101,7 +100,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         }
 
         // combine events
+        let main_events = std::mem::take(&mut self.outstanding_main_events);
         Events::<E>::new(main_events, world_events)
+    }
+
+    pub fn take_tick_events(&mut self, now: &Instant) -> TickEvents {
+        self.world_server.take_tick_events(&now)
     }
 
     // Connections
@@ -178,8 +182,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Sends all update messages to all Clients. If you don't call this
     /// method, the Server will never communicate with it's connected
     /// Clients
-    pub fn send_all_updates<W: WorldRefType<E>>(&mut self, world: W) {
-        self.world_server.send_all_updates(world);
+    pub fn send_all_packets<W: WorldRefType<E>>(&mut self, world: W) {
+        self.world_server.send_all_packets(world);
     }
 
     // Entities

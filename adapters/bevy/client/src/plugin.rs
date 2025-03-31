@@ -3,7 +3,7 @@ use std::{marker::PhantomData, ops::DerefMut, sync::Mutex};
 use bevy_app::{App, Plugin as PluginType, Update};
 use bevy_ecs::{entity::Entity, schedule::IntoSystemConfigs};
 
-use naia_bevy_shared::{ReceivePackets, Protocol, SharedPlugin, WorldData};
+use naia_bevy_shared::{ReceivePackets, Protocol, SharedPlugin, WorldData, ProcessPackets, TranslateWorldEvents, HandleWorldEvents, TranslateTickEvents, HandleTickEvents, HostSyncOwnedAddedTracking, HostSyncChangeTracking, WorldToHostSync, SendPackets};
 
 use naia_client::{Client, ClientConfig};
 
@@ -87,6 +87,16 @@ impl<T: Sync + Send + 'static> PluginType for Plugin<T> {
             .add_event::<EntityAuthGrantedEvent<T>>()
             .add_event::<EntityAuthDeniedEvent<T>>()
             .add_event::<EntityAuthResetEvent<T>>()
+            // SYSTEM SETS //
+            .configure_sets(Update, ReceivePackets.before(TranslateTickEvents))
+            .configure_sets(Update, TranslateTickEvents.before(HandleTickEvents))
+            .configure_sets(Update, HandleTickEvents.before(ProcessPackets))
+            .configure_sets(Update, ProcessPackets.before(TranslateWorldEvents))
+            .configure_sets(Update, TranslateWorldEvents.before(HandleWorldEvents))
+            .configure_sets(Update, HandleWorldEvents.before(HostSyncOwnedAddedTracking))
+            .configure_sets(Update, HostSyncOwnedAddedTracking.before(HostSyncChangeTracking))
+            .configure_sets(Update, HostSyncChangeTracking.before(WorldToHostSync))
+            .configure_sets(Update, WorldToHostSync.before(SendPackets))
             // SYSTEMS //
             .add_systems(
                 Update,

@@ -22,7 +22,7 @@ use naia_shared::{
 
 use crate::{
     connection::{connection::Connection, io::Io, tick_buffer_messages::TickBufferMessages},
-    events::world_events::WorldEvents,
+    events::{TickEvents, world_events::WorldEvents},
     handshake::HandshakeManager,
     request::{GlobalRequestManager, GlobalResponseManager},
     room::Room,
@@ -65,7 +65,10 @@ pub struct WorldServer<E: Copy + Eq + Hash + Send + Sync> {
     global_world_manager: GlobalWorldManager,
     global_entity_map: GlobalEntityMap<E>,
     // Events
-    incoming_events: WorldEvents<E>,
+    addrs_with_new_packets: HashSet<SocketAddr>,
+    outstanding_disconnects: Vec<UserKey>,
+    incoming_world_events: WorldEvents<E>,
+    incoming_tick_events: TickEvents,
     // Requests/Responses
     global_request_manager: GlobalRequestManager,
     global_response_manager: GlobalResponseManager,
@@ -122,7 +125,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             global_world_manager: GlobalWorldManager::new(),
             global_entity_map: GlobalEntityMap::new(),
             // Events
-            incoming_events: WorldEvents::new(),
+            addrs_with_new_packets: HashSet::new(),
+            outstanding_disconnects: Vec::new(),
+            incoming_world_events: WorldEvents::new(),
+            incoming_tick_events: TickEvents::new(),
             // Requests/Responses
             global_request_manager: GlobalRequestManager::new(),
             global_response_manager: GlobalResponseManager::new(),
@@ -170,26 +176,141 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             self.io.register_client(user_address);
         }
 
-        self.incoming_events.push_connection(&user_key);
+        self.incoming_world_events.push_connection(&user_key);
     }
 
-    /// Must be called regularly, maintains connection to and receives messages
-    /// from all Clients
-    pub fn receive<W: WorldMutType<E>>(&mut self, world: W) -> WorldEvents<E> {
-        let now = Instant::now();
+    /// Maintain connection with a client and read all incoming packet data
+    pub fn receive_all_packets(&mut self) {
+        self.handle_disconnects();
+        self.handle_pings();
+        self.handle_heartbeats();
+        self.handle_empty_acks();
 
-        // Need to run this to maintain connection with all clients, and receive packets
-        // until none left
-        self.maintain_socket(world, &now);
+        // receive socket events
+        loop {
+            match self.io.recv_reader() {
+                Ok(Some((address, owned_reader))) => {
+                    // receive packet
+                    let mut reader = owned_reader.borrow();
 
+                    // read header
+                    let Ok(header) = StandardHeader::de(&mut reader) else {
+                        // Received a malformed packet
+                        // TODO: increase suspicion against packet sender
+                        continue;
+                    };
+
+                    match header.packet_type {
+                        PacketType::Data => {
+                            self.addrs_with_new_packets.insert(address);
+
+                            if self
+                                .read_data_packet(&address, &header, &mut reader)
+                                .is_err()
+                            {
+                                warn!("Server Error: cannot read malformed packet");
+                                continue;
+                            }
+                        }
+                        PacketType::Heartbeat => {
+                            if let Some(connection) = self.user_connections.get_mut(&address) {
+                                connection.process_incoming_header(&header);
+                            }
+
+                            continue;
+                        }
+                        PacketType::Ping => {
+                            let response = self.time_manager.process_ping(&mut reader).unwrap();
+                            // send packet
+                            if self.io.send_packet(&address, response.to_packet()).is_err() {
+                                // TODO: pass this on and handle above
+                                warn!("Server Error: Cannot send pong packet to {}", address);
+                                continue;
+                            };
+
+                            if let Some(connection) = self.user_connections.get_mut(&address) {
+                                connection.process_incoming_header(&header);
+                            }
+
+                            continue;
+                        }
+                        PacketType::Pong => {
+                            if let Some(connection) = self.user_connections.get_mut(&address) {
+                                connection.process_incoming_header(&header);
+                                connection
+                                    .ping_manager
+                                    .process_pong(&self.time_manager, &mut reader);
+                            }
+
+                            continue;
+                        }
+                        PacketType::Handshake => {
+                            let handshake_header_result = HandshakeHeader::de(&mut reader);
+                            let Ok(HandshakeHeader::ClientConnectRequest) = handshake_header_result
+                            else {
+                                warn!(
+                                    "Server Error: received invalid handshake packet: {:?}",
+                                    handshake_header_result
+                                );
+                                continue;
+                            };
+                            let has_connection = self.user_connections.contains_key(&address);
+                            if !has_connection {
+                                let Some(user_key) = self.disconnected_users.remove(&address)
+                                else {
+                                    warn!("Server Error: received handshake packet from unknown address: {:?}", address);
+                                    continue;
+                                };
+                                self.finalize_connection(&user_key, &address);
+                            }
+
+                            // Send Connect Response
+                            let packet = HandshakeManager::write_connect_response().to_packet();
+                            if self.io.send_packet(&address, packet).is_err() {
+                                warn!(
+                                    "Server Error: Cannot send handshake response to {}",
+                                    address
+                                );
+                                continue;
+                            }
+
+                            continue;
+                        }
+                    }
+                }
+                Ok(None) => {
+                    // No more packets, break loop
+                    break;
+                }
+                Err(error) => {
+                    self.incoming_world_events
+                        .push_error(NaiaServerError::Wrapped(Box::new(error)));
+                }
+            }
+        }
+    }
+
+    pub fn process_all_packets<W: WorldMutType<E>>(&mut self, mut world: W, now: &Instant) {
+
+        self.process_disconnects(&mut world);
+
+        let addresses = std::mem::take(&mut self.addrs_with_new_packets);
+        for address in addresses {
+            self.process_packets(&address, &mut world, now);
+        }
+    }
+
+    pub fn take_world_events(&mut self) -> WorldEvents<E> {
+        std::mem::replace(&mut self.incoming_world_events, WorldEvents::<E>::new())
+    }
+
+    pub fn take_tick_events(&mut self, now: &Instant) -> TickEvents {
         // tick event
         if self.time_manager.recv_server_tick(&now) {
-            self.incoming_events
+            self.incoming_tick_events
                 .push_tick(self.time_manager.current_tick());
         }
-
-        // return all received messages and reset the buffer
-        std::mem::replace(&mut self.incoming_events, WorldEvents::<E>::new())
+        std::mem::replace(&mut self.incoming_tick_events, TickEvents::new())
     }
 
     // Messages
@@ -412,7 +533,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// Sends all update messages to all Clients. If you don't call this
     /// method, the Server will never communicate with it's connected
     /// Clients
-    pub fn send_all_updates<W: WorldRefType<E>>(&mut self, world: W) {
+    pub fn send_all_packets<W: WorldRefType<E>>(&mut self, world: W) {
         let now = Instant::now();
 
         // update entity scopes
@@ -511,7 +632,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
         if did_change {
             self.send_reset_authority_messages(&global_entity, world_entity);
-            self.incoming_events.push_auth_reset(world_entity);
+            self.incoming_world_events.push_auth_reset(world_entity);
         }
     }
 
@@ -713,7 +834,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 self.send_message::<SystemChannel, EntityEventMessage>(&user_key, &message);
             }
 
-            self.incoming_events
+            self.incoming_world_events
                 .push_auth_grant(origin_user, &world_entity);
         } else {
             panic!("Failed to request authority for entity");
@@ -1562,7 +1683,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             }
         }
         let user = self.user_delete(user_key);
-        self.incoming_events
+        self.incoming_world_events
             .push_disconnection(user_key, user.address());
     }
 
@@ -1624,7 +1745,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             &self.global_world_manager,
             remote_global_entities,
         );
-        let response_events = self.incoming_events.receive_entity_events(
+        let response_events = self.incoming_world_events.receive_entity_events(
             &self.global_entity_map,
             user_key,
             entity_events,
@@ -1795,123 +1916,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
     // Private methods
 
-    /// Maintain connection with a client and read all incoming packet data
-    fn maintain_socket<W: WorldMutType<E>>(&mut self, mut world: W, now: &Instant) {
-        self.handle_disconnects(&mut world);
-        self.handle_pings();
-        self.handle_heartbeats();
-        self.handle_empty_acks();
-
-        let mut addresses: HashSet<SocketAddr> = HashSet::new();
-
-        // receive socket events
-        loop {
-            match self.io.recv_reader() {
-                Ok(Some((address, owned_reader))) => {
-                    // receive packet
-                    let mut reader = owned_reader.borrow();
-
-                    // read header
-                    let Ok(header) = StandardHeader::de(&mut reader) else {
-                        // Received a malformed packet
-                        // TODO: increase suspicion against packet sender
-                        continue;
-                    };
-
-                    match header.packet_type {
-                        PacketType::Data => {
-                            addresses.insert(address);
-
-                            if self
-                                .read_data_packet(&address, &header, &mut reader)
-                                .is_err()
-                            {
-                                warn!("Server Error: cannot read malformed packet");
-                                continue;
-                            }
-                        }
-                        PacketType::Heartbeat => {
-                            if let Some(connection) = self.user_connections.get_mut(&address) {
-                                connection.process_incoming_header(&header);
-                            }
-
-                            continue;
-                        }
-                        PacketType::Ping => {
-                            let response = self.time_manager.process_ping(&mut reader).unwrap();
-                            // send packet
-                            if self.io.send_packet(&address, response.to_packet()).is_err() {
-                                // TODO: pass this on and handle above
-                                warn!("Server Error: Cannot send pong packet to {}", address);
-                                continue;
-                            };
-
-                            if let Some(connection) = self.user_connections.get_mut(&address) {
-                                connection.process_incoming_header(&header);
-                            }
-
-                            continue;
-                        }
-                        PacketType::Pong => {
-                            if let Some(connection) = self.user_connections.get_mut(&address) {
-                                connection.process_incoming_header(&header);
-                                connection
-                                    .ping_manager
-                                    .process_pong(&self.time_manager, &mut reader);
-                            }
-
-                            continue;
-                        }
-                        PacketType::Handshake => {
-                            let handshake_header_result = HandshakeHeader::de(&mut reader);
-                            let Ok(HandshakeHeader::ClientConnectRequest) = handshake_header_result
-                            else {
-                                warn!(
-                                    "Server Error: received invalid handshake packet: {:?}",
-                                    handshake_header_result
-                                );
-                                continue;
-                            };
-                            let has_connection = self.user_connections.contains_key(&address);
-                            if !has_connection {
-                                let Some(user_key) = self.disconnected_users.remove(&address)
-                                else {
-                                    warn!("Server Error: received handshake packet from unknown address: {:?}", address);
-                                    continue;
-                                };
-                                self.finalize_connection(&user_key, &address);
-                            }
-
-                            // Send Connect Response
-                            let packet = HandshakeManager::write_connect_response().to_packet();
-                            if self.io.send_packet(&address, packet).is_err() {
-                                warn!(
-                                    "Server Error: Cannot send handshake response to {}",
-                                    address
-                                );
-                                continue;
-                            }
-
-                            continue;
-                        }
-                    }
-                }
-                Ok(None) => {
-                    // No more packets, break loop
-                    break;
-                }
-                Err(error) => {
-                    self.incoming_events
-                        .push_error(NaiaServerError::Wrapped(Box::new(error)));
-                }
-            }
-        }
-
-        for address in addresses {
-            self.process_packets(&address, &mut world, now);
-        }
-    }
-
     fn read_data_packet(
         &mut self,
         address: &SocketAddr,
@@ -1949,6 +1953,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         return Ok(());
     }
 
+    fn process_disconnects<W: WorldMutType<E>>(
+        &mut self, world: &mut W,
+    ) {
+        let user_disconnects = std::mem::take(&mut self.outstanding_disconnects);
+        for user_key in user_disconnects {
+            self.user_disconnect(&user_key, world);
+        }
+    }
+
     fn process_packets<W: WorldMutType<E>>(
         &mut self,
         address: &SocketAddr,
@@ -1972,7 +1985,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                     &mut self.global_request_manager,
                     &mut self.global_response_manager,
                     world,
-                    &mut self.incoming_events,
+                    &mut self.incoming_world_events,
                 ),
             )
         };
@@ -2088,7 +2101,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         .global_entity_to_entity(&global_entity)
                         .unwrap();
                     self.publish_entity(world, &global_entity, &world_entity, false);
-                    self.incoming_events.push_publish(user_key, &world_entity);
+                    self.incoming_world_events.push_publish(user_key, &world_entity);
                 }
                 EntityResponseEvent::UnpublishEntity(global_entity) => {
                     let world_entity = self
@@ -2096,7 +2109,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         .global_entity_to_entity(&global_entity)
                         .unwrap();
                     self.unpublish_entity(world, &global_entity, &world_entity, false);
-                    self.incoming_events.push_unpublish(user_key, &world_entity);
+                    self.incoming_world_events.push_unpublish(user_key, &world_entity);
                 }
                 EntityResponseEvent::EnableDelegationEntity(global_entity) => {
                     info!("received enable delegation entity message!");
@@ -2110,7 +2123,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         &world_entity,
                         Some(*user_key),
                     );
-                    self.incoming_events.push_delegate(user_key, &world_entity);
+                    self.incoming_world_events.push_delegate(user_key, &world_entity);
                 }
                 EntityResponseEvent::EnableDelegationEntityResponse(global_entity) => {
                     self.entity_enable_delegation_response(user_key, &global_entity);
@@ -2132,7 +2145,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         .global_entity_to_entity(&global_entity)
                         .unwrap();
                     self.entity_release_authority(Some(user_key), &world_entity);
-                    self.incoming_events.push_auth_reset(&world_entity);
+                    self.incoming_world_events.push_auth_reset(&world_entity);
                 }
                 EntityResponseEvent::EntityUpdateAuthority(_, _) => {
                     panic!("Clients should not be able to update entity authority.");
@@ -2411,23 +2424,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         }
     }
 
-    fn handle_disconnects<W: WorldMutType<E>>(&mut self, world: &mut W) {
+    fn handle_disconnects(&mut self) {
         // disconnects
         if self.timeout_timer.ringing() {
             self.timeout_timer.reset();
 
-            let mut user_disconnects: Vec<UserKey> = Vec::new();
-
             for (_, connection) in self.user_connections.iter() {
                 // user disconnects
                 if connection.manual_disconnect {
-                    user_disconnects.push(connection.user_key);
+                    self.outstanding_disconnects.push(connection.user_key);
                     continue;
                 }
-            }
-
-            for user_key in user_disconnects {
-                self.user_disconnect(&user_key, world);
             }
         }
     }

@@ -91,7 +91,7 @@ pub struct WorldMut<'w> {
 
 impl<'w> WorldMut<'w> {
     pub fn new(world: &'w mut World) -> Self {
-        WorldMut { world }
+        Self { world }
     }
 }
 

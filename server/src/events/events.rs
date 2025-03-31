@@ -11,7 +11,7 @@ use crate::{
         world_events::{
             DelegateEntityEvent, DespawnEntityEvent, EntityAuthGrantEvent, EntityAuthResetEvent,
             InsertComponentEvent, MessageEvent, PublishEntityEvent, RemoveComponentEvent,
-            RequestEvent, SpawnEntityEvent, TickEvent, UnpublishEntityEvent, UpdateComponentEvent,
+            RequestEvent, SpawnEntityEvent, UnpublishEntityEvent, UpdateComponentEvent,
             WorldEvent, WorldEvents,
         },
     },
@@ -26,7 +26,7 @@ pub struct Events<E: Hash + Copy + Eq + Sync + Send> {
 
 impl<E: Hash + Copy + Eq + Sync + Send> From<WorldEvents<E>> for Events<E> {
     fn from(world_events: WorldEvents<E>) -> Self {
-        Self::new(MainEvents::new(), world_events)
+        Self::new(MainEvents::default(), world_events)
     }
 }
 
@@ -153,19 +153,6 @@ impl<E: Hash + Copy + Eq + Sync + Send> Event<E> for DisconnectEvent {
 
     fn has(events: &Events<E>) -> bool {
         <DisconnectEvent as WorldEvent<E>>::has(&events.world_events)
-    }
-}
-
-// Tick Event
-impl<E: Hash + Copy + Eq + Sync + Send> Event<E> for TickEvent {
-    type Iter = <TickEvent as WorldEvent<E>>::Iter;
-
-    fn iter(events: &mut Events<E>) -> Self::Iter {
-        <TickEvent as WorldEvent<E>>::iter(&mut events.world_events)
-    }
-
-    fn has(events: &Events<E>) -> bool {
-        <TickEvent as WorldEvent<E>>::has(&events.world_events)
     }
 }
 
