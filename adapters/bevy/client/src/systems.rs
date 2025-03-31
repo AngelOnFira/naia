@@ -3,11 +3,11 @@ use std::{ops::DerefMut, any::TypeId};
 use log::warn;
 
 use bevy_ecs::{
-    event::Events,
-    world::{Mut, World},
+    event::{Events, EventReader, EventWriter},
+    world::{Mut, World}, system::{ResMut, SystemState},
 };
 
-use naia_bevy_shared::{HostOwned, HostSyncEvent, WorldMutType, WorldProxyMut};
+use naia_bevy_shared::{HostOwned, HostSyncEvent, Instant, WorldMutType, WorldProxy, WorldProxyMut};
 
 mod naia_events {
     pub use naia_client::{
@@ -26,9 +26,9 @@ mod bevy_events {
     };
 }
 
-use crate::{component_event_registry::ComponentEventRegistry, client::ClientWrapper, ServerOwned};
+use crate::{events::CachedClientTickEventsState, component_event_registry::ComponentEventRegistry, client::ClientWrapper, ServerOwned};
 
-pub fn receive_packets<T: Send + Sync + 'static>(world: &mut World) {
+pub fn world_to_host_sync<T: Send + Sync + 'static>(world: &mut World) {
     let host_id = TypeId::of::<T>();
 
     world.resource_scope(|world, mut client: Mut<ClientWrapper<T>>| {
@@ -74,9 +74,51 @@ pub fn receive_packets<T: Send + Sync + 'static>(world: &mut World) {
                 event_writer.send(event);
             }
         }
+    });
+}
 
+pub fn receive_packets<T: Send + Sync + 'static>(mut client: ResMut<ClientWrapper<T>>) {
+    client.client.receive_all_packets();
+}
+
+pub fn translate_tick_events<T: Send + Sync + 'static>(
+    mut client: ResMut<ClientWrapper<T>>,
+    mut server_tick_event_writer: EventWriter<bevy_events::ServerTickEvent<T>>,
+    mut client_tick_event_writer: EventWriter<bevy_events::ClientTickEvent<T>>,
+) {
+    let now = Instant::now();
+
+    // Receive Events
+    let mut events = client.client.take_tick_events(&now);
+    if !events.is_empty() {
+
+        // Client Tick Event
+        if events.has::<naia_events::ClientTickEvent>() {
+            for tick in events.read::<naia_events::ClientTickEvent>() {
+                client_tick_event_writer.send(bevy_events::ClientTickEvent::<T>::new(tick));
+            }
+        }
+
+        // Server Tick Event
+        if events.has::<naia_events::ServerTickEvent>() {
+            for tick in events.read::<naia_events::ServerTickEvent>() {
+                server_tick_event_writer.send(bevy_events::ServerTickEvent::<T>::new(tick));
+            }
+        }
+    }
+}
+
+pub fn process_packets<T: Send + Sync + 'static>(world: &mut World) {
+    world.resource_scope(|world, mut client: Mut<ClientWrapper<T>>| {
+        let now = Instant::now();
+        client.client.process_all_packets(world.proxy_mut(), &now);
+    });
+}
+
+pub fn translate_world_events<T: Send + Sync + 'static>(world: &mut World) {
+    world.resource_scope(|world, mut client: Mut<ClientWrapper<T>>| {
         // Receive Events
-        let mut events = client.client.receive(world.proxy_mut());
+        let mut events = client.client.take_world_events();
         if !events.is_empty() {
             if events.has::<naia_events::ConnectEvent>() {
                 // Connect Event
@@ -115,26 +157,6 @@ pub fn receive_packets<T: Send + Sync + 'static>(world: &mut World) {
                     .unwrap();
                 for error in events.read::<naia_events::ErrorEvent>() {
                     event_writer.send(bevy_events::ErrorEvent::<T>::new(error));
-                }
-            }
-
-            // Client Tick Event
-            if events.has::<naia_events::ClientTickEvent>() {
-                let mut event_writer = world
-                    .get_resource_mut::<Events<bevy_events::ClientTickEvent<T>>>()
-                    .unwrap();
-                for tick in events.read::<naia_events::ClientTickEvent>() {
-                    event_writer.send(bevy_events::ClientTickEvent::<T>::new(tick));
-                }
-            }
-
-            // Server Tick Event
-            if events.has::<naia_events::ServerTickEvent>() {
-                let mut event_writer = world
-                    .get_resource_mut::<Events<bevy_events::ServerTickEvent<T>>>()
-                    .unwrap();
-                for tick in events.read::<naia_events::ServerTickEvent>() {
-                    event_writer.send(bevy_events::ServerTickEvent::<T>::new(tick));
                 }
             }
 
@@ -257,6 +279,39 @@ pub fn receive_packets<T: Send + Sync + 'static>(world: &mut World) {
             world.resource_scope(|world, mut registry: Mut<ComponentEventRegistry<T>>| {
                 registry.receive_events(world, &mut events);
             });
+        }
+    });
+}
+
+pub fn send_packets_init<T: Send + Sync + 'static>(world: &mut World) {
+    let tick_event_state: SystemState<EventReader<bevy_events::ClientTickEvent<T>>> =
+        SystemState::new(world);
+    world.insert_resource(CachedClientTickEventsState {
+        event_state: tick_event_state,
+    });
+}
+
+pub fn send_packets<T: Send + Sync + 'static>(world: &mut World) {
+
+    world.resource_scope(|world, mut client: Mut<ClientWrapper<T>>| {
+
+        // if disconnected, always send
+        let mut should_send = if client.client.connection_status().is_connected() { false } else { true };
+
+        // if connected, check if we have ticked before sending packets
+        if !should_send {
+            world.resource_scope(|world, mut events_reader_state: Mut<CachedClientTickEventsState<T>>| {
+                let mut events_reader = events_reader_state.event_state.get_mut(world);
+
+                for _event in events_reader.read() {
+                    should_send = true;
+                }
+            });
+        }
+
+        // send packets
+        if should_send {
+            client.client.send_all_packets(world.proxy());
         }
     });
 }

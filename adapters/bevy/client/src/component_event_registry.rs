@@ -38,7 +38,7 @@ impl<T: Send + Sync + 'static> ComponentEventRegistry<T> {
         self.component_handlers.insert(ComponentKind::of::<R>(), ComponentEventHandlerImpl::<T, R>::new_boxed());
     }
 
-    pub(crate) fn receive_events(&mut self, world: &mut World, events: &mut naia_client::Events<Entity>) {
+    pub(crate) fn receive_events(&mut self, world: &mut World, events: &mut naia_client::WorldEvents<Entity>) {
         // Insert Component Event
         if events.has_inserts() {
             let inserts = events.take_inserts().unwrap();

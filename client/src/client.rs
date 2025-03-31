@@ -12,7 +12,7 @@ use naia_shared::{
     SocketConfig, StandardHeader, SystemChannel, Tick, WorldMutType, WorldRefType,
 };
 
-use super::{client_config::ClientConfig, error::NaiaClientError, events::Events};
+use super::{client_config::ClientConfig, error::NaiaClientError, world_events::WorldEvents};
 use crate::{
     connection::{base_time_manager::BaseTimeManager, connection::Connection, io::Io},
     handshake::{HandshakeManager, HandshakeResult, Handshaker},
@@ -23,6 +23,7 @@ use crate::{
     },
     ReplicationConfig,
 };
+use crate::tick_events::TickEvents;
 
 /// Client can send/receive messages to/from a server, and has a pool of
 /// in-scope entities/components that are synced with the server
@@ -42,7 +43,8 @@ pub struct Client<E: Copy + Eq + Hash + Send + Sync> {
     global_world_manager: GlobalWorldManager,
     global_entity_map: GlobalEntityMap<E>,
     // Events
-    incoming_events: Events<E>,
+    incoming_world_events: WorldEvents<E>,
+    incoming_tick_events: TickEvents,
     // Hacky
     queued_entity_auth_release_messages: Vec<E>,
 }
@@ -80,7 +82,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             global_world_manager: GlobalWorldManager::new(),
             global_entity_map: GlobalEntityMap::new(),
             // Events
-            incoming_events: Events::new(),
+            incoming_world_events: WorldEvents::new(),
+            incoming_tick_events: TickEvents::new(),
             // Hacky
             queued_entity_auth_release_messages: Vec::new(),
         }
@@ -206,105 +209,124 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
     // Receive Data from Server! Very important!
 
-    /// Must call this regularly (preferably at the beginning of every draw
-    /// frame), in a loop until it returns None.
-    /// Retrieves incoming update data from the server, and maintains the connection.
-    pub fn receive<W: WorldMutType<E>>(&mut self, mut world: W) -> Events<E> {
+    pub fn receive_all_packets(&mut self) {
         // Need to run this to maintain connection with server, and receive packets
         // until none left
         self.maintain_socket();
+    }
 
-        self.send_queued_auth_release_messages();
-
-        let mut response_events = None;
+    pub fn process_all_packets<W: WorldMutType<E>>(&mut self, mut world: W, now: &Instant) {
 
         // all other operations
         if self.is_disconnecting() {
             self.disconnect_with_events(&mut world);
-            return std::mem::take(&mut self.incoming_events);
+            return;
         }
 
-        let now = Instant::now();
+        let Some(connection) = &mut self.server_connection else {
+            return;
+        };
+
+        // receive packets, process into events
+        let response_events = connection.process_packets(
+            &mut self.global_entity_map,
+            &mut self.global_world_manager,
+            &self.protocol,
+            &mut world,
+            &now,
+            &mut self.incoming_world_events,
+        );
+
+        self.process_response_events(&mut world, response_events);
+    }
+
+    pub fn take_world_events(&mut self) -> WorldEvents<E> {
+        std::mem::take(&mut self.incoming_world_events)
+    }
+
+    pub fn take_tick_events(&mut self, now: &Instant) -> TickEvents {
+
+        let Some(connection) = &mut self.server_connection else {
+            return TickEvents::default();
+        };
+
+        let (receiving_tick_happened, sending_tick_happened) =
+            connection.time_manager.collect_ticks(&now);
+
+        if let Some((prev_receiving_tick, current_receiving_tick)) = receiving_tick_happened {
+            // read packets on tick boundary, de-jittering
+            if connection
+                .read_buffered_packets(
+                    &self.protocol.channel_kinds,
+                    &self.protocol.message_kinds,
+                    &self.protocol.component_kinds,
+                )
+                .is_err()
+            {
+                // TODO: Except for cosmic radiation .. Server should never send a malformed packet .. handle this
+                warn!("Error reading from buffered packet!");
+            }
+
+            let mut index_tick = prev_receiving_tick.wrapping_add(1);
+            loop {
+                self.incoming_tick_events.push_server_tick(index_tick);
+
+                if index_tick == current_receiving_tick {
+                    break;
+                }
+                index_tick = index_tick.wrapping_add(1);
+            }
+        }
+
+        if let Some((prev_sending_tick, current_sending_tick)) = sending_tick_happened {
+
+            // collect waiting auth release messages
+            if let Some(global_entities) = connection
+                .base
+                .host_world_manager
+                .world_channel
+                .collect_auth_release_messages()
+            {
+                for global_entity in global_entities {
+                    let world_entity = self
+                        .global_entity_map
+                        .global_entity_to_entity(&global_entity)
+                        .unwrap();
+                    self.queued_entity_auth_release_messages.push(world_entity);
+                }
+            }
+
+            // insert tick events in total range
+            let mut index_tick = prev_sending_tick.wrapping_add(1);
+            loop {
+                self.incoming_tick_events.push_client_tick(index_tick);
+
+                if index_tick == current_sending_tick {
+                    break;
+                }
+                index_tick = index_tick.wrapping_add(1);
+            }
+        }
+
+        std::mem::take(&mut self.incoming_tick_events)
+    }
+
+    pub fn send_all_packets<W: WorldRefType<E>>(&mut self, world: W) {
+
+        self.send_queued_auth_release_messages();
 
         if let Some(connection) = &mut self.server_connection {
-            let (receiving_tick_happened, sending_tick_happened) =
-                connection.time_manager.collect_ticks(&now);
+            let now = Instant::now();
 
-            if let Some((prev_receiving_tick, current_receiving_tick)) = receiving_tick_happened {
-                // read packets on tick boundary, de-jittering
-                if connection
-                    .read_buffered_packets(
-                        &self.protocol.channel_kinds,
-                        &self.protocol.message_kinds,
-                        &self.protocol.component_kinds,
-                    )
-                    .is_err()
-                {
-                    // TODO: Except for cosmic radiation .. Server should never send a malformed packet .. handle this
-                    warn!("Error reading from buffered packet!");
-                }
-
-                // receive packets, process into events
-                response_events = Some(connection.process_packets(
-                    &mut self.global_entity_map,
-                    &mut self.global_world_manager,
-                    &self.protocol,
-                    &mut world,
-                    &now,
-                    &mut self.incoming_events,
-                ));
-
-                let mut index_tick = prev_receiving_tick.wrapping_add(1);
-                loop {
-                    self.incoming_events.push_server_tick(index_tick);
-
-                    if index_tick == current_receiving_tick {
-                        break;
-                    }
-                    index_tick = index_tick.wrapping_add(1);
-                }
-            }
-
-            if let Some((prev_sending_tick, current_sending_tick)) = sending_tick_happened {
-                // send outgoing packets
-
-                // collect waiting auth release messages
-                if let Some(global_entities) = connection
-                    .base
-                    .host_world_manager
-                    .world_channel
-                    .collect_auth_release_messages()
-                {
-                    for global_entity in global_entities {
-                        let world_entity = self
-                            .global_entity_map
-                            .global_entity_to_entity(&global_entity)
-                            .unwrap();
-                        self.queued_entity_auth_release_messages.push(world_entity);
-                    }
-                }
-
-                // send packets
-                connection.send_packets(
-                    &self.protocol,
-                    &now,
-                    &mut self.io,
-                    &world,
-                    &self.global_entity_map,
-                    &self.global_world_manager,
-                );
-
-                // insert tick events in total range
-                let mut index_tick = prev_sending_tick.wrapping_add(1);
-                loop {
-                    self.incoming_events.push_client_tick(index_tick);
-
-                    if index_tick == current_sending_tick {
-                        break;
-                    }
-                    index_tick = index_tick.wrapping_add(1);
-                }
-            }
+            // send packets
+            connection.send_packets(
+                &self.protocol,
+                &now,
+                &mut self.io,
+                &world,
+                &self.global_entity_map,
+                &self.global_world_manager,
+            );
         } else {
             if self.io.is_loaded() {
                 if let Some(outgoing_packet) = self.handshake_manager.send() {
@@ -315,12 +337,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 }
             }
         }
-
-        if let Some(events) = response_events {
-            self.process_response_events(&mut world, events);
-        }
-
-        std::mem::take(&mut self.incoming_events)
     }
 
     // Messages
@@ -1168,7 +1184,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 );
 
                 // push outgoing event
-                self.incoming_events.push_auth_grant(*world_entity);
+                self.incoming_world_events.push_auth_grant(*world_entity);
             }
             (EntityAuthStatus::Releasing, EntityAuthStatus::Available)
             | (EntityAuthStatus::Granted, EntityAuthStatus::Available) => {
@@ -1184,15 +1200,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     .untrack_remote_entity(&mut connection.base.local_world_manager, global_entity);
 
                 // push outgoing event
-                self.incoming_events.push_auth_reset(*world_entity);
+                self.incoming_world_events.push_auth_reset(*world_entity);
             }
             (EntityAuthStatus::Available, EntityAuthStatus::Denied) => {
                 // push outgoing event
-                self.incoming_events.push_auth_deny(*world_entity);
+                self.incoming_world_events.push_auth_deny(*world_entity);
             }
             (EntityAuthStatus::Denied, EntityAuthStatus::Available) => {
                 // push outgoing event
-                self.incoming_events.push_auth_reset(*world_entity);
+                self.incoming_world_events.push_auth_reset(*world_entity);
             }
             (EntityAuthStatus::Releasing, EntityAuthStatus::Granted) => {
                 // granted auth response arrived while we are releasing auth!
@@ -1266,15 +1282,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         // push out rejection
                         match old_socket_addr_result {
                             Ok(old_socket_addr) => {
-                                self.incoming_events.push_rejection(&old_socket_addr);
+                                self.incoming_world_events.push_rejection(&old_socket_addr);
                             }
                             Err(err) => {
-                                self.incoming_events.push_error(err);
+                                self.incoming_world_events.push_error(err);
                             }
                         }
                     } else {
                         // push out error
-                        self.incoming_events
+                        self.incoming_world_events
                             .push_error(NaiaClientError::IdError(code));
                     }
 
@@ -1299,7 +1315,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                             self.on_connect();
 
                             let server_addr = self.server_address_unwrapped();
-                            self.incoming_events.push_connection(&server_addr);
+                            self.incoming_world_events.push_connection(&server_addr);
                         }
                         // Some(HandshakeResult::Rejected) => {
                         //     let server_addr = self.server_address_unwrapped();
@@ -1315,7 +1331,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     break;
                 }
                 Err(error) => {
-                    self.incoming_events
+                    self.incoming_world_events
                         .push_error(NaiaClientError::Wrapped(Box::new(error)));
                 }
             }
@@ -1416,7 +1432,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     break;
                 }
                 Err(error) => {
-                    self.incoming_events
+                    self.incoming_world_events
                         .push_error(NaiaClientError::Wrapped(Box::new(error)));
                 }
             }
@@ -1463,12 +1479,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     fn disconnect_with_events<W: WorldMutType<E>>(&mut self, world: &mut W) {
         let server_addr = self.server_address_unwrapped();
 
-        self.incoming_events.clear();
+        self.incoming_world_events.clear();
+        self.incoming_tick_events.clear();
 
         self.despawn_all_remote_entities(world);
         self.disconnect_reset_connection();
 
-        self.incoming_events.push_disconnection(&server_addr);
+        self.incoming_world_events.push_disconnection(&server_addr);
     }
 
     fn despawn_all_remote_entities<W: WorldMutType<E>>(&mut self, world: &mut W) {
@@ -1487,7 +1504,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             remote_entities,
         );
         let response_events = self
-            .incoming_events
+            .incoming_world_events
             .receive_world_events(&self.global_entity_map, entity_events);
         self.process_response_events(world, response_events);
     }
@@ -1580,7 +1597,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         .global_entity_to_entity(&global_entity)
                         .unwrap();
                     self.publish_entity(&global_entity, &world_entity, false);
-                    self.incoming_events.push_publish(world_entity);
+                    self.incoming_world_events.push_publish(world_entity);
                 }
                 EntityResponseEvent::UnpublishEntity(global_entity) => {
                     let world_entity = self
@@ -1588,7 +1605,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         .global_entity_to_entity(&global_entity)
                         .unwrap();
                     self.unpublish_entity(&global_entity, &world_entity, false);
-                    self.incoming_events.push_unpublish(world_entity);
+                    self.incoming_world_events.push_unpublish(world_entity);
                 }
                 EntityResponseEvent::EnableDelegationEntity(global_entity) => {
                     let world_entity = self
@@ -1638,7 +1655,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     self.global_world_manager
                         .entity_update_authority(&global_entity, EntityAuthStatus::Granted);
 
-                    self.incoming_events.push_auth_grant(world_entity);
+                    self.incoming_world_events.push_auth_grant(world_entity);
                 }
             }
         }

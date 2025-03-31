@@ -1,7 +1,7 @@
 use std::{marker::PhantomData, ops::DerefMut, sync::Mutex};
 
-use bevy_app::{App, Plugin as PluginType, Update};
-use bevy_ecs::{entity::Entity, schedule::IntoSystemConfigs};
+use bevy_app::{App, Plugin as PluginType, Startup, Update};
+use bevy_ecs::{entity::Entity, schedule::{IntoSystemConfigs, IntoSystemSetConfigs}};
 
 use naia_bevy_shared::{ReceivePackets, Protocol, SharedPlugin, WorldData, ProcessPackets, TranslateWorldEvents, HandleWorldEvents, TranslateTickEvents, HandleTickEvents, HostSyncOwnedAddedTracking, HostSyncChangeTracking, WorldToHostSync, SendPackets};
 
@@ -17,7 +17,7 @@ use super::{
         MessageEvents, PublishEntityEvent, RejectEvent, ServerTickEvent,
         SpawnEntityEvent, UnpublishEntityEvent,
     },
-    systems::receive_packets,
+    systems::{translate_world_events, receive_packets, process_packets, translate_tick_events, world_to_host_sync, send_packets, send_packets_init},
 };
 
 struct PluginConfig {
@@ -98,9 +98,12 @@ impl<T: Sync + Send + 'static> PluginType for Plugin<T> {
             .configure_sets(Update, HostSyncChangeTracking.before(WorldToHostSync))
             .configure_sets(Update, WorldToHostSync.before(SendPackets))
             // SYSTEMS //
-            .add_systems(
-                Update,
-                receive_packets::<T>.in_set(ReceivePackets),
-            );
+            .add_systems(Update, receive_packets::<T>.in_set(ReceivePackets))
+            .add_systems(Update, translate_tick_events::<T>.in_set(TranslateTickEvents))
+            .add_systems(Update, process_packets::<T>.in_set(ProcessPackets))
+            .add_systems(Update, translate_world_events::<T>.in_set(TranslateWorldEvents))
+            .add_systems(Update, world_to_host_sync::<T>.in_set(WorldToHostSync))
+            .add_systems(Startup, send_packets_init::<T>)
+            .add_systems(Update, send_packets::<T>.in_set(SendPackets));
     }
 }

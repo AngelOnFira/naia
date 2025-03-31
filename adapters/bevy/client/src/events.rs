@@ -1,8 +1,8 @@
 use std::{any::Any, collections::HashMap, marker::PhantomData};
 
-use bevy_ecs::{entity::Entity, prelude::Event};
+use bevy_ecs::{entity::Entity, system::{SystemState, Resource}, event::{Event, EventReader}};
 
-use naia_client::{shared::GlobalResponseId, Events, NaiaClientError};
+use naia_client::{shared::GlobalResponseId, WorldEvents, NaiaClientError};
 
 use naia_bevy_shared::{
     Channel, ChannelKind, Message, MessageContainer, MessageKind,
@@ -76,8 +76,8 @@ pub struct MessageEvents<T> {
     phantom_t: PhantomData<T>,
 }
 
-impl<T> From<&mut Events<Entity>> for MessageEvents<T> {
-    fn from(events: &mut Events<Entity>) -> Self {
+impl<T> From<&mut WorldEvents<Entity>> for MessageEvents<T> {
+    fn from(events: &mut WorldEvents<Entity>) -> Self {
         Self {
             inner: events.take_messages(),
             phantom_t: PhantomData,
@@ -115,8 +115,8 @@ pub struct RequestEvents<T> {
     phantom_t: PhantomData<T>,
 }
 
-impl<T> From<&mut Events<Entity>> for RequestEvents<T> {
-    fn from(events: &mut Events<Entity>) -> Self {
+impl<T> From<&mut WorldEvents<Entity>> for RequestEvents<T> {
+    fn from(events: &mut WorldEvents<Entity>) -> Self {
         Self {
             inner: events.take_requests(),
             phantom_t: PhantomData,
@@ -148,6 +148,12 @@ impl<T> RequestEvents<T> {
 
         output
     }
+}
+
+// ClientTickEventReader
+#[derive(Resource)]
+pub(crate) struct CachedClientTickEventsState<T: Send + Sync + 'static> {
+    pub(crate) event_state: SystemState<EventReader<'static, 'static, ClientTickEvent<T>>>,
 }
 
 // ClientTickEvent

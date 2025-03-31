@@ -15,7 +15,7 @@ use crate::{
         io::Io, tick_buffer_sender::TickBufferSender, tick_queue::TickQueue,
         time_manager::TimeManager,
     },
-    events::Events,
+    world_events::WorldEvents,
     request::{GlobalRequestManager, GlobalResponseManager},
     world::global_world_manager::GlobalWorldManager,
 };
@@ -135,7 +135,7 @@ impl Connection {
         protocol: &Protocol,
         world: &mut W,
         now: &Instant,
-        incoming_events: &mut Events<E>,
+        incoming_events: &mut WorldEvents<E>,
     ) -> Vec<EntityResponseEvent> {
         let mut response_events = Vec::new();
         // Receive Message Events

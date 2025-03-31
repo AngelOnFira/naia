@@ -27,7 +27,8 @@ mod client_config;
 mod command_history;
 mod connection;
 mod error;
-mod events;
+mod world_events;
+mod tick_events;
 mod handshake;
 mod request;
 mod world;
@@ -36,12 +37,13 @@ pub use client::{Client, ConnectionStatus};
 pub use client_config::ClientConfig;
 pub use command_history::CommandHistory;
 pub use error::NaiaClientError;
-pub use events::{
-    ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, EntityAuthDeniedEvent,
-    EntityAuthGrantedEvent, EntityAuthResetEvent, ErrorEvent, Events, InsertComponentEvent,
+pub use world_events::{
+    ConnectEvent, DespawnEntityEvent, DisconnectEvent, EntityAuthDeniedEvent,
+    EntityAuthGrantedEvent, EntityAuthResetEvent, ErrorEvent, WorldEvents, InsertComponentEvent,
     MessageEvent, PublishEntityEvent, RejectEvent, RemoveComponentEvent, RequestEvent,
-    ServerTickEvent, SpawnEntityEvent, UnpublishEntityEvent, UpdateComponentEvent,
+    SpawnEntityEvent, UnpublishEntityEvent, UpdateComponentEvent,
 };
+pub use tick_events::{ServerTickEvent, ClientTickEvent};
 pub use world::{
     entity_mut::EntityMut, entity_ref::EntityRef, replication_config::ReplicationConfig,
 };
