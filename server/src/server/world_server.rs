@@ -22,7 +22,7 @@ use naia_shared::{
 
 use crate::{
     connection::{connection::Connection, io::Io, tick_buffer_messages::TickBufferMessages},
-    events::{TickEvents, world_events::WorldEvents},
+    events::{world_events::WorldEvents, TickEvents},
     handshake::HandshakeManager,
     request::{GlobalRequestManager, GlobalResponseManager},
     room::Room,
@@ -291,7 +291,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     }
 
     pub fn process_all_packets<W: WorldMutType<E>>(&mut self, mut world: W, now: &Instant) {
-
         self.process_disconnects(&mut world);
 
         let addresses = std::mem::take(&mut self.addrs_with_new_packets);
@@ -1953,9 +1952,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         return Ok(());
     }
 
-    fn process_disconnects<W: WorldMutType<E>>(
-        &mut self, world: &mut W,
-    ) {
+    fn process_disconnects<W: WorldMutType<E>>(&mut self, world: &mut W) {
         let user_disconnects = std::mem::take(&mut self.outstanding_disconnects);
         for user_key in user_disconnects {
             self.user_disconnect(&user_key, world);
@@ -2101,7 +2098,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         .global_entity_to_entity(&global_entity)
                         .unwrap();
                     self.publish_entity(world, &global_entity, &world_entity, false);
-                    self.incoming_world_events.push_publish(user_key, &world_entity);
+                    self.incoming_world_events
+                        .push_publish(user_key, &world_entity);
                 }
                 EntityResponseEvent::UnpublishEntity(global_entity) => {
                     let world_entity = self
@@ -2109,7 +2107,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         .global_entity_to_entity(&global_entity)
                         .unwrap();
                     self.unpublish_entity(world, &global_entity, &world_entity, false);
-                    self.incoming_world_events.push_unpublish(user_key, &world_entity);
+                    self.incoming_world_events
+                        .push_unpublish(user_key, &world_entity);
                 }
                 EntityResponseEvent::EnableDelegationEntity(global_entity) => {
                     info!("received enable delegation entity message!");
@@ -2123,7 +2122,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         &world_entity,
                         Some(*user_key),
                     );
-                    self.incoming_world_events.push_delegate(user_key, &world_entity);
+                    self.incoming_world_events
+                        .push_delegate(user_key, &world_entity);
                 }
                 EntityResponseEvent::EnableDelegationEntityResponse(global_entity) => {
                     self.entity_enable_delegation_response(user_key, &global_entity);

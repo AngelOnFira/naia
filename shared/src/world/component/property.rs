@@ -335,8 +335,9 @@ impl<T: Serde> DerefMut for Property<T> {
                 inner.mutate();
                 &mut inner.inner
             }
-            PropertyImpl::RemoteOwned(inner) => &mut inner.inner,
-            PropertyImpl::RemotePublic(inner) => &mut inner.inner,
+            PropertyImpl::RemoteOwned(_) | PropertyImpl::RemotePublic(_) => {
+                panic!("Remote Property should never be mutated.");
+            }
             PropertyImpl::Delegated(inner) => {
                 inner.mutate();
                 &mut inner.inner

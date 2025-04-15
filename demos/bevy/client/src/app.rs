@@ -1,13 +1,19 @@
 use bevy::{
     prelude::{
-        App, ClearColor, Color as BevyColor, IntoSystemConfigs, IntoSystemSetConfigs, Startup, SystemSet, Update,
+        App, ClearColor, Color as BevyColor, IntoSystemConfigs, IntoSystemSetConfigs, Startup,
+        SystemSet, Update,
     },
     DefaultPlugins,
 };
 
-use naia_bevy_client::{AppRegisterComponentEvents, ClientConfig, Plugin as ClientPlugin, HandleWorldEvents};
+use naia_bevy_client::{
+    AppRegisterComponentEvents, ClientConfig, HandleWorldEvents, Plugin as ClientPlugin,
+};
 
-use naia_bevy_demo_shared::{protocol, components::{Color, Shape, Position}};
+use naia_bevy_demo_shared::{
+    components::{Color, Position, Shape},
+    protocol,
+};
 
 use crate::systems::{events, init, input, sync};
 

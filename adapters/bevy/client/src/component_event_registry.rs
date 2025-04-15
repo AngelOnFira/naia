@@ -1,12 +1,15 @@
-use std::{any::Any, marker::PhantomData, collections::HashMap};
+use std::{any::Any, collections::HashMap, marker::PhantomData};
 
-use bevy_ecs::{entity::Entity, world::World, system::Resource};
+use bevy_ecs::{entity::Entity, system::Resource, world::World};
 
 use log::warn;
 
 use naia_bevy_shared::{ComponentKind, Replicate, Tick};
 
-use crate::{bundle_event_registry::BundleEventRegistry, events::{InsertComponentEvent, RemoveComponentEvent, UpdateComponentEvent}};
+use crate::{
+    bundle_event_registry::BundleEventRegistry,
+    events::{InsertComponentEvent, RemoveComponentEvent, UpdateComponentEvent},
+};
 
 #[derive(Resource)]
 pub(crate) struct ComponentEventRegistry<T: Send + Sync + 'static> {
@@ -27,18 +30,22 @@ impl<T: Send + Sync + 'static> Default for ComponentEventRegistry<T> {
 }
 
 impl<T: Send + Sync + 'static> ComponentEventRegistry<T> {
-
     pub(crate) fn bundle_registry_mut(&mut self) -> &mut BundleEventRegistry<T> {
         &mut self.bundle_registry
     }
 
-    pub(crate) fn register_component_handler<R: Replicate>(
-        &mut self,
-    ) {
-        self.component_handlers.insert(ComponentKind::of::<R>(), ComponentEventHandlerImpl::<T, R>::new_boxed());
+    pub(crate) fn register_component_handler<R: Replicate>(&mut self) {
+        self.component_handlers.insert(
+            ComponentKind::of::<R>(),
+            ComponentEventHandlerImpl::<T, R>::new_boxed(),
+        );
     }
 
-    pub(crate) fn receive_events(&mut self, world: &mut World, events: &mut naia_client::WorldEvents<Entity>) {
+    pub(crate) fn receive_events(
+        &mut self,
+        world: &mut World,
+        events: &mut naia_client::WorldEvents<Entity>,
+    ) {
         // Insert Component Event
         if events.has_inserts() {
             let inserts = events.take_inserts().unwrap();
@@ -46,9 +53,9 @@ impl<T: Send + Sync + 'static> ComponentEventRegistry<T> {
             self.bundle_registry.pre_process();
 
             for (kind, entities) in inserts {
-
                 // trigger bundle events
-                self.bundle_registry.process_inserts(world, &kind, &entities);
+                self.bundle_registry
+                    .process_inserts(world, &kind, &entities);
 
                 // trigger component events
                 if let Some(component_handler) = self.component_handlers.get_mut(&kind) {
@@ -109,7 +116,9 @@ impl<T: Send + Sync + 'static, R: Replicate> ComponentEventHandlerImpl<T, R> {
     }
 }
 
-impl<T: Send + Sync + 'static, R: Replicate> ComponentEventHandler for ComponentEventHandlerImpl<T, R> {
+impl<T: Send + Sync + 'static, R: Replicate> ComponentEventHandler
+    for ComponentEventHandlerImpl<T, R>
+{
     fn handle_inserts(&mut self, world: &mut World, entities: Vec<Entity>) {
         for entity in entities {
             world.send_event(InsertComponentEvent::<T, R>::new(entity));

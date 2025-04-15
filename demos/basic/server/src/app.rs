@@ -1,9 +1,10 @@
 use std::{thread::sleep, time::Duration};
 
 use naia_server::{
-    shared::{Instant, default_channels::UnorderedReliableChannel}, transport::webrtc, AuthEvent, ConnectEvent,
-    DisconnectEvent, ErrorEvent, MessageEvent, RoomKey, Server as NaiaServer, ServerConfig,
-    TickEvent,
+    shared::{default_channels::UnorderedReliableChannel, Instant},
+    transport::webrtc,
+    AuthEvent, ConnectEvent, DisconnectEvent, ErrorEvent, MessageEvent, RoomKey,
+    Server as NaiaServer, ServerConfig, TickEvent,
 };
 
 use naia_demo_world::{Entity, World, WorldRefType};
@@ -82,7 +83,8 @@ impl App {
         let now = Instant::now();
 
         self.server.receive_all_packets();
-        self.server.process_all_packets(self.world.proxy_mut(), &now);
+        self.server
+            .process_all_packets(self.world.proxy_mut(), &now);
 
         let mut world_events = self.server.take_world_events();
         let mut tick_events = self.server.take_tick_events(&now);

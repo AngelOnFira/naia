@@ -15,9 +15,9 @@ use crate::{
         io::Io, tick_buffer_sender::TickBufferSender, tick_queue::TickQueue,
         time_manager::TimeManager,
     },
-    world_events::WorldEvents,
     request::{GlobalRequestManager, GlobalResponseManager},
     world::global_world_manager::GlobalWorldManager,
+    world_events::WorldEvents,
 };
 
 pub struct Connection {

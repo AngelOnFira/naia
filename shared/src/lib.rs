@@ -25,11 +25,10 @@ pub use naia_derive::{
 };
 pub use naia_serde::{
     BitReader, BitWrite, BitWriter, ConstBitLength, FileBitWriter, OutgoingPacket, OwnedBitReader,
-    Serde, SerdeBevyClient, SerdeBevyServer, SerdeBevyShared, SerdeErr, SerdeHecs,
-    SerdeIntegerConversion, SerdeInternal, SignedInteger, SignedVariableInteger, UnsignedInteger,
-    UnsignedVariableInteger, MTU_SIZE_BITS, MTU_SIZE_BYTES,
-    SerdeFloatConversion, SignedFloat, SignedVariableFloat, UnsignedFloat,
-    UnsignedVariableFloat,
+    Serde, SerdeBevyClient, SerdeBevyServer, SerdeBevyShared, SerdeErr, SerdeFloatConversion,
+    SerdeHecs, SerdeIntegerConversion, SerdeInternal, SignedFloat, SignedInteger,
+    SignedVariableFloat, SignedVariableInteger, UnsignedFloat, UnsignedInteger,
+    UnsignedVariableFloat, UnsignedVariableInteger, MTU_SIZE_BITS, MTU_SIZE_BYTES,
 };
 pub use naia_socket_shared::{
     generate_identity_token, link_condition_logic, IdentityToken, Instant, LinkConditionerConfig,

@@ -20,9 +20,9 @@ pub use constants::{MTU_SIZE_BITS, MTU_SIZE_BYTES};
 pub use error::SerdeErr;
 pub use file_bit_writer::FileBitWriter;
 pub use number::{
-    SerdeIntegerConversion, SignedInteger, SignedVariableInteger, UnsignedInteger,
-    UnsignedVariableInteger, SerdeFloatConversion, SignedFloat, SignedVariableFloat, UnsignedFloat,
-    UnsignedVariableFloat,
+    SerdeFloatConversion, SerdeIntegerConversion, SignedFloat, SignedInteger, SignedVariableFloat,
+    SignedVariableInteger, UnsignedFloat, UnsignedInteger, UnsignedVariableFloat,
+    UnsignedVariableInteger,
 };
 pub use outgoing_packet::OutgoingPacket;
 pub use serde::{

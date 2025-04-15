@@ -1,13 +1,16 @@
-use std::{ops::DerefMut, any::TypeId};
+use std::{any::TypeId, ops::DerefMut};
 
 use log::warn;
 
 use bevy_ecs::{
-    event::{Events, EventReader, EventWriter},
-    world::{Mut, World}, system::{ResMut, SystemState},
+    event::{EventReader, EventWriter, Events},
+    system::{ResMut, SystemState},
+    world::{Mut, World},
 };
 
-use naia_bevy_shared::{HostOwned, HostSyncEvent, Instant, WorldMutType, WorldProxy, WorldProxyMut};
+use naia_bevy_shared::{
+    HostOwned, HostSyncEvent, Instant, WorldMutType, WorldProxy, WorldProxyMut,
+};
 
 mod naia_events {
     pub use naia_client::{
@@ -20,13 +23,16 @@ mod naia_events {
 mod bevy_events {
     pub use crate::events::{
         ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, EntityAuthDeniedEvent,
-        EntityAuthGrantedEvent, EntityAuthResetEvent, ErrorEvent,
-        MessageEvents, PublishEntityEvent, RejectEvent, RequestEvents,
-        ServerTickEvent, SpawnEntityEvent, UnpublishEntityEvent,
+        EntityAuthGrantedEvent, EntityAuthResetEvent, ErrorEvent, MessageEvents,
+        PublishEntityEvent, RejectEvent, RequestEvents, ServerTickEvent, SpawnEntityEvent,
+        UnpublishEntityEvent,
     };
 }
 
-use crate::{events::CachedClientTickEventsState, component_event_registry::ComponentEventRegistry, client::ClientWrapper, ServerOwned};
+use crate::{
+    client::ClientWrapper, component_event_registry::ComponentEventRegistry,
+    events::CachedClientTickEventsState, ServerOwned,
+};
 
 pub fn world_to_host_sync<T: Send + Sync + 'static>(world: &mut World) {
     let host_id = TypeId::of::<T>();
@@ -91,7 +97,6 @@ pub fn translate_tick_events<T: Send + Sync + 'static>(
     // Receive Events
     let mut events = client.client.take_tick_events(&now);
     if !events.is_empty() {
-
         // Client Tick Event
         if events.has::<naia_events::ClientTickEvent>() {
             for tick in events.read::<naia_events::ClientTickEvent>() {
@@ -292,21 +297,25 @@ pub fn send_packets_init<T: Send + Sync + 'static>(world: &mut World) {
 }
 
 pub fn send_packets<T: Send + Sync + 'static>(world: &mut World) {
-
     world.resource_scope(|world, mut client: Mut<ClientWrapper<T>>| {
-
         // if disconnected, always send
-        let mut should_send = if client.client.connection_status().is_connected() { false } else { true };
+        let mut should_send = if client.client.connection_status().is_connected() {
+            false
+        } else {
+            true
+        };
 
         // if connected, check if we have ticked before sending packets
         if !should_send {
-            world.resource_scope(|world, mut events_reader_state: Mut<CachedClientTickEventsState<T>>| {
-                let mut events_reader = events_reader_state.event_state.get_mut(world);
+            world.resource_scope(
+                |world, mut events_reader_state: Mut<CachedClientTickEventsState<T>>| {
+                    let mut events_reader = events_reader_state.event_state.get_mut(world);
 
-                for _event in events_reader.read() {
-                    should_send = true;
-                }
-            });
+                    for _event in events_reader.read() {
+                        should_send = true;
+                    }
+                },
+            );
         }
 
         // send packets

@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, any::Any, collections::HashMap, hash::Hash, net::SocketAddr};
+use std::{any::Any, collections::HashMap, hash::Hash, marker::PhantomData, net::SocketAddr};
 
 use bevy_ecs::{
     entity::Entity,
@@ -8,8 +8,8 @@ use bevy_ecs::{
 };
 
 use naia_bevy_shared::{
-    Channel, ChannelKind, Message, MessageContainer, MessageKind, Replicate,
-    Request, ResponseSendKey, Tick, ReplicateBundle,
+    Channel, ChannelKind, Message, MessageContainer, MessageKind, Replicate, ReplicateBundle,
+    Request, ResponseSendKey, Tick,
 };
 
 use naia_server::{shared::GlobalResponseId, Events, NaiaServerError, UserKey};
@@ -218,7 +218,6 @@ impl<C: Replicate> UpdateComponentEvent<C> {
         }
     }
 }
-
 
 #[derive(Event)]
 pub struct RemoveComponentEvent<C: Replicate> {

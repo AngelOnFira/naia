@@ -5,7 +5,11 @@ use bevy_ecs::schedule::IntoSystemConfigs;
 
 use log::info;
 
-use crate::{change_detection::{on_despawn, on_host_owned_added, HostSyncEvent}, system_set::{HostSyncOwnedAddedTracking, HostSyncChangeTracking}, HostOwnedMap};
+use crate::{
+    change_detection::{on_despawn, on_host_owned_added, HostSyncEvent},
+    system_set::{HostSyncChangeTracking, HostSyncOwnedAddedTracking},
+    HostOwnedMap,
+};
 
 pub struct SharedPlugin<T: Send + Sync + 'static> {
     phantom_t: PhantomData<T>,

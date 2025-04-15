@@ -1,6 +1,6 @@
-use std::{any::Any, marker::PhantomData, collections::HashMap};
+use std::{any::Any, collections::HashMap, marker::PhantomData};
 
-use bevy_ecs::{entity::Entity, world::World, system::Resource};
+use bevy_ecs::{entity::Entity, system::Resource, world::World};
 
 use log::warn;
 
@@ -8,7 +8,10 @@ use naia_bevy_shared::{ComponentKind, Replicate};
 
 use naia_server::UserKey;
 
-use crate::{bundle_event_registry::BundleEventRegistry, events::{InsertComponentEvent, RemoveComponentEvent, UpdateComponentEvent}};
+use crate::{
+    bundle_event_registry::BundleEventRegistry,
+    events::{InsertComponentEvent, RemoveComponentEvent, UpdateComponentEvent},
+};
 
 #[derive(Resource)]
 pub(crate) struct ComponentEventRegistry {
@@ -29,15 +32,15 @@ impl Default for ComponentEventRegistry {
 }
 
 impl ComponentEventRegistry {
-
     pub(crate) fn bundle_registry_mut(&mut self) -> &mut BundleEventRegistry {
         &mut self.bundle_registry
     }
 
-    pub fn register_component_handler<R: Replicate>(
-        &mut self,
-    ) {
-        self.component_handlers.insert(ComponentKind::of::<R>(), ComponentEventHandlerImpl::<R>::new_boxed());
+    pub fn register_component_handler<R: Replicate>(&mut self) {
+        self.component_handlers.insert(
+            ComponentKind::of::<R>(),
+            ComponentEventHandlerImpl::<R>::new_boxed(),
+        );
     }
 
     pub fn receive_events(&mut self, world: &mut World, events: &mut naia_server::Events<Entity>) {
@@ -48,9 +51,9 @@ impl ComponentEventRegistry {
             self.bundle_registry.pre_process();
 
             for (kind, entities) in inserts {
-
                 // trigger bundle events
-                self.bundle_registry.process_inserts(world, &kind, &entities);
+                self.bundle_registry
+                    .process_inserts(world, &kind, &entities);
 
                 // trigger component events
                 if let Some(handler) = self.component_handlers.get_mut(&kind) {
@@ -90,7 +93,11 @@ impl ComponentEventRegistry {
 trait ComponentEventHandler: Send + Sync {
     fn handle_inserts(&mut self, world: &mut World, entities: Vec<(UserKey, Entity)>);
     fn handle_updates(&mut self, world: &mut World, entities: Vec<(UserKey, Entity)>);
-    fn handle_removes(&mut self, world: &mut World, entities: Vec<(UserKey, Entity, Box<dyn Replicate>)>);
+    fn handle_removes(
+        &mut self,
+        world: &mut World,
+        entities: Vec<(UserKey, Entity, Box<dyn Replicate>)>,
+    );
 }
 
 struct ComponentEventHandlerImpl<R: Replicate> {
@@ -122,7 +129,11 @@ impl<R: Replicate> ComponentEventHandler for ComponentEventHandlerImpl<R> {
         }
     }
 
-    fn handle_removes(&mut self, world: &mut World, entities: Vec<(UserKey, Entity, Box<dyn Replicate>)>) {
+    fn handle_removes(
+        &mut self,
+        world: &mut World,
+        entities: Vec<(UserKey, Entity, Box<dyn Replicate>)>,
+    ) {
         for (user_key, entity, boxed_component) in entities {
             let boxed_any = boxed_component.copy_to_box().to_boxed_any();
             let component: R = Box::<dyn Any + 'static>::downcast::<R>(boxed_any)

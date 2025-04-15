@@ -2,11 +2,22 @@ use std::{hash::Hash, net::SocketAddr, panic, time::Duration};
 
 use naia_shared::{
     Channel, ComponentKind, EntityAndGlobalEntityConverter, EntityAuthStatus,
-    EntityDoesNotExistError, GlobalEntity, Message, Protocol, RemoteEntity, Replicate, Request,
-    Response, ResponseReceiveKey, ResponseSendKey, SocketConfig, Tick, WorldMutType, WorldRefType, Instant
+    EntityDoesNotExistError, GlobalEntity, Instant, Message, Protocol, RemoteEntity, Replicate,
+    Request, Response, ResponseReceiveKey, ResponseSendKey, SocketConfig, Tick, WorldMutType,
+    WorldRefType,
 };
 
-use crate::{connection::tick_buffer_messages::TickBufferMessages, events::main_events::WorldPacketEvent, server::{main_server::MainServer, world_server::WorldServer}, transport::Socket, transport::{PacketChannel, PacketSender}, world::{entity_mut::EntityMut, entity_owner::EntityOwner, entity_ref::EntityRef}, ConnectEvent, DisconnectEvent, Events, MainEvents, NaiaServerError, ReplicationConfig, RoomKey, RoomMut, RoomRef, ServerConfig, TickEvents, UserKey, UserMut, UserRef, UserScopeMut, UserScopeRef};
+use crate::{
+    connection::tick_buffer_messages::TickBufferMessages,
+    events::main_events::WorldPacketEvent,
+    server::{main_server::MainServer, world_server::WorldServer},
+    transport::Socket,
+    transport::{PacketChannel, PacketSender},
+    world::{entity_mut::EntityMut, entity_owner::EntityOwner, entity_ref::EntityRef},
+    ConnectEvent, DisconnectEvent, Events, MainEvents, NaiaServerError, ReplicationConfig, RoomKey,
+    RoomMut, RoomRef, ServerConfig, TickEvents, UserKey, UserMut, UserRef, UserScopeMut,
+    UserScopeRef,
+};
 
 /// A server that uses either UDP or WebRTC communication to send/receive
 /// messages to/from connected clients, and syncs registered entities to
@@ -39,7 +50,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         let world_io_sender = self.main_server.sender_cloned();
         let (to_world_sender, world_io_receiver) = PacketChannel::unbounded();
         self.to_world_sender_opt = Some(to_world_sender);
-        self.world_server.io_load(world_io_sender, world_io_receiver);
+        self.world_server
+            .io_load(world_io_sender, world_io_receiver);
     }
 
     /// Returns whether or not the Server has initialized correctly and is
@@ -54,7 +66,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     }
 
     pub fn receive_all_packets(&mut self) {
-
         let mut main_events = self.main_server.receive();
 
         // handle connects
@@ -83,7 +94,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     }
 
     pub fn take_world_events(&mut self) -> Events<E> {
-
         let mut world_events = self.world_server.take_world_events();
 
         // handle disconnects

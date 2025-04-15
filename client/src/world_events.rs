@@ -394,7 +394,9 @@ pub struct MessageEvent<C: Channel, M: Message> {
     phantom_c: PhantomData<C>,
     phantom_m: PhantomData<M>,
 }
-impl<E: Hash + Copy + Eq + Sync + Send, C: Channel, M: Message> WorldEvent<E> for MessageEvent<C, M> {
+impl<E: Hash + Copy + Eq + Sync + Send, C: Channel, M: Message> WorldEvent<E>
+    for MessageEvent<C, M>
+{
     type Iter = IntoIter<M>;
 
     fn iter(events: &mut WorldEvents<E>) -> Self::Iter {
@@ -431,7 +433,9 @@ pub struct RequestEvent<C: Channel, Q: Request> {
     phantom_c: PhantomData<C>,
     phantom_m: PhantomData<Q>,
 }
-impl<E: Hash + Copy + Eq + Sync + Send, C: Channel, Q: Request> WorldEvent<E> for RequestEvent<C, Q> {
+impl<E: Hash + Copy + Eq + Sync + Send, C: Channel, Q: Request> WorldEvent<E>
+    for RequestEvent<C, Q>
+{
     type Iter = IntoIter<(ResponseSendKey<Q::Response>, Q)>;
 
     fn iter(events: &mut WorldEvents<E>) -> Self::Iter {

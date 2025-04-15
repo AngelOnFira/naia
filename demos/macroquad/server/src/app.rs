@@ -1,8 +1,10 @@
 use std::{collections::HashMap, thread::sleep, time::Duration};
 
 use naia_server::{
-    shared::{Random, Instant}, transport::webrtc, AuthEvent, ConnectEvent, DisconnectEvent, ErrorEvent,
-    PublishEntityEvent, RoomKey, Server as NaiaServer, ServerConfig, TickEvent, UserKey,
+    shared::{Instant, Random},
+    transport::webrtc,
+    AuthEvent, ConnectEvent, DisconnectEvent, ErrorEvent, PublishEntityEvent, RoomKey,
+    Server as NaiaServer, ServerConfig, TickEvent, UserKey,
 };
 
 use naia_demo_world::{Entity, World};
@@ -65,7 +67,8 @@ impl App {
         let now = Instant::now();
 
         self.server.receive_all_packets();
-        self.server.process_all_packets(self.world.proxy_mut(), &now);
+        self.server
+            .process_all_packets(self.world.proxy_mut(), &now);
 
         let mut world_events = self.server.take_world_events();
         let mut tick_events = self.server.take_tick_events(&now);

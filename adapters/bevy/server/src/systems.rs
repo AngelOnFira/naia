@@ -7,10 +7,15 @@ use bevy_ecs::{
 };
 use log::warn;
 
-use naia_bevy_shared::{Instant, HostOwned, HostSyncEvent, WorldMutType, WorldProxy, WorldProxyMut};
+use naia_bevy_shared::{
+    HostOwned, HostSyncEvent, Instant, WorldMutType, WorldProxy, WorldProxyMut,
+};
 use naia_server::EntityOwner;
 
-use crate::{plugin::Singleton, server::ServerImpl, ClientOwned, EntityAuthStatus, component_event_registry::ComponentEventRegistry};
+use crate::{
+    component_event_registry::ComponentEventRegistry, plugin::Singleton, server::ServerImpl,
+    ClientOwned, EntityAuthStatus,
+};
 
 mod naia_events {
     pub use naia_server::{
@@ -22,9 +27,8 @@ mod naia_events {
 
 mod bevy_events {
     pub use crate::events::{
-        AuthEvents, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent,
-        MessageEvents, PublishEntityEvent,
-        RequestEvents, SpawnEntityEvent, TickEvent, UnpublishEntityEvent,
+        AuthEvents, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent, MessageEvents,
+        PublishEntityEvent, RequestEvents, SpawnEntityEvent, TickEvent, UnpublishEntityEvent,
     };
 }
 
@@ -37,10 +41,10 @@ pub fn world_to_host_sync(world: &mut World) {
         }
 
         // Host Component Updates
-        let mut host_component_event_reader = world
-            .get_resource_mut::<Events<HostSyncEvent>>()
-            .unwrap();
-        let host_component_events: Vec<HostSyncEvent> = host_component_event_reader.drain().collect();
+        let mut host_component_event_reader =
+            world.get_resource_mut::<Events<HostSyncEvent>>().unwrap();
+        let host_component_events: Vec<HostSyncEvent> =
+            host_component_event_reader.drain().collect();
         for event in host_component_events {
             match event {
                 HostSyncEvent::Insert(_host_id, entity, component_kind) => {
@@ -49,11 +53,16 @@ pub fn world_to_host_sync(world: &mut World) {
                         continue;
                     }
                     let mut world_proxy = world.proxy_mut();
-                    let Some(mut component_mut) = world_proxy.component_mut_of_kind(&entity, &component_kind) else {
+                    let Some(mut component_mut) =
+                        world_proxy.component_mut_of_kind(&entity, &component_kind)
+                    else {
                         warn!("could not find Component in World which has just been inserted!");
                         continue;
                     };
-                    server.insert_component_worldless(&entity, DerefMut::deref_mut(&mut component_mut));
+                    server.insert_component_worldless(
+                        &entity,
+                        DerefMut::deref_mut(&mut component_mut),
+                    );
                 }
                 HostSyncEvent::Remove(_host_id, entity, component_kind) => {
                     if server.entity_authority_status(&entity) == Some(EntityAuthStatus::Denied) {
@@ -95,7 +104,6 @@ pub fn translate_tick_events(
     // Receive Events
     let mut events = server.take_tick_events(&now);
     if !events.is_empty() {
-
         // Tick Event
         if events.has::<naia_events::TickEvent>() {
             for tick in events.read::<naia_events::TickEvent>() {

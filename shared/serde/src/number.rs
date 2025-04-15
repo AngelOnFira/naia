@@ -18,10 +18,12 @@ pub struct SerdeInteger<const SIGNED: bool, const VARIABLE: bool, const BITS: u8
     inner: SerdeNumberInner,
 }
 
-impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8> SerdeInteger<SIGNED, VARIABLE, BITS> {
+impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8>
+    SerdeInteger<SIGNED, VARIABLE, BITS>
+{
     pub fn new<T: Into<i128>>(value: T) -> Self {
         Self {
-            inner: SerdeNumberInner::new(SIGNED, VARIABLE, BITS, 0, value.into())
+            inner: SerdeNumberInner::new(SIGNED, VARIABLE, BITS, 0, value.into()),
         }
     }
 
@@ -38,7 +40,9 @@ impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8> SerdeInteger<SIGN
     }
 }
 
-impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8> Serde for SerdeInteger<SIGNED, VARIABLE, BITS> {
+impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8> Serde
+    for SerdeInteger<SIGNED, VARIABLE, BITS>
+{
     fn ser(&self, writer: &mut dyn BitWrite) {
         self.inner.ser(writer);
     }
@@ -63,13 +67,17 @@ impl<const SIGNED: bool, const BITS: u8> ConstBitLength for SerdeInteger<SIGNED,
     }
 }
 
-impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8, T: Into<i128>> From<T> for SerdeInteger<SIGNED, VARIABLE, BITS> {
+impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8, T: Into<i128>> From<T>
+    for SerdeInteger<SIGNED, VARIABLE, BITS>
+{
     fn from(value: T) -> Self {
         Self::new(value)
     }
 }
 
-impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8, T: TryFrom<i128>> SerdeIntegerConversion<SIGNED, VARIABLE, BITS> for T {
+impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8, T: TryFrom<i128>>
+    SerdeIntegerConversion<SIGNED, VARIABLE, BITS> for T
+{
     fn from(value: &SerdeInteger<SIGNED, VARIABLE, BITS>) -> Self {
         let Ok(t_value) = T::try_from(value.get()) else {
             panic!("SerdeInteger's value is out of range to convert to this type.");
@@ -80,21 +88,38 @@ impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8, T: TryFrom<i128>>
 
 // Floats
 
-pub trait SerdeFloatConversion<const SIGNED: bool, const VARIABLE: bool, const BITS: u8, const FRACTION_DIGITS: u8> {
+pub trait SerdeFloatConversion<
+    const SIGNED: bool,
+    const VARIABLE: bool,
+    const BITS: u8,
+    const FRACTION_DIGITS: u8,
+>
+{
     fn from(value: &SerdeFloat<SIGNED, VARIABLE, BITS, FRACTION_DIGITS>) -> Self;
 }
 
-pub type UnsignedFloat<const BITS: u8, const FRACTION_DIGITS: u8> = SerdeFloat<false, false, BITS, FRACTION_DIGITS>;
-pub type SignedFloat<const BITS: u8, const FRACTION_DIGITS: u8> = SerdeFloat<true, false, BITS, FRACTION_DIGITS>;
-pub type UnsignedVariableFloat<const BITS: u8, const FRACTION_DIGITS: u8> = SerdeFloat<false, true, BITS, FRACTION_DIGITS>;
-pub type SignedVariableFloat<const BITS: u8, const FRACTION_DIGITS: u8> = SerdeFloat<true, true, BITS, FRACTION_DIGITS>;
+pub type UnsignedFloat<const BITS: u8, const FRACTION_DIGITS: u8> =
+    SerdeFloat<false, false, BITS, FRACTION_DIGITS>;
+pub type SignedFloat<const BITS: u8, const FRACTION_DIGITS: u8> =
+    SerdeFloat<true, false, BITS, FRACTION_DIGITS>;
+pub type UnsignedVariableFloat<const BITS: u8, const FRACTION_DIGITS: u8> =
+    SerdeFloat<false, true, BITS, FRACTION_DIGITS>;
+pub type SignedVariableFloat<const BITS: u8, const FRACTION_DIGITS: u8> =
+    SerdeFloat<true, true, BITS, FRACTION_DIGITS>;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-pub struct SerdeFloat<const SIGNED: bool, const VARIABLE: bool, const BITS: u8, const FRACTION_DIGITS: u8> {
+pub struct SerdeFloat<
+    const SIGNED: bool,
+    const VARIABLE: bool,
+    const BITS: u8,
+    const FRACTION_DIGITS: u8,
+> {
     inner: SerdeNumberInner,
 }
 
-impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8, const FRACTION_DIGITS: u8> SerdeFloat<SIGNED, VARIABLE, BITS, FRACTION_DIGITS> {
+impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8, const FRACTION_DIGITS: u8>
+    SerdeFloat<SIGNED, VARIABLE, BITS, FRACTION_DIGITS>
+{
     pub fn new<T: Into<f32>>(value: T) -> Self {
         let float_val = value.into();
         let scale = 10f32.powi(FRACTION_DIGITS as i32);
@@ -133,7 +158,9 @@ impl<const S: bool, const V: bool, const B: u8, const F: u8> Serde for SerdeFloa
     }
 }
 
-impl<const SIGNED: bool, const BITS: u8, const FRACTION_DIGITS: u8> ConstBitLength for SerdeFloat<SIGNED, false, BITS, FRACTION_DIGITS> {
+impl<const SIGNED: bool, const BITS: u8, const FRACTION_DIGITS: u8> ConstBitLength
+    for SerdeFloat<SIGNED, false, BITS, FRACTION_DIGITS>
+{
     fn const_bit_length() -> u32 {
         let mut output: u32 = 0;
         if SIGNED {
@@ -143,13 +170,27 @@ impl<const SIGNED: bool, const BITS: u8, const FRACTION_DIGITS: u8> ConstBitLeng
     }
 }
 
-impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8, const FRACTION_DIGITS: u8, T: Into<f32>> From<T> for SerdeFloat<SIGNED, VARIABLE, BITS, FRACTION_DIGITS> {
+impl<
+        const SIGNED: bool,
+        const VARIABLE: bool,
+        const BITS: u8,
+        const FRACTION_DIGITS: u8,
+        T: Into<f32>,
+    > From<T> for SerdeFloat<SIGNED, VARIABLE, BITS, FRACTION_DIGITS>
+{
     fn from(value: T) -> Self {
         Self::new(value)
     }
 }
 
-impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8, const FRACTION_DIGITS: u8, T: TryFrom<f32>> SerdeFloatConversion<SIGNED, VARIABLE, BITS, FRACTION_DIGITS> for T {
+impl<
+        const SIGNED: bool,
+        const VARIABLE: bool,
+        const BITS: u8,
+        const FRACTION_DIGITS: u8,
+        T: TryFrom<f32>,
+    > SerdeFloatConversion<SIGNED, VARIABLE, BITS, FRACTION_DIGITS> for T
+{
     fn from(value: &SerdeFloat<SIGNED, VARIABLE, BITS, FRACTION_DIGITS>) -> Self {
         let Ok(t_value) = T::try_from(value.get()) else {
             panic!("SerdeFloat's value is out of range to convert to this type.");
@@ -210,7 +251,13 @@ impl SerdeNumberInner {
         }
     }
 
-    fn new_unchecked(signed: bool, variable: bool, bits: u8, fraction_digits: u8, value: i128) -> Self {
+    fn new_unchecked(
+        signed: bool,
+        variable: bool,
+        bits: u8,
+        fraction_digits: u8,
+        value: i128,
+    ) -> Self {
         Self {
             inner_value: value,
             signed,
@@ -297,11 +344,19 @@ impl SerdeNumberInner {
                     let value: i128 = output as i128;
                     if negative {
                         return Ok(Self::new_unchecked(
-                            signed, variable, bits, fraction_digits, -value,
+                            signed,
+                            variable,
+                            bits,
+                            fraction_digits,
+                            -value,
                         ));
                     } else {
                         return Ok(Self::new_unchecked(
-                            signed, variable, bits, fraction_digits, value,
+                            signed,
+                            variable,
+                            bits,
+                            fraction_digits,
+                            value,
                         ));
                     }
                 }
@@ -319,9 +374,21 @@ impl SerdeNumberInner {
 
             let value: i128 = output as i128;
             if negative {
-                Ok(Self::new_unchecked(signed, variable, bits, fraction_digits, -value))
+                Ok(Self::new_unchecked(
+                    signed,
+                    variable,
+                    bits,
+                    fraction_digits,
+                    -value,
+                ))
             } else {
-                Ok(Self::new_unchecked(signed, variable, bits, fraction_digits, value))
+                Ok(Self::new_unchecked(
+                    signed,
+                    variable,
+                    bits,
+                    fraction_digits,
+                    value,
+                ))
             }
         }
     }
@@ -360,7 +427,10 @@ mod tests {
     use crate::{
         bit_reader::BitReader,
         bit_writer::BitWriter,
-        number::{SignedInteger, SignedVariableInteger, UnsignedInteger, UnsignedVariableInteger, SignedFloat, SignedVariableFloat, UnsignedFloat, UnsignedVariableFloat},
+        number::{
+            SignedFloat, SignedInteger, SignedVariableFloat, SignedVariableInteger, UnsignedFloat,
+            UnsignedInteger, UnsignedVariableFloat, UnsignedVariableInteger,
+        },
         serde::Serde,
     };
 
@@ -488,9 +558,9 @@ mod tests {
         // Write
         let mut writer = BitWriter::new();
 
-        let in_1 = UnsignedFloat::<7,1>::new(12.3);
-        let in_2 = UnsignedFloat::<20,2>::new(5352.21);
-        let in_3 = UnsignedFloat::<5,1>::new(3.0);
+        let in_1 = UnsignedFloat::<7, 1>::new(12.3);
+        let in_2 = UnsignedFloat::<20, 2>::new(5352.21);
+        let in_3 = UnsignedFloat::<5, 1>::new(3.0);
 
         in_1.ser(&mut writer);
         in_2.ser(&mut writer);
@@ -501,9 +571,9 @@ mod tests {
         // Read
         let mut reader = BitReader::new(&buffer);
 
-        let out_1: UnsignedFloat<7,1> = Serde::de(&mut reader).unwrap();
-        let out_2: UnsignedFloat<20,2> = Serde::de(&mut reader).unwrap();
-        let out_3: UnsignedFloat<5,1> = Serde::de(&mut reader).unwrap();
+        let out_1: UnsignedFloat<7, 1> = Serde::de(&mut reader).unwrap();
+        let out_2: UnsignedFloat<20, 2> = Serde::de(&mut reader).unwrap();
+        let out_3: UnsignedFloat<5, 1> = Serde::de(&mut reader).unwrap();
 
         assert!(
             (in_1.get() - out_1.get()).abs() < 0.0001,
@@ -540,9 +610,9 @@ mod tests {
         let buffer = writer.to_bytes();
         let mut reader = BitReader::new(&buffer);
 
-        let out_1: SignedFloat<7,1> = Serde::de(&mut reader).unwrap();
-        let out_2: SignedFloat<20,2> = Serde::de(&mut reader).unwrap();
-        let out_3: SignedFloat<5,1> = Serde::de(&mut reader).unwrap();
+        let out_1: SignedFloat<7, 1> = Serde::de(&mut reader).unwrap();
+        let out_2: SignedFloat<20, 2> = Serde::de(&mut reader).unwrap();
+        let out_3: SignedFloat<5, 1> = Serde::de(&mut reader).unwrap();
 
         assert!(
             (in_1.get() - out_1.get()).abs() < 0.0001,
@@ -568,9 +638,9 @@ mod tests {
     fn read_write_unsigned_variable_float() {
         let mut writer = BitWriter::new();
 
-        let in_1 = UnsignedVariableFloat::<3,1>::new(2.3);
-        let in_2 = UnsignedVariableFloat::<5,2>::new(153.22);
-        let in_3 = UnsignedVariableFloat::<2,1>::new(3.0);
+        let in_1 = UnsignedVariableFloat::<3, 1>::new(2.3);
+        let in_2 = UnsignedVariableFloat::<5, 2>::new(153.22);
+        let in_3 = UnsignedVariableFloat::<2, 1>::new(3.0);
 
         in_1.ser(&mut writer);
         in_2.ser(&mut writer);
@@ -579,9 +649,9 @@ mod tests {
         let buffer = writer.to_bytes();
         let mut reader = BitReader::new(&buffer);
 
-        let out_1: UnsignedVariableFloat<3,1> = Serde::de(&mut reader).unwrap();
-        let out_2: UnsignedVariableFloat<5,2> = Serde::de(&mut reader).unwrap();
-        let out_3: UnsignedVariableFloat<2,1> = Serde::de(&mut reader).unwrap();
+        let out_1: UnsignedVariableFloat<3, 1> = Serde::de(&mut reader).unwrap();
+        let out_2: UnsignedVariableFloat<5, 2> = Serde::de(&mut reader).unwrap();
+        let out_3: UnsignedVariableFloat<2, 1> = Serde::de(&mut reader).unwrap();
 
         assert!(
             (in_1.get() - out_1.get()).abs() < 0.0001,
@@ -607,9 +677,9 @@ mod tests {
     fn read_write_signed_variable_float() {
         let mut writer = BitWriter::new();
 
-        let in_1 = SignedVariableFloat::<5,1>::new(-66.8);
-        let in_2 = SignedVariableFloat::<6,2>::new(537.35);
-        let in_3 = SignedVariableFloat::<2,1>::new(-3.0);
+        let in_1 = SignedVariableFloat::<5, 1>::new(-66.8);
+        let in_2 = SignedVariableFloat::<6, 2>::new(537.35);
+        let in_3 = SignedVariableFloat::<2, 1>::new(-3.0);
 
         in_1.ser(&mut writer);
         in_2.ser(&mut writer);
@@ -618,9 +688,9 @@ mod tests {
         let buffer = writer.to_bytes();
         let mut reader = BitReader::new(&buffer);
 
-        let out_1: SignedVariableFloat<5,1> = Serde::de(&mut reader).unwrap();
-        let out_2: SignedVariableFloat<6,2> = Serde::de(&mut reader).unwrap();
-        let out_3: SignedVariableFloat<2,1> = Serde::de(&mut reader).unwrap();
+        let out_1: SignedVariableFloat<5, 1> = Serde::de(&mut reader).unwrap();
+        let out_2: SignedVariableFloat<6, 2> = Serde::de(&mut reader).unwrap();
+        let out_3: SignedVariableFloat<2, 1> = Serde::de(&mut reader).unwrap();
 
         assert!(
             (in_1.get() - out_1.get()).abs() < 0.0001,

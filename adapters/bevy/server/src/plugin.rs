@@ -1,20 +1,29 @@
 use std::{ops::DerefMut, sync::Mutex};
 
 use bevy_app::{App, Plugin as PluginType, Startup, Update};
-use bevy_ecs::{entity::Entity, schedule::{IntoSystemConfigs, IntoSystemSetConfigs}};
+use bevy_ecs::{
+    entity::Entity,
+    schedule::{IntoSystemConfigs, IntoSystemSetConfigs},
+};
 
-use naia_bevy_shared::{ReceivePackets, Protocol, SendPackets, SharedPlugin, WorldToHostSync, TranslateTickEvents, ProcessPackets, TranslateWorldEvents, HostSyncOwnedAddedTracking, HostSyncChangeTracking, HandleTickEvents, HandleWorldEvents};
+use naia_bevy_shared::{
+    HandleTickEvents, HandleWorldEvents, HostSyncChangeTracking, HostSyncOwnedAddedTracking,
+    ProcessPackets, Protocol, ReceivePackets, SendPackets, SharedPlugin, TranslateTickEvents,
+    TranslateWorldEvents, WorldToHostSync,
+};
 use naia_server::{shared::Protocol as NaiaProtocol, Server, ServerConfig, WorldServer};
 
 use super::{
+    component_event_registry::ComponentEventRegistry,
     events::{
-        AuthEvents, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent,
-        MessageEvents, PublishEntityEvent,
-        RequestEvents, SpawnEntityEvent, TickEvent, UnpublishEntityEvent,
+        AuthEvents, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent, MessageEvents,
+        PublishEntityEvent, RequestEvents, SpawnEntityEvent, TickEvent, UnpublishEntityEvent,
     },
     server::ServerImpl,
-    systems::{receive_packets, send_packets, send_packets_init, world_to_host_sync, translate_tick_events, translate_world_events, process_packets},
-    component_event_registry::ComponentEventRegistry,
+    systems::{
+        process_packets, receive_packets, send_packets, send_packets_init, translate_tick_events,
+        translate_world_events, world_to_host_sync,
+    },
 };
 
 struct PluginConfig {
@@ -99,7 +108,10 @@ impl PluginType for Plugin {
             .configure_sets(Update, HandleWorldEvents.before(TranslateTickEvents))
             .configure_sets(Update, TranslateTickEvents.before(HandleTickEvents))
             .configure_sets(Update, HandleTickEvents.before(HostSyncOwnedAddedTracking))
-            .configure_sets(Update, HostSyncOwnedAddedTracking.before(HostSyncChangeTracking))
+            .configure_sets(
+                Update,
+                HostSyncOwnedAddedTracking.before(HostSyncChangeTracking),
+            )
             .configure_sets(Update, HostSyncChangeTracking.before(WorldToHostSync))
             .configure_sets(Update, WorldToHostSync.before(SendPackets))
             // SYSTEMS //

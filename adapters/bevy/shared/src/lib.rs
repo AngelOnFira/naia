@@ -9,13 +9,13 @@ pub use naia_shared::{
     MessageContainer, MessageKind, MessageKinds, Named, OwnedBitReader, Property, PropertyMutate,
     PropertyMutator, Random, ReliableSettings, RemoteEntity, ReplicaDynMut, ReplicaDynRef,
     ReplicateBevy as Replicate, ReplicateBuilder, Request, Response, ResponseReceiveKey,
-    ResponseSendKey, SerdeBevyShared as Serde, SerdeErr, SerdeIntegerConversion, SignedInteger,
-    SignedVariableInteger, Tick, TickBufferSettings, Timer, UnsignedInteger,
+    ResponseSendKey, SerdeBevyShared as Serde, SerdeErr, SerdeFloatConversion,
+    SerdeIntegerConversion, SignedFloat, SignedInteger, SignedVariableFloat, SignedVariableInteger,
+    Tick, TickBufferSettings, Timer, UnsignedFloat, UnsignedInteger, UnsignedVariableFloat,
     UnsignedVariableInteger, WorldMutType, WorldRefType, MTU_SIZE_BYTES,
-    SerdeFloatConversion, SignedFloat, SignedVariableFloat, UnsignedFloat,
-    UnsignedVariableFloat,
 };
 
+mod bundle;
 mod change_detection;
 mod component_access;
 mod component_ref;
@@ -26,15 +26,18 @@ mod protocol_plugin;
 mod system_set;
 mod world_data;
 mod world_proxy;
-mod bundle;
 
+pub use bundle::ReplicateBundle;
 pub use change_detection::HostSyncEvent;
 pub use component_access::{AppTag, ComponentAccess, ComponentAccessor};
 pub use components::{HostOwned, HostOwnedMap};
 pub use plugin::SharedPlugin;
 pub use protocol::Protocol;
 pub use protocol_plugin::ProtocolPlugin;
-pub use system_set::{ReceivePackets, HostSyncChangeTracking, HostSyncOwnedAddedTracking, HandleWorldEvents, HandleTickEvents, SendPackets, WorldToHostSync, TranslateTickEvents, ProcessPackets, TranslateWorldEvents};
+pub use system_set::{
+    HandleTickEvents, HandleWorldEvents, HostSyncChangeTracking, HostSyncOwnedAddedTracking,
+    ProcessPackets, ReceivePackets, SendPackets, TranslateTickEvents, TranslateWorldEvents,
+    WorldToHostSync,
+};
 pub use world_data::WorldData;
 pub use world_proxy::{WorldMut, WorldProxy, WorldProxyMut, WorldRef};
-pub use bundle::ReplicateBundle;

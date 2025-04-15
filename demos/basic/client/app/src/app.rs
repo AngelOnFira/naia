@@ -61,7 +61,8 @@ impl App {
         let now = Instant::now();
 
         self.client.receive_all_packets();
-        self.client.process_all_packets(self.world.proxy_mut(), &now);
+        self.client
+            .process_all_packets(self.world.proxy_mut(), &now);
 
         let mut world_events = self.client.take_world_events();
         let mut tick_events = self.client.take_tick_events(&now);
@@ -85,7 +86,8 @@ impl App {
         for server_address in world_events.read::<DisconnectEvent>() {
             info!("Client disconnected from: {}", server_address);
         }
-        for message in world_events.read::<MessageEvent<UnorderedReliableChannel, StringMessage>>() {
+        for message in world_events.read::<MessageEvent<UnorderedReliableChannel, StringMessage>>()
+        {
             let message_contents = &(*message.contents);
             info!("Client recv <- {}", message_contents);
 

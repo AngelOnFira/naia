@@ -1,12 +1,15 @@
-use std::{collections::{HashMap, HashSet}, marker::PhantomData};
+use std::{
+    collections::{HashMap, HashSet},
+    marker::PhantomData,
+};
 
-use bevy_ecs::{world::World, entity::Entity};
+use bevy_ecs::{entity::Entity, world::World};
 
 use naia_bevy_shared::{ComponentKind, ReplicateBundle, WorldProxy, WorldRefType};
 
 use naia_server::UserKey;
 
-use crate::{events::InsertBundleEvent};
+use crate::events::InsertBundleEvent;
 
 pub(crate) struct BundleEventRegistry {
     bundle_events_sent: HashMap<BundleId, HashSet<Entity>>,
@@ -30,16 +33,18 @@ impl Default for BundleEventRegistry {
 }
 
 impl BundleEventRegistry {
-    pub(crate) fn register_bundle_handler<B: ReplicateBundle>(
-        &mut self,
-    ) {
+    pub(crate) fn register_bundle_handler<B: ReplicateBundle>(&mut self) {
         let set = B::kind_set();
         let handler = BundleEventHandlerImpl::<B>::new_boxed();
         self.register_bundle_handler_impl(set, handler);
     }
 
     // split this out to avoid large monomorphic calls
-    fn register_bundle_handler_impl(&mut self, components: HashSet<ComponentKind>, handler: Box<dyn BundleEventHandler>) {
+    fn register_bundle_handler_impl(
+        &mut self,
+        components: HashSet<ComponentKind>,
+        handler: Box<dyn BundleEventHandler>,
+    ) {
         let bundle_id = self.next_bundle_id();
 
         // add components to map
@@ -52,7 +57,8 @@ impl BundleEventRegistry {
         }
 
         // add bundle to map
-        self.bundles.insert(bundle_id, BundleInfo::new(components, handler));
+        self.bundles
+            .insert(bundle_id, BundleInfo::new(components, handler));
     }
 
     fn next_bundle_id(&mut self) -> BundleId {
@@ -65,7 +71,12 @@ impl BundleEventRegistry {
         self.bundle_events_sent.clear();
     }
 
-    pub(crate) fn process_inserts(&mut self, world: &mut World, component_kind: &ComponentKind, entities: &Vec<(UserKey, Entity)>) {
+    pub(crate) fn process_inserts(
+        &mut self,
+        world: &mut World,
+        component_kind: &ComponentKind,
+        entities: &Vec<(UserKey, Entity)>,
+    ) {
         let Some(bundle_ids) = self.components_to_bundle_ids.get(&component_kind) else {
             // component is not part of any bundle
             return;
@@ -75,7 +86,6 @@ impl BundleEventRegistry {
             let bundle_info = self.bundles.get(bundle_id).unwrap();
 
             for (user_key, entity) in entities {
-
                 // see if we need to skip
                 if let Some(bundle_events_sent) = self.bundle_events_sent.get(bundle_id) {
                     if bundle_events_sent.contains(entity) {
@@ -117,10 +127,7 @@ struct BundleInfo {
 
 impl BundleInfo {
     fn new(kinds: HashSet<ComponentKind>, handler: Box<dyn BundleEventHandler>) -> Self {
-        Self {
-            kinds,
-            handler,
-        }
+        Self { kinds, handler }
     }
 }
 

@@ -11,9 +11,9 @@ use bevy::{
 
 use naia_bevy_client::{
     events::{
-        ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent,
-        MessageEvents, PublishEntityEvent, RejectEvent, RequestEvents,
-        SpawnEntityEvent, UnpublishEntityEvent, InsertComponentEvent, RemoveComponentEvent, UpdateComponentEvent
+        ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, InsertComponentEvent,
+        MessageEvents, PublishEntityEvent, RejectEvent, RemoveComponentEvent, RequestEvents,
+        SpawnEntityEvent, UnpublishEntityEvent, UpdateComponentEvent,
     },
     sequence_greater_than, Client, CommandsExt, Random, Replicate, Tick,
 };

@@ -6,7 +6,7 @@ use macroquad::prelude::{
 };
 
 use naia_client::{
-    shared::{sequence_greater_than, Tick, Instant},
+    shared::{sequence_greater_than, Instant, Tick},
     transport::webrtc,
     Client as NaiaClient, ClientConfig, ClientTickEvent, CommandHistory, ConnectEvent,
     DespawnEntityEvent, DisconnectEvent, ErrorEvent, InsertComponentEvent, MessageEvent,
@@ -125,7 +125,8 @@ impl App {
         let now = Instant::now();
 
         self.client.receive_all_packets();
-        self.client.process_all_packets(self.world.proxy_mut(), &now);
+        self.client
+            .process_all_packets(self.world.proxy_mut(), &now);
 
         let mut world_events = self.client.take_world_events();
         let mut tick_events = self.client.take_tick_events(&now);
@@ -211,7 +212,9 @@ impl App {
             let server_entity = owned_entity.confirmed;
             let client_entity = owned_entity.predicted;
 
-            for (server_tick, updated_entity) in world_events.read::<UpdateComponentEvent<Position>>() {
+            for (server_tick, updated_entity) in
+                world_events.read::<UpdateComponentEvent<Position>>()
+            {
                 // If entity is owned
                 if updated_entity == server_entity {
                     if let Some(last_tick) = &mut latest_tick {

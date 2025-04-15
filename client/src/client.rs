@@ -13,6 +13,7 @@ use naia_shared::{
 };
 
 use super::{client_config::ClientConfig, error::NaiaClientError, world_events::WorldEvents};
+use crate::tick_events::TickEvents;
 use crate::{
     connection::{base_time_manager::BaseTimeManager, connection::Connection, io::Io},
     handshake::{HandshakeManager, HandshakeResult, Handshaker},
@@ -23,7 +24,6 @@ use crate::{
     },
     ReplicationConfig,
 };
-use crate::tick_events::TickEvents;
 
 /// Client can send/receive messages to/from a server, and has a pool of
 /// in-scope entities/components that are synced with the server
@@ -216,7 +216,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     }
 
     pub fn process_all_packets<W: WorldMutType<E>>(&mut self, mut world: W, now: &Instant) {
-
         // all other operations
         if self.is_disconnecting() {
             self.disconnect_with_events(&mut world);
@@ -245,7 +244,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     }
 
     pub fn take_tick_events(&mut self, now: &Instant) -> TickEvents {
-
         let Some(connection) = &mut self.server_connection else {
             return TickEvents::default();
         };
@@ -279,7 +277,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         }
 
         if let Some((prev_sending_tick, current_sending_tick)) = sending_tick_happened {
-
             // collect waiting auth release messages
             if let Some(global_entities) = connection
                 .base
@@ -312,7 +309,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     }
 
     pub fn send_all_packets<W: WorldRefType<E>>(&mut self, world: W) {
-
         self.send_queued_auth_release_messages();
 
         if let Some(connection) = &mut self.server_connection {

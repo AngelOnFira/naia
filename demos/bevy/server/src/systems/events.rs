@@ -279,9 +279,7 @@ pub fn insert_component_events(
     }
 }
 
-pub fn update_component_events(
-    mut position_events: EventReader<UpdateComponentEvent<Position>>,
-) {
+pub fn update_component_events(mut position_events: EventReader<UpdateComponentEvent<Position>>) {
     for _events in position_events.read() {
         // info!("update component in client entity");
     }

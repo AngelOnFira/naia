@@ -27,7 +27,6 @@ impl Default for MainEvents {
 }
 
 impl MainEvents {
-
     // Public
 
     pub fn is_empty(&self) -> bool {

@@ -11,8 +11,8 @@ use crate::{
         world_events::{
             DelegateEntityEvent, DespawnEntityEvent, EntityAuthGrantEvent, EntityAuthResetEvent,
             InsertComponentEvent, MessageEvent, PublishEntityEvent, RemoveComponentEvent,
-            RequestEvent, SpawnEntityEvent, UnpublishEntityEvent, UpdateComponentEvent,
-            WorldEvent, WorldEvents,
+            RequestEvent, SpawnEntityEvent, UnpublishEntityEvent, UpdateComponentEvent, WorldEvent,
+            WorldEvents,
         },
     },
     user::UserKey,

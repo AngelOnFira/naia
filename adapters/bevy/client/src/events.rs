@@ -1,12 +1,16 @@
 use std::{any::Any, collections::HashMap, marker::PhantomData};
 
-use bevy_ecs::{entity::Entity, system::{SystemState, Resource}, event::{Event, EventReader}};
+use bevy_ecs::{
+    entity::Entity,
+    event::{Event, EventReader},
+    system::{Resource, SystemState},
+};
 
-use naia_client::{shared::GlobalResponseId, WorldEvents, NaiaClientError};
+use naia_client::{shared::GlobalResponseId, NaiaClientError, WorldEvents};
 
 use naia_bevy_shared::{
-    Channel, ChannelKind, Message, MessageContainer, MessageKind,
-    Request, ResponseSendKey, Tick, ReplicateBundle,
+    Channel, ChannelKind, Message, MessageContainer, MessageKind, ReplicateBundle, Request,
+    ResponseSendKey, Tick,
 };
 
 use crate::Replicate;
