@@ -6,11 +6,7 @@ use bevy_ecs::{
     schedule::{IntoSystemConfigs, IntoSystemSetConfigs},
 };
 
-use naia_bevy_shared::{
-    HandleTickEvents, HandleWorldEvents, HostSyncChangeTracking, HostSyncOwnedAddedTracking,
-    ProcessPackets, Protocol, ReceivePackets, SendPackets, SharedPlugin, TranslateTickEvents,
-    TranslateWorldEvents, WorldToHostSync,
-};
+use naia_bevy_shared::{HandleTickEvents, HandleWorldEvents, HostSyncChangeTracking, HostSyncOwnedAddedTracking, ProcessPackets, Protocol, ReceivePackets, SendPackets, SharedPlugin, TranslateTickEvents, TranslateWorldEvents, WorldToHostSync, WorldUpdate};
 use naia_server::{shared::Protocol as NaiaProtocol, Server, ServerConfig, WorldServer};
 
 use super::{
@@ -107,7 +103,8 @@ impl PluginType for Plugin {
             .configure_sets(Update, TranslateWorldEvents.before(HandleWorldEvents))
             .configure_sets(Update, HandleWorldEvents.before(TranslateTickEvents))
             .configure_sets(Update, TranslateTickEvents.before(HandleTickEvents))
-            .configure_sets(Update, HandleTickEvents.before(HostSyncOwnedAddedTracking))
+            .configure_sets(Update, HandleTickEvents.before(WorldUpdate))
+            .configure_sets(Update, WorldUpdate.before(HostSyncOwnedAddedTracking))
             .configure_sets(
                 Update,
                 HostSyncOwnedAddedTracking.before(HostSyncChangeTracking),

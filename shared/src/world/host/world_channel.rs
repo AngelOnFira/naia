@@ -636,27 +636,35 @@ impl WorldChannel {
         let mut output = HashMap::new();
 
         for (global_entity, entity_channel) in self.entity_channels.iter() {
-            let world_entity = converter.global_entity_to_entity(global_entity).unwrap();
 
-            if entity_channel.is_spawned() && world.has_entity(&world_entity) {
-                for component_kind in entity_channel.inserted_components() {
-                    if self
-                        .diff_handler
-                        .diff_mask_is_clear(global_entity, &component_kind)
-                    {
-                        continue;
+            if !entity_channel.is_spawned() {
+                continue;
+            }
+
+            let Ok(world_entity) = converter.global_entity_to_entity(global_entity) else {
+                panic!("World Channel: cannot convert global entity ({:?}) to world entity", global_entity);
+            };
+
+            if !world.has_entity(&world_entity) {
+                continue;
+            }
+            for component_kind in entity_channel.inserted_components() {
+                if self
+                    .diff_handler
+                    .diff_mask_is_clear(global_entity, &component_kind)
+                {
+                    continue;
+                }
+                let entity_is_replicating =
+                    global_world_manager.entity_is_replicating(global_entity);
+                let world_has_component =
+                    world.has_component_of_kind(&world_entity, &component_kind);
+                if entity_is_replicating && world_has_component {
+                    if !output.contains_key(global_entity) {
+                        output.insert(*global_entity, HashSet::new());
                     }
-                    let entity_is_replicating =
-                        global_world_manager.entity_is_replicating(global_entity);
-                    let world_has_component =
-                        world.has_component_of_kind(&world_entity, &component_kind);
-                    if entity_is_replicating && world_has_component {
-                        if !output.contains_key(global_entity) {
-                            output.insert(*global_entity, HashSet::new());
-                        }
-                        let send_component_set = output.get_mut(global_entity).unwrap();
-                        send_component_set.insert(component_kind);
-                    }
+                    let send_component_set = output.get_mut(global_entity).unwrap();
+                    send_component_set.insert(component_kind);
                 }
             }
         }

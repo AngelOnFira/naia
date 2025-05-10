@@ -704,8 +704,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
         let global_entity = self
             .global_entity_map
-            .entity_to_global_entity(world_entity)
-            .unwrap();
+            .entity_to_global_entity(world_entity).ok()?;
 
         self.global_world_manager
             .entity_authority_status(&global_entity)

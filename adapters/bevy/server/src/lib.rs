@@ -1,5 +1,5 @@
 pub use naia_bevy_shared::{
-    EntityAuthStatus, HandleTickEvents, HandleWorldEvents, Random, Replicate, ReplicateBundle, Tick,
+    EntityAuthStatus, HandleTickEvents, WorldUpdate, HandleWorldEvents, Random, Replicate, ReplicateBundle, Tick,
 };
 pub use naia_server::{
     shared::{

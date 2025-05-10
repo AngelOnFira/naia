@@ -1,5 +1,5 @@
 pub use naia_shared::{
-    sequence_greater_than, sequence_less_than, wrapping_diff, BitReader, BitWrite, BitWriter,
+    sequence_greater_than, sequence_less_than, wrapping_diff, BitReader, BitWrite, FileBitWriter, BitWriter,
     Channel, ChannelDirection, ChannelKind, ChannelMode, ComponentFieldUpdate, ComponentKind,
     ComponentKinds, ComponentUpdate, ConstBitLength, DiffMask, EntityAndGlobalEntityConverter,
     EntityAuthAccessor, EntityAuthStatus, EntityDoesNotExistError, EntityProperty,
@@ -34,7 +34,7 @@ pub use components::{HostOwned, HostOwnedMap};
 pub use plugin::SharedPlugin;
 pub use protocol::Protocol;
 pub use protocol_plugin::ProtocolPlugin;
-pub use system_set::{
+pub use system_set::{WorldUpdate,
     HandleTickEvents, HandleWorldEvents, HostSyncChangeTracking, HostSyncOwnedAddedTracking,
     ProcessPackets, ReceivePackets, SendPackets, TranslateTickEvents, TranslateWorldEvents,
     WorldToHostSync,
