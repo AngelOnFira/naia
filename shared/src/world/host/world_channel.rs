@@ -345,40 +345,53 @@ impl WorldChannel {
         self.remote_world.insert(*entity, CheckedSet::new());
 
         if self.host_world.contains_key(entity) {
-            // initialize component channels
-            let host_components = self.host_world.get(entity).unwrap();
-
-            let inserted_and_inserting_components: HashSet<&ComponentKind> = host_components
-                .inner
-                .union(&inserted_component_kinds)
-                .collect();
-
-            for component_kind in inserted_and_inserting_components {
-                // change to inserting status.
-                // for the components that have already been inserted, they will be migrated with
-                // the `on_remote_insert_component()` call below.
-                entity_channel.insert_component(component_kind, true);
-            }
-
-            let send_insert_action_component_kinds: HashSet<&ComponentKind> = host_components
-                .inner
-                .difference(&inserted_component_kinds)
-                .collect();
-
-            for component in send_insert_action_component_kinds {
-                // send insert action
-                self.outgoing_actions
-                    .send_message(EntityActionEvent::InsertComponent(*entity, *component));
-            }
-
-            // receive inserted components
-            for component_kind in inserted_component_kinds {
-                self.on_remote_insert_component(entity, component_kind);
-            }
 
             if should_despawn {
-                warn!("complete queued despawn");
+                // initialize component channels for inserted components (so we can safely remove them)
+
+                // receive inserted components
+                for component_kind in inserted_component_kinds {
+                    // change to inserting status.
+                    // inserted components will be migrated with the `on_remote_insert_component()` call below.
+                    entity_channel.insert_component(component_kind, true);
+                }
+                for component_kind in inserted_component_kinds {
+                    self.on_remote_insert_component(entity, component_kind);
+                }
+
+                // now initiate despawn of entity
                 self.host_despawn_entity(entity);
+            } else {
+                // initialize component channels
+                let host_components = self.host_world.get(entity).unwrap();
+
+                let inserted_and_inserting_components: HashSet<&ComponentKind> = host_components
+                    .inner
+                    .union(&inserted_component_kinds)
+                    .collect();
+
+                for component_kind in inserted_and_inserting_components {
+                    // change to inserting status.
+                    // for the components that have already been inserted, they will be migrated with
+                    // the `on_remote_insert_component()` call below.
+                    entity_channel.insert_component(component_kind, true);
+                }
+
+                let send_insert_action_component_kinds: HashSet<&ComponentKind> = host_components
+                    .inner
+                    .difference(&inserted_component_kinds)
+                    .collect();
+
+                for component in send_insert_action_component_kinds {
+                    // send insert action
+                    self.outgoing_actions
+                        .send_message(EntityActionEvent::InsertComponent(*entity, *component));
+                }
+
+                // receive inserted components
+                for component_kind in inserted_component_kinds {
+                    self.on_remote_insert_component(entity, component_kind);
+                }
             }
         } else {
             // despawn entity
@@ -447,7 +460,7 @@ impl WorldChannel {
             // info!("World Channel: received insert component message for entity without initialized channel, ignoring");
             return;
         };
-        if entity_channel.is_despawning() {
+        if entity_channel.is_despawning() || entity_channel.will_despawn_after_spawn() {
             // entity channel may be despawning, which is okay at this point
             // info!("World Channel: received insert component message for despawning entity, ignoring");
             return;

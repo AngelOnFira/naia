@@ -4,6 +4,8 @@ use std::{
     hash::Hash,
 };
 
+use log::warn;
+
 use crate::{
     messages::channels::senders::indexed_message_writer::IndexedMessageWriter,
     sequence_list::SequenceList,
@@ -190,11 +192,6 @@ impl HostWorldWriter {
             EntityActionEvent::SpawnEntity(global_entity, component_kind_list) => {
                 EntityActionType::SpawnEntity.ser(writer);
 
-                // get world entity
-                let world_entity = entity_converter
-                    .global_entity_to_entity(global_entity)
-                    .unwrap();
-
                 // write net entity
                 local_world_manager
                     .entity_converter()
@@ -202,20 +199,31 @@ impl HostWorldWriter {
                     .unwrap()
                     .ser(writer);
 
+                // get world entity
+                let (world_entity_opt, component_kind_list) = if let Ok(world_entity) = entity_converter
+                    .global_entity_to_entity(global_entity) {
+                    (Some(world_entity), component_kind_list.clone())
+                } else {
+                    warn!("EntityActionEvent::SpawnEntity: {:?} not found in world!", global_entity);
+                    (None, Vec::new())
+                };
+
                 // write number of components
                 let components_num =
                     UnsignedVariableInteger::<3>::new(component_kind_list.len() as i128);
                 components_num.ser(writer);
 
-                for component_kind in component_kind_list {
-                    let mut converter =
-                        EntityConverterMut::new(global_world_manager, local_world_manager);
+                if let Some(world_entity) = world_entity_opt {
+                    for component_kind in &component_kind_list {
+                        let mut converter =
+                            EntityConverterMut::new(global_world_manager, local_world_manager);
 
-                    // write component payload
-                    world
-                        .component_of_kind(&world_entity, component_kind)
-                        .expect("Component does not exist in World")
-                        .write(component_kinds, writer, &mut converter);
+                        // write component payload
+                        world
+                            .component_of_kind(&world_entity, component_kind)
+                            .expect("Component does not exist in World")
+                            .write(component_kinds, writer, &mut converter);
+                    }
                 }
 
                 // if we are writing to this packet, add it to record
@@ -224,7 +232,7 @@ impl HostWorldWriter {
                         &mut host_manager.sent_action_packets,
                         packet_index,
                         action_id,
-                        EntityAction::SpawnEntity(*global_entity, component_kind_list.clone()),
+                        EntityAction::SpawnEntity(*global_entity, component_kind_list),
                     );
                 }
             }

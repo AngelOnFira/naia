@@ -1,6 +1,6 @@
 use std::{any::TypeId, ops::DerefMut};
 
-use log::warn;
+use log::{info, warn};
 
 use bevy_ecs::{
     event::{EventReader, EventWriter, Events},
@@ -68,6 +68,7 @@ pub fn world_to_host_sync<T: Send + Sync + 'static>(world: &mut World) {
                         .remove_component_worldless(&entity, &component_kind);
                 }
                 HostSyncEvent::Despawn(_, entity) => {
+                    info!("despawn on HostOwned entity: {:?}", entity);
                     client.client.despawn_entity_worldless(&entity);
                 }
             }

@@ -886,10 +886,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     }
 
     pub fn despawn_entity_worldless(&mut self, world_entity: &E) {
-        let global_entity = self
+        let Ok(global_entity) = self
             .global_entity_map
-            .entity_to_global_entity(world_entity)
-            .unwrap();
+            .entity_to_global_entity(world_entity) else {
+            warn!("attempting to despawn entity that has already been despawned?");
+            return;
+        };
         if !self.global_world_manager.has_entity(&global_entity) {
             warn!("attempting to despawn entity that has already been despawned?");
             return;

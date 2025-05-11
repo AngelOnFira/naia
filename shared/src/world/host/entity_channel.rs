@@ -67,6 +67,10 @@ impl EntityChannel {
         return self.state == EntityChannelState::Despawning;
     }
 
+    pub(crate) fn will_despawn_after_spawn(&self) -> bool {
+        return self.despawn_after_spawned;
+    }
+
     pub(crate) fn inserted_components(&self) -> Vec<ComponentKind> {
         let mut output = Vec::new();
 
