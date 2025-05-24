@@ -1,6 +1,6 @@
 use bevy::{
     prelude::{
-        App, ClearColor, Color as BevyColor, IntoSystemConfigs, IntoSystemSetConfigs, Startup,
+        App, ClearColor, Color as BevyColor, IntoScheduleConfigs, Startup,
         SystemSet, Update,
     },
     DefaultPlugins,

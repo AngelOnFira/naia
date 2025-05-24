@@ -54,7 +54,7 @@ pub fn on_despawn(
             let Some(host_owned) = host_owned_map.remove(&entity) else {
                 panic!("HostOwned entity {:?} not found in HostOwnedMap", entity);
             };
-            events.send(HostSyncEvent::Despawn(host_owned.type_id(), entity));
+            events.write(HostSyncEvent::Despawn(host_owned.type_id(), entity));
         }
     }
 }
@@ -64,7 +64,7 @@ pub fn on_component_added<R: Replicate + Component>(
     query: Query<(Entity, &HostOwned), Added<R>>,
 ) {
     for (entity, host_owned) in query.iter() {
-        events.send(HostSyncEvent::Insert(
+        events.write(HostSyncEvent::Insert(
             host_owned.type_id(),
             entity,
             ComponentKind::of::<R>(),
@@ -79,7 +79,7 @@ pub fn on_component_removed<R: Replicate + Component>(
 ) {
     for entity in removals.read() {
         if let Ok(host_owned) = query.get(entity) {
-            events.send(HostSyncEvent::Remove(
+            events.write(HostSyncEvent::Remove(
                 host_owned.type_id(),
                 entity,
                 ComponentKind::of::<R>(),

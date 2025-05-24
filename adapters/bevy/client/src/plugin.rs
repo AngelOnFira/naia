@@ -3,7 +3,7 @@ use std::{marker::PhantomData, ops::DerefMut, sync::Mutex};
 use bevy_app::{App, Plugin as PluginType, Startup, Update};
 use bevy_ecs::{
     entity::Entity,
-    schedule::{IntoSystemConfigs, IntoSystemSetConfigs},
+    schedule::{IntoScheduleConfigs},
 };
 
 use naia_bevy_shared::{HandleTickEvents, HandleWorldEvents, HostSyncChangeTracking, HostSyncOwnedAddedTracking, ProcessPackets, Protocol, ReceivePackets, SendPackets, SharedPlugin, TranslateTickEvents, TranslateWorldEvents, WorldData, WorldToHostSync, WorldUpdate};

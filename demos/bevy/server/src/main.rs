@@ -1,8 +1,8 @@
 use std::time::Duration;
 
-use bevy_app::{App, ScheduleRunnerPlugin, Startup, Update};
-use bevy_core::{FrameCountPlugin, TaskPoolPlugin, TypeRegistrationPlugin};
-use bevy_ecs::schedule::IntoSystemConfigs;
+use bevy_app::{App, ScheduleRunnerPlugin, Startup, Update, TaskPoolPlugin};
+use bevy_diagnostic::FrameCountPlugin;
+use bevy_ecs::schedule::IntoScheduleConfigs;
 use bevy_log::{info, LogPlugin};
 
 use naia_bevy_demo_shared::{
@@ -29,7 +29,6 @@ fn main() {
     App::default()
         // Plugins
         .add_plugins(TaskPoolPlugin::default())
-        .add_plugins(TypeRegistrationPlugin::default())
         .add_plugins(FrameCountPlugin::default())
         // this is needed to avoid running the server at uncapped FPS
         .add_plugins(ScheduleRunnerPlugin::run_loop(Duration::from_millis(3)))

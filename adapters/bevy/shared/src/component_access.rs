@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
 use bevy_app::{App, Update};
-use bevy_ecs::{component::Component, entity::Entity, schedule::IntoSystemConfigs, world::World};
+use bevy_ecs::{component::{Component, Mutable}, entity::Entity, schedule::IntoScheduleConfigs, world::World};
 
 use naia_shared::{
     EntityAndGlobalEntityConverter, GlobalWorldManagerType, ReplicaDynMutWrapper,
@@ -70,7 +70,7 @@ pub struct ComponentAccessor<R: Replicate> {
     phantom_r: PhantomData<R>,
 }
 
-impl<R: Replicate + Component> ComponentAccessor<R> {
+impl<R: Replicate + Component<Mutability = Mutable>> ComponentAccessor<R> {
     fn new() -> Self {
         Self {
             phantom_r: PhantomData::<R>,
@@ -82,7 +82,7 @@ impl<R: Replicate + Component> ComponentAccessor<R> {
     }
 }
 
-impl<R: Replicate + Component> ComponentAccess for ComponentAccessor<R> {
+impl<R: Replicate + Component<Mutability = Mutable>> ComponentAccess for ComponentAccessor<R> {
     fn add_systems(&self, app: &mut App) {
         app.add_systems(
             Update,

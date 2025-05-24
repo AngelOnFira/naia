@@ -1,9 +1,9 @@
 use bevy_ecs::{
     entity::Entity,
     system::EntityCommands,
-    world::{Command as BevyCommand, Mut, World},
+    world::{Mut, World},
 };
-
+use bevy_ecs::system::Command;
 use naia_bevy_shared::{EntityAuthStatus, HostOwned, WorldProxyMut};
 use naia_server::{ReplicationConfig, UserKey};
 
@@ -95,7 +95,7 @@ impl ConfigureReplicationCommand {
     }
 }
 
-impl BevyCommand for ConfigureReplicationCommand {
+impl Command for ConfigureReplicationCommand {
     fn apply(self, world: &mut World) {
         world.resource_scope(|world, mut server: Mut<ServerImpl>| {
             server.configure_entity_replication(&mut world.proxy_mut(), &self.entity, self.config);

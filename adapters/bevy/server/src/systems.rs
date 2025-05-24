@@ -5,6 +5,7 @@ use bevy_ecs::{
     system::{ResMut, SystemState},
     world::{Mut, World},
 };
+
 use log::warn;
 
 use naia_bevy_shared::{
@@ -107,7 +108,7 @@ pub fn translate_tick_events(
         // Tick Event
         if events.has::<naia_events::TickEvent>() {
             for tick in events.read::<naia_events::TickEvent>() {
-                tick_event_writer.send(bevy_events::TickEvent(tick));
+                tick_event_writer.write(bevy_events::TickEvent(tick));
             }
         }
     }

@@ -121,10 +121,10 @@ cfg_if! {
     if #[cfg(feature = "bevy_support")]
     {
         // Require that Bevy Component to be implemented
-        use bevy_ecs::component::Component;
+        use bevy_ecs::component::{Component, Mutable};
 
-        pub trait ReplicatedComponent: Replicate + Component {}
-        impl<T: Replicate + Component> ReplicatedComponent for T {}
+        pub trait ReplicatedComponent: Replicate + Component<Mutability = Mutable> {}
+        impl<T: Replicate + Component<Mutability = Mutable>> ReplicatedComponent for T {}
     }
     else
     {

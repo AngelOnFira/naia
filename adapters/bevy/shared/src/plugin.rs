@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
 use bevy_app::{App, Plugin as PluginType, Update};
-use bevy_ecs::schedule::IntoSystemConfigs;
+use bevy_ecs::schedule::IntoScheduleConfigs;
 
 use log::info;
 

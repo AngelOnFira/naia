@@ -101,14 +101,14 @@ pub fn translate_tick_events<T: Send + Sync + 'static>(
         // Client Tick Event
         if events.has::<naia_events::ClientTickEvent>() {
             for tick in events.read::<naia_events::ClientTickEvent>() {
-                client_tick_event_writer.send(bevy_events::ClientTickEvent::<T>::new(tick));
+                client_tick_event_writer.write(bevy_events::ClientTickEvent::<T>::new(tick));
             }
         }
 
         // Server Tick Event
         if events.has::<naia_events::ServerTickEvent>() {
             for tick in events.read::<naia_events::ServerTickEvent>() {
-                server_tick_event_writer.send(bevy_events::ServerTickEvent::<T>::new(tick));
+                server_tick_event_writer.write(bevy_events::ServerTickEvent::<T>::new(tick));
             }
         }
     }

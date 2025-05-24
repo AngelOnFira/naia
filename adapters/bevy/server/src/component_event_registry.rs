@@ -1,6 +1,6 @@
 use std::{any::Any, collections::HashMap, marker::PhantomData};
 
-use bevy_ecs::{entity::Entity, system::Resource, world::World};
+use bevy_ecs::{entity::Entity, resource::Resource, world::World};
 
 use log::warn;
 
