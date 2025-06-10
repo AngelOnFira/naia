@@ -130,6 +130,7 @@ pub use world::{
         global_entity::GlobalEntity,
         global_entity_map::{GlobalEntityMap, GlobalEntitySpawner},
         local_entity::{HostEntity, OwnedLocalEntity, RemoteEntity},
+        in_scope_entities::InScopeEntities,
     },
     host::{
         global_diff_handler::GlobalDiffHandler,
@@ -144,6 +145,7 @@ pub use world::{
     },
     shared_global_world_manager::SharedGlobalWorldManager,
     world_type::{WorldMutType, WorldRefType},
+    local_entity_map::LocalEntityMap,
 };
 
 pub use bigmap::{BigMap, BigMapKey};

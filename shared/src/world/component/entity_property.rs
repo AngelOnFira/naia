@@ -3,17 +3,14 @@ use std::hash::Hash;
 use log::{info, warn};
 use naia_serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde, SerdeErr};
 
-use crate::{
-    world::entity::{
-        entity_converters::{
-            EntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverter,
-            LocalEntityAndGlobalEntityConverterMut,
-        },
-        global_entity::GlobalEntity,
-        local_entity::OwnedLocalEntity,
+use crate::{world::entity::{
+    entity_converters::{
+        EntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverter,
+        LocalEntityAndGlobalEntityConverterMut,
     },
-    EntityAuthAccessor, PropertyMutator, RemoteEntity,
-};
+    global_entity::GlobalEntity,
+    local_entity::OwnedLocalEntity,
+}, EntityAuthAccessor, PropertyMutator, RemoteEntity};
 
 #[derive(Clone)]
 enum EntityRelation {

@@ -2,12 +2,7 @@ use std::{any::Any, hash::Hash, net::SocketAddr};
 
 use log::warn;
 
-use naia_shared::{
-    BaseConnection, BigMapKey, BitReader, BitWriter, ChannelKind, ChannelKinds, ComponentKinds,
-    ConnectionConfig, EntityAndGlobalEntityConverter, EntityEventMessage, EntityResponseEvent,
-    GlobalEntitySpawner, HostType, HostWorldEvents, Instant, MessageKinds, PacketType, Serde,
-    SerdeErr, StandardHeader, SystemChannel, Tick, WorldMutType, WorldRefType,
-};
+use naia_shared::{BaseConnection, BigMapKey, BitReader, BitWriter, ChannelKind, ChannelKinds, ComponentKinds, ConnectionConfig, EntityAndGlobalEntityConverter, EntityEventMessage, EntityResponseEvent, GlobalEntitySpawner, GlobalWorldManagerType, HostType, HostWorldEvents, Instant, MessageKinds, PacketType, Serde, SerdeErr, StandardHeader, SystemChannel, Tick, WorldMutType, WorldRefType};
 
 use crate::{
     connection::{
@@ -63,12 +58,14 @@ impl Connection {
     }
 
     /// Read packet data received from a client, storing necessary data in an internal buffer
-    pub fn read_packet(
+    pub fn read_packet<E: Copy + Eq + Hash + Send + Sync>(
         &mut self,
         channel_kinds: &ChannelKinds,
         message_kinds: &MessageKinds,
         component_kinds: &ComponentKinds,
         client_authoritative_entities: bool,
+        global_world_manager: &dyn GlobalWorldManagerType,
+        spawner: &mut dyn GlobalEntitySpawner<E>,
         server_tick: Tick,
         client_tick: Tick,
         reader: &mut BitReader,
@@ -88,6 +85,8 @@ impl Connection {
             channel_kinds,
             message_kinds,
             component_kinds,
+            global_world_manager,
+            spawner,
             &client_tick,
             client_authoritative_entities,
             reader,

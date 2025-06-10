@@ -194,15 +194,14 @@ pub fn translate_world_events(world: &mut World) {
                 let mut event_writer = world
                     .get_resource_mut::<Events<bevy_events::SpawnEntityEvent>>()
                     .unwrap();
-                let mut spawned_entities = Vec::new();
-                for (user_key, entity) in events.read::<naia_events::SpawnEntityEvent>() {
-                    spawned_entities.push(entity);
-                    event_writer.send(bevy_events::SpawnEntityEvent(user_key, entity));
+                let mut client_spawned_entities = Vec::new();
+                for (_, entity) in events.read::<naia_events::SpawnEntityEvent>() {
+                    if let EntityOwner::Client(user_key) = server.entity_owner(&entity) {
+                        client_spawned_entities.push((user_key, entity));
+                        event_writer.send(bevy_events::SpawnEntityEvent(user_key, entity));
+                    }
                 }
-                for entity in spawned_entities {
-                    let EntityOwner::Client(user_key) = server.entity_owner(&entity) else {
-                        panic!("spawned entity that doesn't belong to a client ... shouldn't be possible.");
-                    };
+                for (user_key, entity) in client_spawned_entities {
                     world.entity_mut(entity).insert(ClientOwned(user_key));
                 }
             }

@@ -1,25 +1,23 @@
 use std::{
     collections::{HashMap, VecDeque},
     time::Duration,
+    hash::Hash,
 };
 
 use naia_socket_shared::Instant;
 
-use crate::{
-    world::{
-        entity::local_entity::{HostEntity, RemoteEntity},
-        local_entity_map::LocalEntityMap,
-    },
-    GlobalEntity, KeyGenerator, LocalEntityAndGlobalEntityConverter,
-};
+use crate::{world::{
+    entity::{local_entity::{HostEntity, RemoteEntity}, in_scope_entities::GlobalEntityReserver},
+    local_entity_map::LocalEntityMap,
+}, GlobalEntity, GlobalEntitySpawner, GlobalWorldManagerType, KeyGenerator, LocalEntityAndGlobalEntityConverter};
 
 pub struct LocalWorldManager {
     user_key: u64,
     host_entity_generator: KeyGenerator<u16>,
     entity_map: LocalEntityMap,
-    reserved_entities: HashMap<GlobalEntity, HostEntity>,
-    reserved_entity_ttl: Duration,
-    reserved_entities_ttls: VecDeque<(Instant, GlobalEntity)>,
+    reserved_host_entities: HashMap<GlobalEntity, HostEntity>,
+    reserved_host_entity_ttl: Duration,
+    reserved_host_entities_ttls: VecDeque<(Instant, GlobalEntity)>,
 }
 
 impl LocalWorldManager {
@@ -28,9 +26,9 @@ impl LocalWorldManager {
             user_key,
             host_entity_generator: KeyGenerator::new(Duration::from_secs(60)),
             entity_map: LocalEntityMap::new(),
-            reserved_entities: HashMap::new(),
-            reserved_entity_ttl: Duration::from_secs(60),
-            reserved_entities_ttls: VecDeque::new(),
+            reserved_host_entities: HashMap::new(),
+            reserved_host_entity_ttl: Duration::from_secs(60),
+            reserved_host_entities_ttls: VecDeque::new(),
         }
     }
 
@@ -38,18 +36,27 @@ impl LocalWorldManager {
         &self.entity_map
     }
 
+    pub fn global_entity_reserver<'a, 'b, 'c, E: Copy + Eq + Hash + Send + Sync>(
+        &'c mut self, global_entity_manager: &'a dyn GlobalWorldManagerType,
+        global_entity_spawner: &'b mut dyn GlobalEntitySpawner<E>
+    ) -> GlobalEntityReserver<'a, 'b, 'c, E> {
+        GlobalEntityReserver::new(global_entity_manager, global_entity_spawner, &mut self.entity_map)
+    }
+
     // Host entities
 
-    pub fn host_reserve_entity(&mut self, world_entity: &GlobalEntity) -> HostEntity {
+    pub fn host_reserve_entity(&mut self, global_entity: &GlobalEntity) -> HostEntity {
         self.process_reserved_entity_timeouts();
 
-        if self.reserved_entities.contains_key(world_entity) {
-            panic!("World Entity has already reserved Local Entity!");
+        if self.reserved_host_entities.contains_key(global_entity) {
+            panic!("Global Entity has already reserved Local Entity!");
         }
         let host_entity = self.generate_host_entity();
-        self.entity_map
-            .insert_with_host_entity(*world_entity, host_entity);
-        self.reserved_entities.insert(*world_entity, host_entity);
+        if let Some(old_host_entity) = self.entity_map
+            .insert_with_host_entity(*global_entity, host_entity) {
+            self.recycle_host_entity(old_host_entity);
+        }
+        self.reserved_host_entities.insert(*global_entity, host_entity);
         host_entity
     }
 
@@ -57,14 +64,14 @@ impl LocalWorldManager {
         let now = Instant::now();
 
         loop {
-            let Some((timeout, _)) = self.reserved_entities_ttls.front() else {
+            let Some((timeout, _)) = self.reserved_host_entities_ttls.front() else {
                 break;
             };
-            if timeout.elapsed(&now) < self.reserved_entity_ttl {
+            if timeout.elapsed(&now) < self.reserved_host_entity_ttl {
                 break;
             }
-            let (_, world_entity) = self.reserved_entities_ttls.pop_front().unwrap();
-            let Some(_) = self.reserved_entities.remove(&world_entity) else {
+            let (_, global_entity) = self.reserved_host_entities_ttls.pop_front().unwrap();
+            let Some(_) = self.reserved_host_entities.remove(&global_entity) else {
                 panic!("Reserved Entity does not exist!");
             };
         }
@@ -74,7 +81,7 @@ impl LocalWorldManager {
         &mut self,
         global_entity: &GlobalEntity,
     ) -> Option<HostEntity> {
-        self.reserved_entities.remove(global_entity)
+        self.reserved_host_entities.remove(global_entity)
     }
 
     pub(crate) fn generate_host_entity(&mut self) -> HostEntity {
@@ -83,15 +90,16 @@ impl LocalWorldManager {
 
     pub(crate) fn insert_host_entity(
         &mut self,
-        world_entity: GlobalEntity,
+        global_entity: GlobalEntity,
         host_entity: HostEntity,
     ) {
         if self.entity_map.contains_host_entity(&host_entity) {
             panic!("Local Entity already exists!");
         }
 
-        self.entity_map
-            .insert_with_host_entity(world_entity, host_entity);
+        if let Some(old_host_entity) = self.entity_map.insert_with_host_entity(global_entity, host_entity) {
+            self.recycle_host_entity(old_host_entity);
+        }
     }
 
     pub fn insert_remote_entity(
@@ -99,36 +107,32 @@ impl LocalWorldManager {
         global_entity: &GlobalEntity,
         remote_entity: RemoteEntity,
     ) {
-        if self.entity_map.contains_remote_entity(&remote_entity) {
-            panic!("Remote Entity `{:?}` already exists!", remote_entity);
-        }
-
         self.entity_map
             .insert_with_remote_entity(*global_entity, remote_entity);
     }
 
-    pub(crate) fn remove_by_world_entity(&mut self, world_entity: &GlobalEntity) {
+    pub(crate) fn remove_by_global_entity(&mut self, global_entity: &GlobalEntity) {
         let record = self
             .entity_map
-            .remove_by_world_entity(world_entity)
+            .remove_by_global_entity(global_entity)
             .expect("Attempting to despawn entity which does not exist!");
         let host_entity = record.host().unwrap();
         self.recycle_host_entity(host_entity);
     }
 
     pub fn remove_by_remote_entity(&mut self, remote_entity: &RemoteEntity) -> GlobalEntity {
-        let world_entity = *(self
+        let global_entity = *(self
             .entity_map
-            .world_entity_from_remote(remote_entity)
+            .global_entity_from_remote(remote_entity)
             .expect("Attempting to despawn entity which does not exist!"));
         let record = self
             .entity_map
-            .remove_by_world_entity(&world_entity)
+            .remove_by_global_entity(&global_entity)
             .expect("Attempting to despawn entity which does not exist!");
         if let Some(host_entity) = record.host() {
             self.recycle_host_entity(host_entity);
         }
-        world_entity
+        global_entity
     }
 
     pub(crate) fn recycle_host_entity(&mut self, host_entity: HostEntity) {
@@ -142,11 +146,11 @@ impl LocalWorldManager {
     }
 
     pub(crate) fn global_entity_from_remote(&self, remote_entity: &RemoteEntity) -> GlobalEntity {
-        if let Some(world_entity) = self.entity_map.world_entity_from_remote(remote_entity) {
-            return *world_entity;
+        if let Some(global_entity) = self.entity_map.global_entity_from_remote(remote_entity) {
+            return *global_entity;
         } else {
             panic!(
-                "Attempting to get world entity for local entity which does not exist!: `{:?}`",
+                "Attempting to get global entity for local entity which does not exist!: `{:?}`",
                 remote_entity
             );
         }
@@ -156,29 +160,27 @@ impl LocalWorldManager {
         self.entity_map
             .iter()
             .filter(|(_, record)| record.is_only_remote())
-            .map(|(world_entity, _)| *world_entity)
+            .map(|(global_entity, _)| *global_entity)
             .collect::<Vec<GlobalEntity>>()
     }
 
     // Misc
 
-    pub fn has_both_host_and_remote_entity(&self, world_entity: &GlobalEntity) -> bool {
+    pub fn has_both_host_and_remote_entity(&self, global_entity: &GlobalEntity) -> bool {
         self.entity_map
-            .has_both_host_and_remote_entity(world_entity)
+            .has_both_host_and_remote_entity(global_entity)
     }
 
-    pub fn has_world_entity(&self, world_entity: &GlobalEntity) -> bool {
-        self.entity_map.contains_world_entity(world_entity)
+    pub fn has_global_entity(&self, global_entity: &GlobalEntity) -> bool {
+        self.entity_map.contains_global_entity(global_entity)
     }
 
-    pub fn remove_redundant_host_entity(&mut self, world_entity: &GlobalEntity) {
-        if let Some(host_entity) = self.entity_map.remove_redundant_host_entity(world_entity) {
-            self.recycle_host_entity(host_entity);
-        }
+    pub fn set_primary_to_remote(&mut self, global_entity: &GlobalEntity) {
+        self.entity_map.set_primary_to_remote(global_entity);
     }
 
-    pub fn remove_redundant_remote_entity(&mut self, world_entity: &GlobalEntity) -> RemoteEntity {
-        self.entity_map.remove_redundant_remote_entity(world_entity)
+    pub fn set_primary_to_host(&mut self, global_entity: &GlobalEntity) {
+        self.entity_map.set_primary_to_host(global_entity);
     }
 
     pub fn get_user_key(&self) -> &u64 {

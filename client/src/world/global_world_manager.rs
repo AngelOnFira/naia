@@ -5,10 +5,7 @@ use std::{
 
 use log::info;
 
-use naia_shared::{
-    ComponentKind, EntityAuthAccessor, EntityAuthStatus, GlobalDiffHandler, GlobalEntity,
-    GlobalWorldManagerType, HostAuthHandler, HostType, MutChannelType, PropertyMutator, Replicate,
-};
+use naia_shared::{ComponentKind, EntityAuthAccessor, EntityAuthStatus, GlobalDiffHandler, GlobalEntity, GlobalWorldManagerType, HostAuthHandler, HostType, InScopeEntities, MutChannelType, PropertyMutator, Replicate};
 
 use super::global_entity_record::GlobalEntityRecord;
 use crate::{
@@ -57,12 +54,12 @@ impl GlobalWorldManager {
     }
 
     // Spawn
-    pub fn insert_entity_record(&mut self, global_entity: &GlobalEntity) {
+    pub fn host_spawn_entity(&mut self, global_entity: &GlobalEntity) {
         if self.entity_records.contains_key(global_entity) {
             panic!("entity already initialized!");
         }
-        self.entity_records
-            .insert(*global_entity, GlobalEntityRecord::new(EntityOwner::Client));
+        // info!("Inserting entity record for {:?}", global_entity);
+        self.entity_records.insert(*global_entity, GlobalEntityRecord::new(EntityOwner::Client));
     }
 
     // Despawn
@@ -151,6 +148,7 @@ impl GlobalWorldManager {
         if self.entity_records.contains_key(global_entity) {
             panic!("entity already initialized!");
         }
+        // info!("Remote spawning entity record for {:?}", global_entity);
         self.entity_records
             .insert(*global_entity, GlobalEntityRecord::new(EntityOwner::Server));
     }
@@ -371,5 +369,11 @@ impl GlobalWorldManagerType for GlobalWorldManager {
             panic!("entity does not have record");
         };
         return record.is_replicating;
+    }
+}
+
+impl InScopeEntities for GlobalWorldManager {
+    fn has_entity(&self, global_entity: &GlobalEntity) -> bool {
+        self.entity_records.contains_key(global_entity)
     }
 }

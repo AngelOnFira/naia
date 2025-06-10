@@ -5,21 +5,17 @@ use std::{
 
 use log::warn;
 
-use crate::{
-    bigmap::BigMapKey,
-    world::{
-        delegation::auth_channel::EntityAuthAccessor,
-        entity::{
-            error::EntityDoesNotExistError,
-            global_entity::GlobalEntity,
-            local_entity::{HostEntity, OwnedLocalEntity, RemoteEntity},
-        },
-        host::mut_channel::MutChannelType,
+use crate::{bigmap::BigMapKey, world::{
+    delegation::auth_channel::EntityAuthAccessor,
+    entity::{
+        error::EntityDoesNotExistError,
+        global_entity::GlobalEntity,
+        local_entity::{HostEntity, OwnedLocalEntity, RemoteEntity},
     },
-    ComponentKind, GlobalDiffHandler, LocalWorldManager, PropertyMutator,
-};
+    host::mut_channel::MutChannelType,
+}, ComponentKind, GlobalDiffHandler, InScopeEntities, LocalWorldManager, PropertyMutator};
 
-pub trait GlobalWorldManagerType {
+pub trait GlobalWorldManagerType : InScopeEntities {
     fn component_kinds(&self, entity: &GlobalEntity) -> Option<Vec<ComponentKind>>;
     /// Whether or not a given user can receive a Message/Component with an EntityProperty relating to the given Entity
     fn entity_can_relate_to_user(&self, global_entity: &GlobalEntity, user_key: &u64) -> bool;

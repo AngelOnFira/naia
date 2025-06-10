@@ -272,7 +272,7 @@ impl WorldChannel {
         self.remote_world.remove(entity);
         self.entity_channels.remove(entity).unwrap();
 
-        local_world_manager.remove_redundant_host_entity(entity);
+        local_world_manager.set_primary_to_remote(entity);
 
         self.delivered_actions
             .untrack_hosts_redundant_remote_entity(entity);
@@ -569,7 +569,7 @@ impl WorldChannel {
         local_world_manager: &mut LocalWorldManager,
         entity: &GlobalEntity,
     ) {
-        local_world_manager.remove_by_world_entity(entity);
+        local_world_manager.remove_by_global_entity(entity);
     }
 
     fn on_component_channel_opened(

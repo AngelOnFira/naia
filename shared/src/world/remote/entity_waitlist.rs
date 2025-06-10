@@ -3,17 +3,18 @@ use std::{
     time::Duration,
 };
 
+use log::info;
+
 use naia_socket_shared::Instant;
 
-use crate::{KeyGenerator, RemoteEntity};
+use crate::{world::entity::in_scope_entities::InScopeEntities, GlobalEntity, KeyGenerator};
 
 pub type WaitlistHandle = u16;
 
 pub struct EntityWaitlist {
     handle_store: KeyGenerator<WaitlistHandle>,
-    handle_to_required_entities: HashMap<WaitlistHandle, HashSet<RemoteEntity>>,
-    waiting_entity_to_handles: HashMap<RemoteEntity, HashSet<WaitlistHandle>>,
-    in_scope_entities: HashSet<RemoteEntity>,
+    handle_to_required_entities: HashMap<WaitlistHandle, HashSet<GlobalEntity>>,
+    waiting_entity_to_handles: HashMap<GlobalEntity, HashSet<WaitlistHandle>>,
     ready_handles: HashSet<WaitlistHandle>,
     removed_handles: HashSet<WaitlistHandle>,
     handle_ttls: VecDeque<(Instant, WaitlistHandle)>,
@@ -26,7 +27,6 @@ impl EntityWaitlist {
             handle_to_required_entities: HashMap::new(),
             handle_store: KeyGenerator::new(Duration::from_secs(60)),
             waiting_entity_to_handles: HashMap::new(),
-            in_scope_entities: HashSet::new(),
             ready_handles: HashSet::new(),
             removed_handles: HashSet::new(),
             handle_ttls: VecDeque::new(),
@@ -34,20 +34,27 @@ impl EntityWaitlist {
         }
     }
 
-    fn must_queue(&self, entities: &HashSet<RemoteEntity>) -> bool {
-        !entities.is_subset(&self.in_scope_entities)
+    fn required_entities_are_in_scope(&self, in_scope_entities: &dyn InScopeEntities, entities: &HashSet<GlobalEntity>) -> bool {
+        for entity in entities {
+            if !in_scope_entities.has_entity(entity) {
+                return false;
+            }
+        }
+        return true;
     }
 
     pub fn queue<T>(
         &mut self,
-        entities: &HashSet<RemoteEntity>,
+        in_scope_entities: &dyn InScopeEntities,
+        entities: &HashSet<GlobalEntity>,
         waitlist_store: &mut WaitlistStore<T>,
         item: T,
     ) -> WaitlistHandle {
         let new_handle = self.handle_store.generate();
 
         // if all entities are in scope, we can send the message immediately
-        if !self.must_queue(entities) {
+        if self.required_entities_are_in_scope(in_scope_entities, entities) {
+            info!("Entity's dependencies {:?} are in scope", entities);
             waitlist_store.queue(new_handle, item);
             self.ready_handles.insert(new_handle);
             return new_handle;
@@ -87,17 +94,24 @@ impl EntityWaitlist {
         waitlist_store.collect_ready_items(&mut self.ready_handles)
     }
 
-    pub fn add_entity(&mut self, entity: &RemoteEntity) {
-        // put new entity into scope
-        self.in_scope_entities.insert(*entity);
+    pub fn add_entity(
+        &mut self,
+        in_scope_entities: &dyn InScopeEntities,
+        // converter: &dyn LocalEntityAndGlobalEntityConverter,
+        global_entity: &GlobalEntity
+    ) {
+        
+        // let remote_entity = converter.global_entity_to_remote_entity(global_entity).unwrap();
+        // warn!("Waitlist is tracking in-scope entity ({:?}, {:?}) .. should have been added to GlobalWorldManager", remote_entity, global_entity);
 
         // get a list of handles ready to send
         let mut outgoing_handles = Vec::new();
 
-        if let Some(message_set) = self.waiting_entity_to_handles.get_mut(entity) {
+        if let Some(message_set) = self.waiting_entity_to_handles.get(global_entity) {
             for message_handle in message_set.iter() {
                 if let Some(entities) = self.handle_to_required_entities.get(message_handle) {
-                    if entities.is_subset(&self.in_scope_entities) {
+                    if self.required_entities_are_in_scope(in_scope_entities, entities) {
+                        // info!("Entity's dependencies {:?} are in scope", entities);
                         outgoing_handles.push(*message_handle);
                     }
                 }
@@ -110,10 +124,6 @@ impl EntityWaitlist {
             self.ready_handles.insert(outgoing_handle);
             self.remove_waiting_handle(&outgoing_handle);
         }
-    }
-
-    pub fn remove_entity(&mut self, entity: &RemoteEntity) {
-        self.in_scope_entities.remove(entity);
     }
 
     pub fn remove_waiting_handle(&mut self, handle: &WaitlistHandle) {

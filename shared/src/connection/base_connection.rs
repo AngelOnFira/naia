@@ -3,20 +3,12 @@ use std::{hash::Hash, net::SocketAddr};
 use naia_serde::{BitReader, BitWriter, Serde, SerdeErr};
 use naia_socket_shared::Instant;
 
-use crate::{
-    messages::{channels::channel_kinds::ChannelKinds, message_manager::MessageManager},
-    types::{HostType, PacketIndex},
-    world::{
-        entity::entity_converters::GlobalWorldManagerType,
-        host::{host_world_manager::HostWorldEvents, host_world_writer::HostWorldWriter},
-        local_world_manager::LocalWorldManager,
-        remote::remote_world_reader::RemoteWorldReader,
-    },
-    AckManager, ComponentKinds, ConnectionConfig, EntityAndGlobalEntityConverter,
-    EntityConverterMut, GlobalEntity, HostWorldManager, MessageKinds, PacketType,
-    RemoteWorldManager, StandardHeader, Tick, Timer, WorldRefType,
-};
-
+use crate::{messages::{channels::channel_kinds::ChannelKinds, message_manager::MessageManager}, types::{HostType, PacketIndex}, world::{
+    entity::entity_converters::GlobalWorldManagerType,
+    host::{host_world_manager::HostWorldEvents, host_world_writer::HostWorldWriter},
+    local_world_manager::LocalWorldManager,
+    remote::remote_world_reader::RemoteWorldReader,
+}, AckManager, ComponentKinds, ConnectionConfig, EntityAndGlobalEntityConverter, EntityConverterMut, GlobalEntity, GlobalEntitySpawner, HostWorldManager, MessageKinds, PacketType, RemoteWorldManager, StandardHeader, Tick, Timer, WorldRefType};
 use super::packet_notifiable::PacketNotifiable;
 
 /// Represents a connection to a remote host, and provides functionality to
@@ -179,21 +171,25 @@ impl BaseConnection {
         }
     }
 
-    pub fn read_packet(
+    pub fn read_packet<E: Copy + Eq + Hash + Sync + Send>(
         &mut self,
         channel_kinds: &ChannelKinds,
         message_kinds: &MessageKinds,
         component_kinds: &ComponentKinds,
+        global_entity_manager: &dyn GlobalWorldManagerType,
+        spawner: &mut dyn GlobalEntitySpawner<E>,
         client_tick: &Tick,
         read_world_events: bool,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
+        let mut reserver = self.local_world_manager.global_entity_reserver(global_entity_manager, spawner);
+        
         // read messages
         self.message_manager.read_messages(
             channel_kinds,
             message_kinds,
             &mut self.remote_world_manager.entity_waitlist,
-            self.local_world_manager.entity_converter(),
+            &mut reserver,
             reader,
         )?;
 

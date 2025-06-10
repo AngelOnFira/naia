@@ -12,7 +12,7 @@ pub use naia_shared::{
     ResponseSendKey, SerdeBevyShared as Serde, SerdeErr, SerdeFloatConversion,
     SerdeIntegerConversion, SignedFloat, SignedInteger, SignedVariableFloat, SignedVariableInteger,
     Tick, TickBufferSettings, Timer, UnsignedFloat, UnsignedInteger, UnsignedVariableFloat,
-    UnsignedVariableInteger, WorldMutType, WorldRefType, MTU_SIZE_BYTES,
+    UnsignedVariableInteger, WorldMutType, WorldRefType, MTU_SIZE_BYTES, LocalEntityMap,
 };
 
 mod bundle;

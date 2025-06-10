@@ -5,10 +5,7 @@ use std::{
 
 use log::warn;
 
-use naia_shared::{
-    BigMapKey, ComponentKind, EntityAuthAccessor, EntityAuthStatus, GlobalDiffHandler,
-    GlobalEntity, GlobalWorldManagerType, MutChannelType, PropertyMutator, Replicate,
-};
+use naia_shared::{BigMapKey, ComponentKind, EntityAuthAccessor, EntityAuthStatus, GlobalDiffHandler, GlobalEntity, GlobalWorldManagerType, InScopeEntities, MutChannelType, PropertyMutator, Replicate};
 
 use super::global_entity_record::GlobalEntityRecord;
 use crate::{
@@ -57,6 +54,7 @@ impl GlobalWorldManager {
         if self.entity_records.contains_key(global_entity) {
             panic!("entity already initialized!");
         }
+        // info!("Spawning Entity: {:?} with Owner: {:?}", global_entity, entity_owner);
         self.entity_records
             .insert(*global_entity, GlobalEntityRecord::new(entity_owner));
     }
@@ -70,6 +68,7 @@ impl GlobalWorldManager {
     }
 
     pub fn remove_entity_record(&mut self, global_entity: &GlobalEntity) {
+        // info!("Despawning Entity: {:?}", global_entity);
         self.entity_records
             .remove(global_entity)
             .expect("Cannot despawn non-existant entity!");
@@ -92,6 +91,7 @@ impl GlobalWorldManager {
     // Insert Component
     pub fn insert_component_record(
         &mut self,
+        // component_kinds: &ComponentKinds,
         global_entity: &GlobalEntity,
         component_kind: &ComponentKind,
     ) {
@@ -104,6 +104,7 @@ impl GlobalWorldManager {
             .unwrap()
             .component_kinds;
         component_kind_set.insert(*component_kind);
+        // info!("Registered Component: {:?} for Entity: {:?}", component_kinds.kind_to_name(component_kind), global_entity);
     }
 
     pub fn has_component_record(
@@ -402,5 +403,11 @@ impl GlobalWorldManagerType for GlobalWorldManager {
             panic!("entity record does not exist!");
         };
         return record.is_replicating;
+    }
+}
+
+impl InScopeEntities for GlobalWorldManager {
+    fn has_entity(&self, global_entity: &GlobalEntity) -> bool {
+        self.entity_records.contains_key(global_entity)
     }
 }

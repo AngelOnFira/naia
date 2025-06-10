@@ -575,7 +575,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
     /// Creates a new Entity with a specific id
     fn spawn_entity_inner(&mut self, world_entity: &E) {
-        let global_entity = self.global_entity_map.spawn(*world_entity);
+        let global_entity = self.global_entity_map.spawn(*world_entity, None);
         self.global_world_manager
             .insert_entity_record(&global_entity, EntityOwner::Server);
     }
@@ -906,16 +906,22 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
     fn remove_redundant_remote_entity_from_host(
         connection: &mut Connection,
-        world_entity: &GlobalEntity,
+        global_entity: &GlobalEntity,
     ) {
         let remote_entity = connection
+            .base.local_world_manager
+            .entity_converter()
+            .global_entity_to_remote_entity(global_entity)
+            .unwrap();
+        connection
             .base
             .local_world_manager
-            .remove_redundant_remote_entity(world_entity);
+            .set_primary_to_host(global_entity);
         connection
             .base
             .remote_world_reader
             .untrack_hosts_redundant_remote_entity(&remote_entity);
+        // does nothing right now
         connection
             .base
             .remote_world_manager
@@ -1279,17 +1285,21 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             .global_world_manager
             .has_component_record(&global_entity, &component_kind)
         {
-            warn!(
-                "Attempted to add component `{:?}` to entity that already has it, this can happen if a delegated entity's auth is transferred to the Server before the Server Adapter has been able to process the newly inserted Component. Skipping this action.",
-                component.name());
+            // warn!(
+            //     "Attempted to add component `{:?}` to entity `{:?}` that already has it, this can happen if a delegated entity's auth is transferred to the Server before the Server Adapter has been able to process the newly inserted Component. Skipping this action.",
+            //     component.name(), global_entity,
+            // );
             return;
         }
 
         self.insert_new_component_into_entity_scopes(&global_entity, &component_kind, None);
 
         // update in world manager
-        self.global_world_manager
-            .insert_component_record(&global_entity, &component_kind);
+        self.global_world_manager.insert_component_record(
+                // &self.component_kinds,
+                &global_entity,
+                &component_kind
+            );
         self.global_world_manager
             .insert_component_diff_handler(&global_entity, component);
 
@@ -1944,6 +1954,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             &self.message_kinds,
             &self.component_kinds,
             self.client_authoritative_entities,
+            &self.global_world_manager,
+            &mut self.global_entity_map,
             server_tick,
             client_tick,
             reader,
@@ -2003,24 +2015,25 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         .insert_entity_record(&global_entity, EntityOwner::Client(*user_key));
                     let user = self.users.get(user_key).unwrap();
                     let connection = self.user_connections.get_mut(&user.address()).unwrap();
-                    let remote_entity = connection
-                        .base
-                        .local_world_manager
-                        .entity_converter()
-                        .global_entity_to_remote_entity(&global_entity)
-                        .unwrap();
                     connection
                         .base
                         .remote_world_manager
-                        .on_entity_channel_opened(&remote_entity);
+                        .on_entity_channel_opened(
+                            &self.global_world_manager,
+                            // connection.base.local_world_manager.entity_converter(),
+                            &global_entity
+                        );
                 }
                 EntityResponseEvent::InsertComponent(global_entity, component_kind) => {
                     let world_entity = self
                         .global_entity_map
                         .global_entity_to_entity(&global_entity)
                         .unwrap();
-                    self.global_world_manager
-                        .insert_component_record(&global_entity, &component_kind);
+                    self.global_world_manager.insert_component_record(
+                        // &self.component_kinds,
+                        &global_entity,
+                        &component_kind
+                    );
                     if self
                         .global_world_manager
                         .entity_is_public_and_client_owned(&global_entity)
@@ -2092,7 +2105,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         for response_event in deferred_events {
             match response_event {
                 EntityResponseEvent::PublishEntity(global_entity) => {
-                    info!("received publish entity message!");
+                    info!("received publish message for entity `{:?}`!", global_entity);
                     let world_entity = self
                         .global_entity_map
                         .global_entity_to_entity(&global_entity)
@@ -2111,7 +2124,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         .push_unpublish(user_key, &world_entity);
                 }
                 EntityResponseEvent::EnableDelegationEntity(global_entity) => {
-                    info!("received enable delegation entity message!");
+                    info!("received enable delegation message for entity `{:?}`!", global_entity);
                     let world_entity = self
                         .global_entity_map
                         .global_entity_to_entity(&global_entity)

@@ -55,6 +55,11 @@ pub fn world_to_host_sync<T: Send + Sync + 'static>(world: &mut World) {
                     let Some(mut component_mut) =
                         world_proxy.component_mut_of_kind(&entity, &component_kind)
                     else {
+                        // let component_name = client.client.component_name(&component_kind);
+                        // warn!(
+                        //     "Tried to insert component {:?} on entity {:?}, but it does not exist!",
+                        //     component_name, entity
+                        // );
                         continue;
                     };
                     client.client.insert_component_worldless(

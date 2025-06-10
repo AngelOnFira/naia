@@ -3,38 +3,32 @@ use std::collections::HashMap;
 use naia_serde::{BitReader, BitWrite, BitWriter, ConstBitLength, Serde, SerdeErr};
 use naia_socket_shared::Instant;
 
-use crate::{
-    constants::FRAGMENTATION_LIMIT_BITS,
-    messages::{
-        channels::{
-            channel::ChannelMode,
-            channel::ChannelSettings,
-            channel_kinds::{ChannelKind, ChannelKinds},
-            receivers::{
-                channel_receiver::MessageChannelReceiver,
-                ordered_reliable_receiver::OrderedReliableReceiver,
-                sequenced_reliable_receiver::SequencedReliableReceiver,
-                sequenced_unreliable_receiver::SequencedUnreliableReceiver,
-                unordered_reliable_receiver::UnorderedReliableReceiver,
-                unordered_unreliable_receiver::UnorderedUnreliableReceiver,
-            },
-            senders::{
-                channel_sender::MessageChannelSender, message_fragmenter::MessageFragmenter,
-                reliable_message_sender::ReliableMessageSender, request_sender::LocalResponseId,
-                sequenced_unreliable_sender::SequencedUnreliableSender,
-                unordered_unreliable_sender::UnorderedUnreliableSender,
-            },
+use crate::{constants::FRAGMENTATION_LIMIT_BITS, messages::{
+    channels::{
+        channel::ChannelMode,
+        channel::ChannelSettings,
+        channel_kinds::{ChannelKind, ChannelKinds},
+        receivers::{
+            channel_receiver::MessageChannelReceiver,
+            ordered_reliable_receiver::OrderedReliableReceiver,
+            sequenced_reliable_receiver::SequencedReliableReceiver,
+            sequenced_unreliable_receiver::SequencedUnreliableReceiver,
+            unordered_reliable_receiver::UnorderedReliableReceiver,
+            unordered_unreliable_receiver::UnorderedUnreliableReceiver,
         },
-        message_container::MessageContainer,
-        request::GlobalRequestId,
+        senders::{
+            channel_sender::MessageChannelSender, message_fragmenter::MessageFragmenter,
+            reliable_message_sender::ReliableMessageSender, request_sender::LocalResponseId,
+            sequenced_unreliable_sender::SequencedUnreliableSender,
+            unordered_unreliable_sender::UnorderedUnreliableSender,
+        },
     },
-    types::{HostType, MessageIndex, PacketIndex},
-    world::{
-        entity::entity_converters::LocalEntityAndGlobalEntityConverterMut,
-        remote::entity_waitlist::EntityWaitlist,
-    },
-    LocalEntityAndGlobalEntityConverter, MessageKinds, PacketNotifiable,
-};
+    message_container::MessageContainer,
+    request::GlobalRequestId,
+}, types::{HostType, MessageIndex, PacketIndex}, world::{
+    entity::{entity_converters::LocalEntityAndGlobalEntityConverterMut, in_scope_entities::InScopeEntitiesMut},
+    remote::entity_waitlist::EntityWaitlist,
+}, LocalEntityAndGlobalEntityConverter, MessageKinds, PacketNotifiable};
 
 /// Handles incoming/outgoing messages, tracks the delivery status of Messages
 /// so that guaranteed Messages can be re-transmitted to the remote host
@@ -299,7 +293,7 @@ impl MessageManager {
         channel_kinds: &ChannelKinds,
         message_kinds: &MessageKinds,
         entity_waitlist: &mut EntityWaitlist,
-        entity_converter: &dyn LocalEntityAndGlobalEntityConverter,
+        entity_converter: &mut dyn InScopeEntitiesMut,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
         loop {

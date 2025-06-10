@@ -7,3 +7,4 @@ pub mod error;
 pub mod global_entity;
 pub mod global_entity_map;
 pub mod local_entity;
+pub mod in_scope_entities;

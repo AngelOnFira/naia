@@ -1,24 +1,18 @@
 use naia_serde::{BitReader, SerdeErr};
 use naia_socket_shared::Instant;
 
-use crate::messages::channels::senders::request_sender::LocalRequestId;
-use crate::{
-    messages::{
-        channels::{
-            receivers::{
-                channel_receiver::{ChannelReceiver, MessageChannelReceiver},
-                fragment_receiver::FragmentReceiver,
-                indexed_message_reader::IndexedMessageReader,
-                reliable_receiver::ReliableReceiver,
-            },
-            senders::request_sender::LocalRequestOrResponseId,
+use crate::{messages::{
+    channels::{
+        receivers::{
+            channel_receiver::{ChannelReceiver, MessageChannelReceiver},
+            fragment_receiver::FragmentReceiver,
+            indexed_message_reader::IndexedMessageReader,
+            reliable_receiver::ReliableReceiver,
         },
-        message_kinds::MessageKinds,
+        senders::request_sender::{LocalRequestOrResponseId, LocalRequestId},
     },
-    types::MessageIndex,
-    world::remote::entity_waitlist::{EntityWaitlist, WaitlistStore},
-    LocalEntityAndGlobalEntityConverter, LocalResponseId, MessageContainer, RequestOrResponse,
-};
+    message_kinds::MessageKinds,
+}, types::MessageIndex, world::{remote::entity_waitlist::{EntityWaitlist, WaitlistStore}, entity::in_scope_entities::InScopeEntitiesMut}, LocalEntityAndGlobalEntityConverter, LocalResponseId, MessageContainer, RequestOrResponse};
 
 // Receiver Arranger Trait
 pub trait ReceiverArranger: Send + Sync {
@@ -58,7 +52,7 @@ impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
         &mut self,
         message_kinds: &MessageKinds,
         entity_waitlist: &mut EntityWaitlist,
-        converter: &dyn LocalEntityAndGlobalEntityConverter,
+        converter: &mut dyn InScopeEntitiesMut,
         message_index: MessageIndex,
         message: MessageContainer,
     ) {
@@ -73,16 +67,21 @@ impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
             return;
         };
 
-        if let Some(entity_set) = full_message.relations_waiting() {
-            //warn!("Queuing waiting message!");
-            entity_waitlist.queue(
-                &entity_set,
-                &mut self.waitlist_store,
-                (start_message_index, end_message_index, full_message),
-            );
-            return;
+        if let Some(remote_entity_set) = full_message.relations_waiting() {
+            if let Ok(global_entity_set) = converter.get_or_reserve_global_entity_set_from_remote_entity_set(remote_entity_set) {
+                // warn!("Queuing waiting message! Waiting on entities: {:?}", global_entity_set);
+                entity_waitlist.queue(
+                    converter,
+                    &global_entity_set,
+                    &mut self.waitlist_store,
+                    (start_message_index, end_message_index, full_message),
+                );
+                return;
+            } else {
+                panic!("Cannot convert remote entity set to global entity set!");
+            }
         } else {
-            //info!("Received message!");
+            // info!("Received message! {:?}", full_message.name());
         }
 
         let incoming_messages =
@@ -97,7 +96,7 @@ impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
         &mut self,
         message_kinds: &MessageKinds,
         entity_waitlist: &mut EntityWaitlist,
-        converter: &dyn LocalEntityAndGlobalEntityConverter,
+        converter: &mut dyn InScopeEntitiesMut,
         message_index: MessageIndex,
         message: MessageContainer,
     ) {
@@ -187,7 +186,7 @@ impl<A: ReceiverArranger> MessageChannelReceiver for ReliableMessageReceiver<A> 
         &mut self,
         message_kinds: &MessageKinds,
         entity_waitlist: &mut EntityWaitlist,
-        converter: &dyn LocalEntityAndGlobalEntityConverter,
+        converter: &mut dyn InScopeEntitiesMut,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
         let id_w_msgs = IndexedMessageReader::read_messages(message_kinds, converter, reader)?;

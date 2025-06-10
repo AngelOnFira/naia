@@ -256,7 +256,7 @@ impl HostWorldWriter {
                     );
                 }
             }
-            EntityActionEvent::InsertComponent(global_entity, component) => {
+            EntityActionEvent::InsertComponent(global_entity, component_kind) => {
                 // get world entity
                 let world_entity = entity_converter
                     .global_entity_to_entity(global_entity)
@@ -265,7 +265,7 @@ impl HostWorldWriter {
                 if !host_manager
                     .world_channel
                     .entity_channel_is_open(global_entity)
-                    || !world.has_component_of_kind(&world_entity, component)
+                    || !world.has_component_of_kind(&world_entity, component_kind)
                 {
                     EntityActionType::Noop.ser(writer);
 
@@ -294,7 +294,7 @@ impl HostWorldWriter {
 
                     // write component payload
                     world
-                        .component_of_kind(&world_entity, component)
+                        .component_of_kind(&world_entity, component_kind)
                         .expect("Component does not exist in World")
                         .write(component_kinds, writer, &mut converter);
 
@@ -305,7 +305,7 @@ impl HostWorldWriter {
                             &mut host_manager.sent_action_packets,
                             packet_index,
                             action_id,
-                            EntityAction::InsertComponent(*global_entity, *component),
+                            EntityAction::InsertComponent(*global_entity, *component_kind),
                         );
                     }
                 }

@@ -3,20 +3,13 @@ use std::mem;
 use naia_serde::{BitReader, SerdeErr};
 use naia_socket_shared::Instant;
 
-use crate::messages::channels::senders::request_sender::LocalRequestId;
-use crate::{
-    messages::{
-        channels::receivers::{
-            channel_receiver::{ChannelReceiver, MessageChannelReceiver},
-            indexed_message_reader::IndexedMessageReader,
-        },
-        message_kinds::MessageKinds,
-    },
-    sequence_greater_than,
-    types::MessageIndex,
-    world::remote::entity_waitlist::{EntityWaitlist, WaitlistStore},
-    LocalEntityAndGlobalEntityConverter, LocalResponseId, MessageContainer,
-};
+use crate::{messages::{
+    channels::{receivers::{
+        channel_receiver::{ChannelReceiver, MessageChannelReceiver},
+        indexed_message_reader::IndexedMessageReader,
+    }, senders::request_sender::LocalRequestId},
+    message_kinds::MessageKinds,
+}, sequence_greater_than, types::MessageIndex, world::{remote::entity_waitlist::{EntityWaitlist, WaitlistStore}, entity::in_scope_entities::InScopeEntitiesMut}, LocalEntityAndGlobalEntityConverter, LocalResponseId, MessageContainer};
 
 pub struct SequencedUnreliableReceiver {
     newest_received_message_index: Option<MessageIndex>,
@@ -35,17 +28,23 @@ impl SequencedUnreliableReceiver {
 
     pub fn buffer_message(
         &mut self,
+        entity_converter: &mut dyn InScopeEntitiesMut,
         entity_waitlist: &mut EntityWaitlist,
         message_index: MessageIndex,
         message: MessageContainer,
     ) {
-        if let Some(entity_set) = message.relations_waiting() {
-            entity_waitlist.queue(
-                &entity_set,
-                &mut self.waitlist_store,
-                (message_index, message),
-            );
-            return;
+        if let Some(remote_entity_set) = message.relations_waiting() {
+            if let Ok(global_entity_set) = entity_converter.get_or_reserve_global_entity_set_from_remote_entity_set(remote_entity_set) {
+                entity_waitlist.queue(
+                    entity_converter,
+                    &global_entity_set,
+                    &mut self.waitlist_store,
+                    (message_index, message),
+                );
+                return;
+            } else {
+                panic!("SequencedUnreliableReceiver: Failed to convert remote entity set to global entity set");
+            }
         }
 
         self.arrange_message(message_index, message);
@@ -90,12 +89,12 @@ impl MessageChannelReceiver for SequencedUnreliableReceiver {
         &mut self,
         message_kinds: &MessageKinds,
         entity_waitlist: &mut EntityWaitlist,
-        converter: &dyn LocalEntityAndGlobalEntityConverter,
+        converter: &mut dyn InScopeEntitiesMut,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
         let id_w_msgs = IndexedMessageReader::read_messages(message_kinds, converter, reader)?;
         for (id, message) in id_w_msgs {
-            self.buffer_message(entity_waitlist, id, message);
+            self.buffer_message(converter, entity_waitlist, id, message);
         }
         Ok(())
     }

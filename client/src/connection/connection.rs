@@ -2,13 +2,7 @@ use std::{any::Any, hash::Hash};
 
 use log::warn;
 
-use naia_shared::{
-    BaseConnection, BitReader, BitWriter, ChannelKind, ChannelKinds, ComponentKinds,
-    ConnectionConfig, EntityAndGlobalEntityConverter, EntityEventMessage, EntityEventMessageAction,
-    EntityResponseEvent, GlobalEntitySpawner, HostType, HostWorldEvents, Instant, MessageKinds,
-    OwnedBitReader, PacketType, Protocol, Serde, SerdeErr, StandardHeader, SystemChannel, Tick,
-    Timer, WorldMutType, WorldRefType,
-};
+use naia_shared::{BaseConnection, BitReader, BitWriter, ChannelKind, ChannelKinds, ComponentKinds, ConnectionConfig, EntityAndGlobalEntityConverter, EntityEventMessage, EntityEventMessageAction, EntityResponseEvent, GlobalEntitySpawner, GlobalWorldManagerType, HostType, HostWorldEvents, Instant, MessageKinds, OwnedBitReader, PacketType, Protocol, Serde, SerdeErr, StandardHeader, SystemChannel, Tick, Timer, WorldMutType, WorldRefType};
 
 use crate::{
     connection::{
@@ -103,11 +97,13 @@ impl Connection {
 
     /// Read the packets (raw bits) from the jitter buffer that correspond to the
     /// `receiving_tick`. Reads packets, storing necessary data into an internal buffer
-    pub fn read_buffered_packets(
+    pub fn read_buffered_packets<E: Copy + Eq + Hash + Send + Sync>(
         &mut self,
         channel_kinds: &ChannelKinds,
         message_kinds: &MessageKinds,
         component_kinds: &ComponentKinds,
+        global_world_manager: &dyn GlobalWorldManagerType,
+        spawner: &mut dyn GlobalEntitySpawner<E>,
     ) -> Result<(), SerdeErr> {
         let receiving_tick = self.time_manager.client_receiving_tick;
 
@@ -118,6 +114,8 @@ impl Connection {
                 channel_kinds,
                 message_kinds,
                 component_kinds,
+                global_world_manager,
+                spawner,
                 &server_tick,
                 true,
                 &mut reader,

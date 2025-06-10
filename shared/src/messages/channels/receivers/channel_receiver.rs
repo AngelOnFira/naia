@@ -1,12 +1,7 @@
 use naia_serde::{BitReader, SerdeErr};
 use naia_socket_shared::Instant;
 
-use crate::messages::channels::senders::request_sender::LocalRequestId;
-use crate::{
-    messages::{message_container::MessageContainer, message_kinds::MessageKinds},
-    world::remote::entity_waitlist::EntityWaitlist,
-    LocalEntityAndGlobalEntityConverter, LocalResponseId,
-};
+use crate::{messages::{channels::senders::request_sender::LocalRequestId, message_container::MessageContainer, message_kinds::MessageKinds}, world::{remote::entity_waitlist::EntityWaitlist, entity::in_scope_entities::InScopeEntitiesMut}, LocalEntityAndGlobalEntityConverter, LocalResponseId};
 
 pub trait ChannelReceiver<P>: Send + Sync {
     /// Read messages from an internal buffer and return their content
@@ -25,7 +20,7 @@ pub trait MessageChannelReceiver: ChannelReceiver<MessageContainer> {
         &mut self,
         message_kinds: &MessageKinds,
         entity_waitlist: &mut EntityWaitlist,
-        converter: &dyn LocalEntityAndGlobalEntityConverter,
+        converter: &mut dyn InScopeEntitiesMut,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr>;
 

@@ -258,6 +258,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     &self.protocol.channel_kinds,
                     &self.protocol.message_kinds,
                     &self.protocol.component_kinds,
+                    &self.global_world_manager,
+                    &mut self.global_entity_map,
                 )
                 .is_err()
             {
@@ -541,10 +543,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
     /// Creates a new Entity with a specific id
     fn spawn_entity_inner(&mut self, world_entity: &E) {
-        let global_entity = self.global_entity_map.spawn(*world_entity);
+        let global_entity = self.global_entity_map.spawn(*world_entity, None);
 
         self.global_world_manager
-            .insert_entity_record(&global_entity);
+            .host_spawn_entity(&global_entity);
 
         if let Some(connection) = &mut self.server_connection {
             let component_kinds = self
@@ -960,6 +962,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             world.insert_component(entity, component);
         }
     }
+    
+    // For debugging purposes only
+    pub fn component_name(&self, component_kind: &ComponentKind) -> String {
+        self.protocol.component_kinds.kind_to_name(component_kind)
+    }
 
     // This intended to be used by adapter crates, do not use this as it will not update the world
     pub fn insert_component_worldless(&mut self, world_entity: &E, component: &mut dyn Replicate) {
@@ -982,7 +989,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     .base
                     .host_world_manager
                     .insert_component(&global_entity, &component_kind);
+            } else {
+                warn!("Attempting to insert component into a non-existent entity in the server connection. This should not happen.");
             }
+        } else {
+            warn!("Attempting to insert component into a non-existent entity in the server connection. This should not happen.");
         }
 
         // update in world manager
@@ -1543,16 +1554,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     let Some(connection) = self.server_connection.as_mut() else {
                         panic!("Client is disconnected!");
                     };
-                    let remote_entity = connection
-                        .base
-                        .local_world_manager
-                        .entity_converter()
-                        .global_entity_to_remote_entity(&global_entity)
-                        .unwrap();
                     connection
                         .base
                         .remote_world_manager
-                        .on_entity_channel_opened(&remote_entity);
+                        .on_entity_channel_opened(
+                            &self.global_world_manager,
+                            // connection.base.local_world_manager.entity_converter(),
+                            &global_entity
+                        );
                 }
                 EntityResponseEvent::DespawnEntity(global_entity) => {
                     let world_entity = self
