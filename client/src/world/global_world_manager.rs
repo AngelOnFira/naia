@@ -159,7 +159,7 @@ impl GlobalWorldManager {
             .expect("Cannot despawn non-existant entity!");
     }
 
-    pub fn remote_insert_component(
+    pub fn insert_component_record(
         &mut self,
         global_entity: &GlobalEntity,
         component_kind: &ComponentKind,
@@ -175,7 +175,7 @@ impl GlobalWorldManager {
         component_kind_set.insert(*component_kind);
     }
 
-    pub fn remote_remove_component(
+    pub fn remove_component_record(
         &mut self,
         global_entity: &GlobalEntity,
         component_kind: &ComponentKind,

@@ -1234,6 +1234,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             }
             (EntityAuthStatus::Available, EntityAuthStatus::Available) => {
                 // auth was released before it was granted, continue as normal
+                warn!(
+                    "-- Entity updated authority, not handled -- {:?} -> {:?}",
+                    old_auth_status, new_auth_status
+                );
+            }
+            (EntityAuthStatus::Denied, EntityAuthStatus::Denied) => {
+                // sometimes this happens when a new connection is established
+                warn!(
+                    "-- Entity updated authority, not handled -- {:?} -> {:?}",
+                    old_auth_status, new_auth_status
+                );
             }
             (_, _) => {
                 panic!(
@@ -1590,12 +1601,38 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     self.global_entity_map.despawn_by_global(&global_entity);
                 }
                 EntityResponseEvent::InsertComponent(global_entity, component_kind) => {
-                    self.global_world_manager
-                        .remote_insert_component(&global_entity, &component_kind);
+                    let world_entity = self
+                        .global_entity_map
+                        .global_entity_to_entity(&global_entity)
+                        .unwrap();
+                    self.global_world_manager.insert_component_record(&global_entity, &component_kind);
+
+                    if self.global_world_manager.entity_is_delegated(&global_entity) {
+                        world.component_publish(
+                            &self.global_entity_map,
+                            &self.global_world_manager,
+                            &world_entity,
+                            &component_kind,
+                        );
+                        world.component_enable_delegation(
+                            &self.global_entity_map,
+                            &self.global_world_manager,
+                            &world_entity,
+                            &component_kind,
+                        );
+                    }
                 }
                 EntityResponseEvent::RemoveComponent(global_entity, component_kind) => {
-                    self.global_world_manager
-                        .remote_remove_component(&global_entity, &component_kind);
+                    if self.global_world_manager.entity_is_delegated(&global_entity) {
+                        let world_entity = self
+                            .global_entity_map
+                            .global_entity_to_entity(&global_entity)
+                            .unwrap();
+                        self.remove_component_worldless(&world_entity, &component_kind);
+                    } else {
+                        self.global_world_manager
+                            .remove_component_record(&global_entity, &component_kind);
+                    }
                 }
                 EntityResponseEvent::PublishEntity(global_entity) => {
                     let world_entity = self
