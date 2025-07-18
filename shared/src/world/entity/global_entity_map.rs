@@ -1,7 +1,5 @@
 use std::{collections::HashMap, hash::Hash};
 
-use log::warn;
-
 use crate::{BigMap, EntityAndGlobalEntityConverter, EntityDoesNotExistError, GlobalEntity, RemoteEntity};
 
 pub struct GlobalEntityMap<E: Copy + Eq + Hash + Send + Sync> {
@@ -105,10 +103,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalEntitySpawner<E> for GlobalEntityM
         let global_entity = self.global_to_entity_map.insert(None);
         self.reserved_global_entities.insert(remote_entity, global_entity);
 
-        warn!(
-            "Reserving global entity {:?}, for remote entity {:?}",
-            global_entity, remote_entity
-        );
+        // warn!(
+        //     "Reserving global entity {:?}, for remote entity {:?}",
+        //     global_entity, remote_entity
+        // );
 
         global_entity
     }
