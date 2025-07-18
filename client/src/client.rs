@@ -997,6 +997,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         }
 
         // update in world manager
+        info!(
+            "Client.insert_component_worldless(): inserting Component {:?} into Entity {:?}",
+            self.protocol.component_kinds.kind_to_name(&component_kind),
+            global_entity
+        );
         self.global_world_manager
             .host_insert_component(&self.protocol.component_kinds, &global_entity, component);
 
@@ -1122,6 +1127,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         global_entity: &GlobalEntity,
         world_entity: &E,
     ) {
+        info!("client.entity_enable_delegation(), for entity: {:?}", global_entity);
         world.entity_enable_delegation(
             &self.protocol.component_kinds,
             &self.global_entity_map,
@@ -1609,6 +1615,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     self.global_world_manager.insert_component_record(&global_entity, &component_kind);
 
                     if self.global_world_manager.entity_is_delegated(&global_entity) {
+                        let component_name = self
+                            .protocol
+                            .component_kinds
+                            .kind_to_name(&component_kind);
+                        info!(
+                            "Client.process_response_events(), handling InsertComponent for Component: {:?} into delegated Entity: {:?}",
+                            component_name, global_entity
+                        );
                         world.component_publish(
                             &self.protocol.component_kinds,
                             &self.global_entity_map,
@@ -1654,6 +1668,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     self.incoming_world_events.push_unpublish(world_entity);
                 }
                 EntityResponseEvent::EnableDelegationEntity(global_entity) => {
+                    info!("Client process_response_events(): EnableDelegationEntity, for entity: {:?}", global_entity);
                     let world_entity = self
                         .global_entity_map
                         .global_entity_to_entity(&global_entity)
@@ -1695,6 +1710,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         .global_entity_map
                         .global_entity_to_entity(&global_entity)
                         .unwrap();
+                    info!("Client process_response_events(): EntityMigrateResponse, for entity: {:?}", global_entity);
                     self.entity_complete_delegation(world, &global_entity, &world_entity);
                     self.add_redundant_remote_entity_to_host(&world_entity, remote_entity);
 
