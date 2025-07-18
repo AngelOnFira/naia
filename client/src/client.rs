@@ -998,7 +998,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
         // update in world manager
         self.global_world_manager
-            .host_insert_component(&global_entity, component);
+            .host_insert_component(&self.protocol.component_kinds, &global_entity, component);
 
         // if entity is delegated, convert over
         if self
@@ -1123,6 +1123,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         world_entity: &E,
     ) {
         world.entity_enable_delegation(
+            &self.protocol.component_kinds,
             &self.global_entity_map,
             &self.global_world_manager,
             world_entity,
@@ -1609,12 +1610,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
                     if self.global_world_manager.entity_is_delegated(&global_entity) {
                         world.component_publish(
+                            &self.protocol.component_kinds,
                             &self.global_entity_map,
                             &self.global_world_manager,
                             &world_entity,
                             &component_kind,
                         );
                         world.component_enable_delegation(
+                            &self.protocol.component_kinds,
                             &self.global_entity_map,
                             &self.global_world_manager,
                             &world_entity,

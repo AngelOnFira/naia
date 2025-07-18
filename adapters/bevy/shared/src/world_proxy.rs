@@ -5,12 +5,7 @@ use bevy_ecs::{
     world::{Mut, World},
 };
 
-use naia_shared::{
-    ComponentFieldUpdate, ComponentKind, ComponentUpdate, EntityAndGlobalEntityConverter,
-    GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter, ReplicaDynMutWrapper,
-    ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicatedComponent,
-    SerdeErr, WorldMutType, WorldRefType,
-};
+use naia_shared::{ComponentFieldUpdate, ComponentKind, ComponentKinds, ComponentUpdate, EntityAndGlobalEntityConverter, GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter, ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicatedComponent, SerdeErr, WorldMutType, WorldRefType};
 
 use super::{
     component_ref::{ComponentMut, ComponentRef},
@@ -314,6 +309,7 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
 
     fn entity_publish(
         &mut self,
+        component_kinds: &ComponentKinds,
         converter: &dyn EntityAndGlobalEntityConverter<Entity>,
         global_world_manager: &dyn GlobalWorldManagerType,
         entity: &Entity,
@@ -321,6 +317,7 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
         for component_kind in WorldMutType::<Entity>::component_kinds(self, entity) {
             WorldMutType::<Entity>::component_publish(
                 self,
+                component_kinds,
                 converter,
                 global_world_manager,
                 entity,
@@ -331,6 +328,7 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
 
     fn component_publish(
         &mut self,
+        component_kinds: &ComponentKinds,
         converter: &dyn EntityAndGlobalEntityConverter<Entity>,
         global_world_manager: &dyn GlobalWorldManagerType,
         world_entity: &Entity,
@@ -341,7 +339,7 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
                 let Some(accessor) = data.component_access(component_kind) else {
                     panic!("ComponentKind has not been registered?");
                 };
-                accessor.component_publish(converter, global_world_manager, world, world_entity);
+                accessor.component_publish(component_kinds, converter, global_world_manager, world, world_entity);
             });
     }
 
@@ -363,6 +361,7 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
 
     fn entity_enable_delegation(
         &mut self,
+        component_kinds: &ComponentKinds,
         converter: &dyn EntityAndGlobalEntityConverter<Entity>,
         global_world_manager: &dyn GlobalWorldManagerType,
         entity: &Entity,
@@ -370,6 +369,7 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
         for component_kind in WorldMutType::<Entity>::component_kinds(self, entity) {
             WorldMutType::<Entity>::component_enable_delegation(
                 self,
+                component_kinds,
                 converter,
                 global_world_manager,
                 entity,
@@ -380,6 +380,7 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
 
     fn component_enable_delegation(
         &mut self,
+        component_kinds: &ComponentKinds,
         converter: &dyn EntityAndGlobalEntityConverter<Entity>,
         global_world_manager: &dyn GlobalWorldManagerType,
         entity: &Entity,
@@ -391,6 +392,7 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
                     panic!("ComponentKind has not been registered?");
                 };
                 accessor.component_enable_delegation(
+                    component_kinds,
                     converter,
                     global_world_manager,
                     world,

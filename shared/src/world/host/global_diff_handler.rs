@@ -1,6 +1,6 @@
 use std::{collections::HashMap, net::SocketAddr};
 
-use crate::{ComponentKind, GlobalEntity, GlobalWorldManagerType};
+use crate::{ComponentKind, ComponentKinds, GlobalEntity, GlobalWorldManagerType};
 
 use super::mut_channel::{MutChannel, MutReceiver, MutReceiverBuilder, MutSender};
 
@@ -17,6 +17,7 @@ impl GlobalDiffHandler {
 
     pub fn register_component(
         &mut self,
+        component_kinds: &ComponentKinds,
         global_world_manager: &dyn GlobalWorldManagerType,
         entity: &GlobalEntity,
         component_kind: &ComponentKind,
@@ -26,7 +27,8 @@ impl GlobalDiffHandler {
             .mut_receiver_builders
             .contains_key(&(*entity, *component_kind))
         {
-            panic!("Component cannot register with Server more than once!");
+            let name = component_kinds.kind_to_name(component_kind);
+            panic!("Component {} cannot register with Server more than once!", name);
         }
 
         let (sender, builder) = MutChannel::new_channel(global_world_manager, diff_mask_length);

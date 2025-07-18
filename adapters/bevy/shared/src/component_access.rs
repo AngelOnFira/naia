@@ -3,10 +3,7 @@ use std::marker::PhantomData;
 use bevy_app::{App, Update};
 use bevy_ecs::{component::{Component, Mutable}, entity::Entity, schedule::IntoScheduleConfigs, world::World};
 
-use naia_shared::{
-    EntityAndGlobalEntityConverter, GlobalWorldManagerType, ReplicaDynMutWrapper,
-    ReplicaDynRefWrapper, Replicate,
-};
+use naia_shared::{ComponentKinds, EntityAndGlobalEntityConverter, GlobalWorldManagerType, ReplicaDynMutWrapper, ReplicaDynRefWrapper, Replicate};
 
 use super::{
     change_detection::{on_component_added, on_component_removed},
@@ -50,6 +47,7 @@ pub trait ComponentAccess: Send + Sync {
     );
     fn component_publish(
         &self,
+        component_kinds: &ComponentKinds,
         converter: &dyn EntityAndGlobalEntityConverter<Entity>,
         global_world_manager: &dyn GlobalWorldManagerType,
         world: &mut World,
@@ -58,6 +56,7 @@ pub trait ComponentAccess: Send + Sync {
     fn component_unpublish(&self, world: &mut World, world_entity: &Entity);
     fn component_enable_delegation(
         &self,
+        component_kinds: &ComponentKinds,
         converter: &dyn EntityAndGlobalEntityConverter<Entity>,
         global_manager: &dyn GlobalWorldManagerType,
         world: &mut World,
@@ -171,6 +170,7 @@ impl<R: Replicate + Component<Mutability = Mutable>> ComponentAccess for Compone
 
     fn component_publish(
         &self,
+        component_kinds: &ComponentKinds,
         converter: &dyn EntityAndGlobalEntityConverter<Entity>,
         global_manager: &dyn GlobalWorldManagerType,
         world: &mut World,
@@ -181,7 +181,7 @@ impl<R: Replicate + Component<Mutability = Mutable>> ComponentAccess for Compone
             let diff_mask_size = component_mut.diff_mask_size();
             let global_entity = converter.entity_to_global_entity(world_entity).unwrap();
             let mutator =
-                global_manager.register_component(&global_entity, &component_kind, diff_mask_size);
+                global_manager.register_component(component_kinds, &global_entity, &component_kind, diff_mask_size);
             component_mut.publish(&mutator);
         }
     }
@@ -194,6 +194,7 @@ impl<R: Replicate + Component<Mutability = Mutable>> ComponentAccess for Compone
 
     fn component_enable_delegation(
         &self,
+        component_kinds: &ComponentKinds,
         converter: &dyn EntityAndGlobalEntityConverter<Entity>,
         global_manager: &dyn GlobalWorldManagerType,
         world: &mut World,
@@ -206,6 +207,7 @@ impl<R: Replicate + Component<Mutability = Mutable>> ComponentAccess for Compone
                 let component_kind = component_mut.kind();
                 let diff_mask_size = component_mut.diff_mask_size();
                 let mutator = global_manager.register_component(
+                    component_kinds,
                     &global_entity,
                     &component_kind,
                     diff_mask_size,

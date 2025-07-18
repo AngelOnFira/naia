@@ -5,7 +5,7 @@ use std::{
 
 use log::info;
 
-use naia_shared::{ComponentKind, EntityAuthAccessor, EntityAuthStatus, GlobalDiffHandler, GlobalEntity, GlobalWorldManagerType, HostAuthHandler, HostType, InScopeEntities, MutChannelType, PropertyMutator, Replicate};
+use naia_shared::{ComponentKind, ComponentKinds, EntityAuthAccessor, EntityAuthStatus, GlobalDiffHandler, GlobalEntity, GlobalWorldManagerType, HostAuthHandler, HostType, InScopeEntities, MutChannelType, PropertyMutator, Replicate};
 
 use super::global_entity_record::GlobalEntityRecord;
 use crate::{
@@ -97,6 +97,7 @@ impl GlobalWorldManager {
     // Insert Component
     pub fn host_insert_component(
         &mut self,
+        component_kinds: &ComponentKinds,
         global_entity: &GlobalEntity,
         component: &mut dyn Replicate,
     ) {
@@ -114,7 +115,7 @@ impl GlobalWorldManager {
         component_kind_set.insert(component_kind);
 
         let prop_mutator =
-            self.register_component(global_entity, &component_kind, diff_mask_length);
+            self.register_component(component_kinds, global_entity, &component_kind, diff_mask_length);
 
         component.set_mutator(&prop_mutator);
     }
@@ -335,6 +336,7 @@ impl GlobalWorldManagerType for GlobalWorldManager {
 
     fn register_component(
         &self,
+        component_kinds: &ComponentKinds,
         global_entity: &GlobalEntity,
         component_kind: &ComponentKind,
         diff_mask_length: u8,
@@ -344,7 +346,7 @@ impl GlobalWorldManagerType for GlobalWorldManager {
             .as_ref()
             .write()
             .expect("DiffHandler should be initialized")
-            .register_component(self, global_entity, &component_kind, diff_mask_length);
+            .register_component(component_kinds, self, global_entity, &component_kind, diff_mask_length);
 
         PropertyMutator::new(mut_sender)
     }

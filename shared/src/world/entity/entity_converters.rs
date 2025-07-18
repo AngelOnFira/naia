@@ -13,7 +13,7 @@ use crate::{bigmap::BigMapKey, world::{
         local_entity::{HostEntity, OwnedLocalEntity, RemoteEntity},
     },
     host::mut_channel::MutChannelType,
-}, ComponentKind, GlobalDiffHandler, InScopeEntities, LocalWorldManager, PropertyMutator};
+}, ComponentKind, ComponentKinds, GlobalDiffHandler, InScopeEntities, LocalWorldManager, PropertyMutator};
 
 pub trait GlobalWorldManagerType : InScopeEntities {
     fn component_kinds(&self, entity: &GlobalEntity) -> Option<Vec<ComponentKind>>;
@@ -23,6 +23,7 @@ pub trait GlobalWorldManagerType : InScopeEntities {
     fn diff_handler(&self) -> Arc<RwLock<GlobalDiffHandler>>;
     fn register_component(
         &self,
+        component_kinds: &ComponentKinds,
         global_entity: &GlobalEntity,
         component_kind: &ComponentKind,
         diff_mask_length: u8,

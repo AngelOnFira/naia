@@ -1301,7 +1301,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 &component_kind
             );
         self.global_world_manager
-            .insert_component_diff_handler(&global_entity, component);
+            .insert_component_diff_handler(&self.component_kinds, &global_entity, component);
 
         // if entity is delegated, convert over
         if self
@@ -1428,6 +1428,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         let result = self.global_world_manager.entity_publish(&global_entity);
         if result {
             world.entity_publish(
+                &self.component_kinds,
                 &self.global_entity_map,
                 &self.global_world_manager,
                 world_entity,
@@ -1505,6 +1506,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             self.global_world_manager
                 .entity_enable_delegation(&global_entity);
             world.entity_enable_delegation(
+                &self.component_kinds,
                 &self.global_entity_map,
                 &self.global_world_manager,
                 world_entity,
@@ -1537,6 +1539,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 let result = self.global_world_manager.entity_publish(&global_entity);
                 if result {
                     world.entity_publish(
+                        &self.component_kinds,
                         &self.global_entity_map,
                         &self.global_world_manager,
                         world_entity,
@@ -1593,6 +1596,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         self.global_world_manager
             .entity_enable_delegation(&global_entity);
         world.entity_enable_delegation(
+            &self.component_kinds,
             &self.global_entity_map,
             &self.global_world_manager,
             world_entity,
@@ -2042,6 +2046,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                             .entity_is_delegated(&global_entity)
                     {
                         world.component_publish(
+                            &self.component_kinds,
                             &self.global_entity_map,
                             &self.global_world_manager,
                             &world_entity,
@@ -2053,6 +2058,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                             .entity_is_delegated(&global_entity)
                         {
                             world.component_enable_delegation(
+                                &self.component_kinds,
                                 &self.global_entity_map,
                                 &self.global_world_manager,
                                 &world_entity,
