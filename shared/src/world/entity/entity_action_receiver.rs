@@ -138,6 +138,7 @@ impl<E: Copy + Hash + Eq> EntityChannel<E> {
                 );
             }
             EntityAction::Noop => {}
+            _ => {}
         }
     }
 
@@ -253,6 +254,11 @@ impl<E: Copy + Hash + Eq> EntityChannel<E> {
             if sequence_less_than(index, last_index) {
                 return;
             }
+        }
+
+        if !self.spawned {
+            component_state.waiting_inserts.push_back(index, ());
+            return;
         }
 
         if !component_state.inserted {
@@ -425,5 +431,129 @@ impl<P> OrderedIds<P> {
         if pop {
             self.inner.pop_front();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use std::any::TypeId;
+
+    #[test]
+    fn spawn_then_insert_emitted_in_order() {
+        let mut receiver: EntityActionReceiver<u8> = EntityActionReceiver::new();
+
+        let entity_id: u8 = 1;
+        let comp = ComponentKind::from(TypeId::of::<u32>());
+
+        // spawn first
+        receiver.buffer_action(1, EntityAction::SpawnEntity(entity_id, Vec::new()));
+        // insert next
+        receiver.buffer_action(2, EntityAction::InsertComponent(entity_id, comp));
+
+        let actions = receiver.receive_actions();
+
+        assert_eq!(actions.len(), 2);
+        matches!(actions[0], EntityAction::SpawnEntity(e, _) if e == entity_id);
+        matches!(actions[1], EntityAction::InsertComponent(e, k) if e == entity_id && k == comp);
+    }
+
+    #[test]
+    fn insert_before_spawn_reorders_correctly() {
+        let mut receiver: EntityActionReceiver<u8> = EntityActionReceiver::new();
+
+        let entity_id: u8 = 2;
+        let comp = ComponentKind::from(TypeId::of::<u64>());
+
+        // buffer Insert (idx 2) before Spawn (idx 1)
+        receiver.buffer_action(2, EntityAction::InsertComponent(entity_id, comp));
+
+        // Now buffer Spawn (idx 1) after Insert already queued
+        receiver.buffer_action(1, EntityAction::SpawnEntity(entity_id, Vec::new()));
+
+        let actions = receiver.receive_actions();
+
+        assert_eq!(actions.len(), 2);
+        matches!(actions[0], EntityAction::SpawnEntity(e, _) if e == entity_id);
+        matches!(actions[1], EntityAction::InsertComponent(e, k) if e == entity_id && k == comp);
+    }
+
+    #[test]
+    fn remove_blocked_until_insert() {
+        let mut receiver: EntityActionReceiver<u8> = EntityActionReceiver::new();
+
+        let entity_id: u8 = 3;
+        let comp = ComponentKind::from(TypeId::of::<u16>());
+
+        // Spawn arrives first (idx 1)
+        receiver.buffer_action(1, EntityAction::SpawnEntity(entity_id, Vec::new()));
+
+        // Remove arrives before Insert (idx 3)
+        receiver.buffer_action(3, EntityAction::RemoveComponent(entity_id, comp));
+
+        // Now Insert arrives later (idx 2)
+        receiver.buffer_action(2, EntityAction::InsertComponent(entity_id, comp));
+
+        let actions = receiver.receive_actions();
+
+        assert_eq!(actions.len(), 3);
+        matches!(actions[0], EntityAction::SpawnEntity(e, _) if e == entity_id);
+        matches!(actions[1], EntityAction::InsertComponent(e, k) if e == entity_id && k == comp);
+        matches!(actions[2], EntityAction::RemoveComponent(e, k) if e == entity_id && k == comp);
+    }
+
+    #[test]
+    fn despawn_blocked_until_spawn() {
+        let mut receiver: EntityActionReceiver<u8> = EntityActionReceiver::new();
+
+        let entity_id: u8 = 4;
+
+        // Despawn arrives first (idx 2), before Spawn
+        receiver.buffer_action(2, EntityAction::DespawnEntity(entity_id));
+
+        // No action should be emitted yet
+        assert!(receiver.receive_actions().is_empty());
+
+        // Spawn arrives later (idx 1)
+        receiver.buffer_action(1, EntityAction::SpawnEntity(entity_id, Vec::new()));
+
+        let actions = receiver.receive_actions();
+
+        assert_eq!(actions.len(), 2);
+        matches!(actions[0], EntityAction::SpawnEntity(e, _) if e == entity_id);
+        matches!(actions[1], EntityAction::DespawnEntity(e) if e == entity_id);
+    }
+
+    #[test]
+    fn per_entity_independence() {
+        let mut receiver: EntityActionReceiver<u8> = EntityActionReceiver::new();
+
+        let entity_a: u8 = 5;
+        let entity_b: u8 = 6;
+
+        let comp = ComponentKind::from(TypeId::of::<u32>());
+
+        // 1) Insert for entity A (idx 2) arrives before its Spawn
+        receiver.buffer_action(2, EntityAction::InsertComponent(entity_a, comp));
+
+        // 2) Spawn & Insert for entity B (idx 3 & 4)
+        receiver.buffer_action(3, EntityAction::SpawnEntity(entity_b, Vec::new()));
+        receiver.buffer_action(4, EntityAction::InsertComponent(entity_b, comp));
+
+        // At this point we expect only actions for entity B, none for A yet
+        let first_actions = receiver.receive_actions();
+        assert!(first_actions.len() == 2);
+        assert!(first_actions[0] == EntityAction::SpawnEntity(entity_b, Vec::new()));
+        assert!(first_actions[1] == EntityAction::InsertComponent(entity_b, comp));
+
+        // 3) Spawn for entity A (idx 1)
+        receiver.buffer_action(1, EntityAction::SpawnEntity(entity_a, Vec::new()));
+
+        // We expect Spawn A & Insert A now
+        let second_actions = receiver.receive_actions();
+        assert!(second_actions.len() == 2);
+        assert!(second_actions[0] == EntityAction::SpawnEntity(entity_a, Vec::new()));
+        assert!(second_actions[1] == EntityAction::InsertComponent(entity_a, comp));
     }
 }
