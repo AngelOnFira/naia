@@ -4,6 +4,7 @@ use std::{
     net::SocketAddr,
 };
 use std::sync::RwLockReadGuard;
+
 use log::warn;
 
 use super::{
@@ -11,6 +12,7 @@ use super::{
     user_diff_handler::UserDiffHandler,
 };
 use crate::{world::{host::entity_channel::EntityChannel, local_world_manager::LocalWorldManager}, ChannelSender, ComponentKind, EntityMessage, EntityMessageReceiver, EntityAndGlobalEntityConverter, GlobalEntity, GlobalWorldManagerType, HostEntity, Instant, ReliableSender, WorldRefType, DiffMask};
+use crate::world::host::checked_map::{CheckedMap, CheckedSet};
 
 const RESEND_COMMAND_RTT_FACTOR: f32 = 1.5;
 
@@ -58,19 +60,19 @@ impl EntityCommandSender {
     pub fn host_has_entity(&self, entity: &GlobalEntity) -> bool {
         self.host_world.contains_key(entity)
     }
-    
+
     pub fn diff_handler_has_component(&self, entity: &GlobalEntity, component_kind: &ComponentKind) -> bool {
         self.diff_handler.has_component(entity, component_kind)
     }
-    
+
     pub fn or_diff_mask(&mut self, entity: &GlobalEntity, component_kind: &ComponentKind, new_diff_mask: &DiffMask) {
         self.diff_handler.or_diff_mask(entity, component_kind, new_diff_mask);
     }
-    
+
     pub fn get_diff_mask(&self, entity: &GlobalEntity, component_kind: &ComponentKind) -> RwLockReadGuard<DiffMask> {
         self.diff_handler.diff_mask(entity, component_kind)
     }
-    
+
     pub fn clear_diff_mask(&mut self, entity: &GlobalEntity, component_kind: &ComponentKind) {
         self.diff_handler.clear_diff_mask(entity, component_kind);
     }
@@ -708,95 +710,5 @@ impl EntityCommandSender {
         command: EntityCommand,
     ) {
         self.outgoing_commands.send_message(command);
-    }
-}
-
-// CheckedMap
-pub struct CheckedMap<K: Eq + Hash, V> {
-    pub inner: HashMap<K, V>,
-}
-
-impl<K: Eq + Hash, V> CheckedMap<K, V> {
-    pub fn new() -> Self {
-        Self {
-            inner: HashMap::new(),
-        }
-    }
-
-    pub fn contains_key(&self, key: &K) -> bool {
-        self.inner.contains_key(key)
-    }
-
-    pub fn get(&self, key: &K) -> Option<&V> {
-        self.inner.get(key)
-    }
-
-    pub fn get_mut(&mut self, key: &K) -> Option<&mut V> {
-        self.inner.get_mut(key)
-    }
-
-    pub fn insert(&mut self, key: K, value: V) {
-        if self.inner.contains_key(&key) {
-            panic!("Cannot insert and replace value for given key. Check first.")
-        }
-
-        self.inner.insert(key, value);
-    }
-
-    pub fn remove(&mut self, key: &K) -> Option<V> {
-        if !self.inner.contains_key(key) {
-            panic!("Cannot remove value for key with non-existent value. Check whether map contains key first.")
-        }
-
-        self.inner.remove(key)
-    }
-
-    pub fn iter(&self) -> std::collections::hash_map::Iter<K, V> {
-        self.inner.iter()
-    }
-
-    pub fn len(&self) -> usize {
-        self.inner.len()
-    }
-
-    pub fn clear(&mut self) {
-        self.inner.clear();
-    }
-}
-
-// CheckedSet
-pub struct CheckedSet<K: Eq + Hash> {
-    pub inner: HashSet<K>,
-}
-
-impl<K: Eq + Hash> CheckedSet<K> {
-    pub fn new() -> Self {
-        Self {
-            inner: HashSet::new(),
-        }
-    }
-
-    pub fn contains(&self, key: &K) -> bool {
-        self.inner.contains(key)
-    }
-
-    pub fn insert(&mut self, key: K) {
-        if self.inner.contains(&key) {
-            panic!("Cannot insert and replace given key. Check first.")
-        }
-
-        self.inner.insert(key);
-    }
-
-    pub fn remove(&mut self, key: &K) {
-        if !self.inner.contains(key) {
-            panic!("Cannot remove given non-existent key. Check first.")
-        }
-
-        self.inner.remove(key);
-    }
-
-    pub fn iter(&self) -> std::collections::hash_set::Iter<K> {
-        self.inner.iter()
     }
 }

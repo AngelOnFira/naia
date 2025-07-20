@@ -7,3 +7,4 @@ pub mod entity_command_sender;
 pub mod entity_command;
 
 mod entity_channel;
+mod checked_map;
