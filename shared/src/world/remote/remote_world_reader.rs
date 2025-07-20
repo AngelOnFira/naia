@@ -2,22 +2,16 @@ use std::collections::HashMap;
 
 use log::warn;
 
-use crate::{
-    messages::channels::receivers::indexed_message_reader::IndexedMessageReader,
-    world::entity::local_entity::RemoteEntity, world::local_world_manager::LocalWorldManager,
-    BitReader, ComponentKind, ComponentKinds, ComponentUpdate, EntityAction, EntityActionReceiver,
-    EntityActionType, GlobalEntity, LocalEntityAndGlobalEntityConverter, MessageIndex, Replicate,
-    Serde, SerdeErr, Tick, UnsignedVariableInteger,
-};
+use crate::{messages::channels::receivers::indexed_message_reader::IndexedMessageReader, world::entity::local_entity::RemoteEntity, world::local_world_manager::LocalWorldManager, BitReader, ComponentKind, ComponentKinds, ComponentUpdate, EntityMessage, EntityMessageReceiver, EntityMessageType, EntityAuthStatus, GlobalEntity, HostEntity, LocalEntityAndGlobalEntityConverter, MessageIndex, Replicate, Serde, SerdeErr, Tick, UnsignedVariableInteger};
 
 pub struct RemoteWorldReader {
-    receiver: EntityActionReceiver<RemoteEntity>,
+    receiver: EntityMessageReceiver<RemoteEntity>,
     received_components: HashMap<(RemoteEntity, ComponentKind), Box<dyn Replicate>>,
     received_updates: Vec<(Tick, GlobalEntity, ComponentUpdate)>,
 }
 
 pub struct RemoteWorldEvents {
-    pub incoming_actions: Vec<EntityAction<RemoteEntity>>,
+    pub incoming_messages: Vec<EntityMessage<RemoteEntity>>,
     pub incoming_components: HashMap<(RemoteEntity, ComponentKind), Box<dyn Replicate>>,
     pub incoming_updates: Vec<(Tick, GlobalEntity, ComponentUpdate)>,
 }
@@ -25,7 +19,7 @@ pub struct RemoteWorldEvents {
 impl RemoteWorldReader {
     pub fn new() -> Self {
         Self {
-            receiver: EntityActionReceiver::new(),
+            receiver: EntityMessageReceiver::new(),
             received_components: HashMap::default(),
             received_updates: Vec::new(),
         }
@@ -33,7 +27,7 @@ impl RemoteWorldReader {
 
     pub fn take_incoming_events(&mut self) -> RemoteWorldEvents {
         RemoteWorldEvents {
-            incoming_actions: self.receiver.receive_actions(),
+            incoming_messages: self.receiver.receive_messages(),
             incoming_components: std::mem::take(&mut self.received_components),
             incoming_updates: std::mem::take(&mut self.received_updates),
         }
@@ -77,8 +71,8 @@ impl RemoteWorldReader {
         // read entity updates
         self.read_updates(local_world_manager, component_kinds, tick, reader)?;
 
-        // read entity actions
-        self.read_actions(
+        // read entity messages
+        self.read_messages(
             local_world_manager.entity_converter(),
             component_kinds,
             reader,
@@ -87,8 +81,8 @@ impl RemoteWorldReader {
         Ok(())
     }
 
-    /// Read incoming Entity actions.
-    fn read_actions(
+    /// Read incoming Entity messages.
+    fn read_messages(
         &mut self,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
         component_kinds: &ComponentKinds,
@@ -97,37 +91,37 @@ impl RemoteWorldReader {
         let mut last_read_id: Option<MessageIndex> = None;
 
         loop {
-            // read action continue bit
-            let action_continue = bool::de(reader)?;
-            if !action_continue {
+            // read message continue bit
+            let message_continue = bool::de(reader)?;
+            if !message_continue {
                 break;
             }
 
-            self.read_action(converter, component_kinds, reader, &mut last_read_id)?;
+            self.read_message(converter, component_kinds, reader, &mut last_read_id)?;
         }
 
         Ok(())
     }
 
-    /// Read the bits corresponding to the EntityAction and adds the [`EntityAction`]
+    /// Read the bits corresponding to the EntityMessage and adds the [`EntityMessage`]
     /// to an internal buffer.
     ///
     /// We can use a UnorderedReliableReceiver buffer because the messages have already been
     /// ordered by the client's jitter buffer
-    fn read_action(
+    fn read_message(
         &mut self,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
         component_kinds: &ComponentKinds,
         reader: &mut BitReader,
         last_read_id: &mut Option<MessageIndex>,
     ) -> Result<(), SerdeErr> {
-        let action_id = Self::read_message_index(reader, last_read_id)?;
+        let message_id = Self::read_message_index(reader, last_read_id)?;
 
-        let action_type = EntityActionType::de(reader)?;
+        let message_type = EntityMessageType::de(reader)?;
 
-        match action_type {
+        match message_type {
             // Entity Creation
-            EntityActionType::SpawnEntity => {
+            EntityMessageType::SpawnEntity => {
                 // read entity
                 let remote_entity = RemoteEntity::de(reader)?;
 
@@ -142,46 +136,129 @@ impl RemoteWorldReader {
                     component_kind_list.push(new_component_kind);
                 }
 
-                self.receiver.buffer_action(
-                    action_id,
-                    EntityAction::SpawnEntity(remote_entity, component_kind_list),
+                self.receiver.buffer_message(
+                    message_id,
+                    EntityMessage::SpawnEntity(remote_entity, component_kind_list),
                 );
             }
             // Entity Deletion
-            EntityActionType::DespawnEntity => {
+            EntityMessageType::DespawnEntity => {
                 // read all data
                 let remote_entity = RemoteEntity::de(reader)?;
 
                 self.receiver
-                    .buffer_action(action_id, EntityAction::DespawnEntity(remote_entity));
+                    .buffer_message(message_id, EntityMessage::DespawnEntity(remote_entity));
             }
             // Add Component to Entity
-            EntityActionType::InsertComponent => {
+            EntityMessageType::InsertComponent => {
                 // read all data
                 let remote_entity = RemoteEntity::de(reader)?;
                 let new_component = component_kinds.read(reader, converter)?;
                 let new_component_kind = new_component.kind();
 
-                self.receiver.buffer_action(
-                    action_id,
-                    EntityAction::InsertComponent(remote_entity, new_component_kind),
+                self.receiver.buffer_message(
+                    message_id,
+                    EntityMessage::InsertComponent(remote_entity, new_component_kind),
                 );
                 self.received_components
                     .insert((remote_entity, new_component_kind), new_component);
             }
             // Component Removal
-            EntityActionType::RemoveComponent => {
+            EntityMessageType::RemoveComponent => {
                 // read all data
                 let remote_entity = RemoteEntity::de(reader)?;
                 let component_kind = ComponentKind::de(component_kinds, reader)?;
 
-                self.receiver.buffer_action(
-                    action_id,
-                    EntityAction::RemoveComponent(remote_entity, component_kind),
+                self.receiver.buffer_message(
+                    message_id,
+                    EntityMessage::RemoveComponent(remote_entity, component_kind),
                 );
             }
-            EntityActionType::Noop => {
-                self.receiver.buffer_action(action_id, EntityAction::Noop);
+            // Former SystemChannel messages - now handled as EntityMessages
+            // These generate EntityResponseEvent directly instead of going through EntityMessage
+            EntityMessageType::PublishEntity => {
+                // read entity
+                let remote_entity = RemoteEntity::de(reader)?;
+
+                self.receiver
+                    .buffer_message(message_id, EntityMessage::PublishEntity(remote_entity));
+            }
+            EntityMessageType::UnpublishEntity => {
+                // read entity
+                let remote_entity = RemoteEntity::de(reader)?;
+
+                self.receiver
+                    .buffer_message(message_id, EntityMessage::UnpublishEntity(remote_entity));
+            }
+            EntityMessageType::EnableDelegationEntity => {
+                // read entity
+                let remote_entity = RemoteEntity::de(reader)?;
+
+                self.receiver
+                    .buffer_message(message_id, EntityMessage::EnableDelegationEntity(remote_entity));
+            }
+            EntityMessageType::EnableDelegationEntityResponse => {
+                // read entity
+                let remote_entity = RemoteEntity::de(reader)?;
+
+                self.receiver
+                    .buffer_message(message_id, EntityMessage::EnableDelegationEntityResponse(remote_entity));
+            }
+            EntityMessageType::DisableDelegationEntity => {
+                // read entity
+                let remote_entity = RemoteEntity::de(reader)?;
+
+                self.receiver
+                    .buffer_message(message_id, EntityMessage::DisableDelegationEntity(remote_entity));
+            }
+            EntityMessageType::RequestAuthority => {
+                // read entity
+                let remote_entity = RemoteEntity::de(reader)?;
+                // read remote entity value
+                let remote_entity_value = u16::de(reader)?;
+
+                self.receiver.buffer_message(
+                    message_id,
+                    EntityMessage::EntityRequestAuthority(
+                        remote_entity,
+                        RemoteEntity::new(remote_entity_value),
+                    ),
+                );
+            }
+            EntityMessageType::ReleaseAuthority => {
+                // read entity
+                let remote_entity = RemoteEntity::de(reader)?;
+
+                self.receiver
+                    .buffer_message(message_id, EntityMessage::EntityReleaseAuthority(remote_entity));
+            }
+            EntityMessageType::UpdateAuthority => {
+                // read entity
+                let remote_entity = RemoteEntity::de(reader)?;
+                // read auth status
+                let auth_status = EntityAuthStatus::de(reader)?;
+
+                self.receiver.buffer_message(
+                    message_id,
+                    EntityMessage::EntityUpdateAuthority(remote_entity, auth_status),
+                );
+            }
+            EntityMessageType::EntityMigrateResponse => {
+                // read entity
+                let remote_entity = RemoteEntity::de(reader)?;
+                // read new host entity value
+                let new_host_entity_value = u16::de(reader)?;
+
+                self.receiver.buffer_message(
+                    message_id,
+                    EntityMessage::EntityMigrateResponse(
+                        remote_entity,
+                        HostEntity::new(new_host_entity_value),
+                    ),
+                );
+            }
+            EntityMessageType::Noop => {
+                self.receiver.buffer_message(message_id, EntityMessage::Noop);
             }
         }
 

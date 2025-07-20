@@ -16,7 +16,7 @@ use crate::{
             remote_world_reader::RemoteWorldEvents,
         },
     },
-    ComponentFieldUpdate, ComponentKind, ComponentKinds, ComponentUpdate, EntityAction,
+    ComponentFieldUpdate, ComponentKind, ComponentKinds, ComponentUpdate, EntityMessage,
     EntityAndGlobalEntityConverter, GlobalEntity, GlobalEntitySpawner, GlobalWorldManagerType,
     LocalEntityAndGlobalEntityConverter, Replicate, Tick, WorldMutType,
 };
@@ -74,43 +74,43 @@ impl RemoteWorldManager {
             now,
             world_events.incoming_updates,
         );
-        self.process_actions(
+        self.process_incoming_messages(
             spawner,
             global_world_manager,
             local_world_manager,
             world,
             now,
-            world_events.incoming_actions,
+            world_events.incoming_messages,
             world_events.incoming_components,
         );
 
         std::mem::take(&mut self.outgoing_events)
     }
 
-    /// Process incoming Entity actions.
+    /// Process incoming Entity messages.
     ///
-    /// * Emits client events corresponding to any [`EntityAction`] received
+    /// * Emits client events corresponding to any [`EntityMessage`] received
     /// Store
-    pub fn process_actions<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
+    pub fn process_incoming_messages<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
         &mut self,
         spawner: &mut dyn GlobalEntitySpawner<E>,
         global_world_manager: &dyn GlobalWorldManagerType,
         local_world_manager: &mut LocalWorldManager,
         world: &mut W,
         now: &Instant,
-        incoming_actions: Vec<EntityAction<RemoteEntity>>,
+        incoming_messages: Vec<EntityMessage<RemoteEntity>>,
         incoming_components: HashMap<(RemoteEntity, ComponentKind), Box<dyn Replicate>>,
     ) {
-        self.process_ready_actions(
+        self.process_ready_messages(
             spawner,
             global_world_manager,
             local_world_manager,
             world,
-            incoming_actions,
+            incoming_messages,
             incoming_components,
         );
         let world_converter = spawner.to_converter();
-        self.process_waitlist_actions(
+        self.process_waitlist_messages(
             local_world_manager.entity_converter(),
             world_converter,
             world,
@@ -118,21 +118,21 @@ impl RemoteWorldManager {
         );
     }
 
-    /// For each [`EntityAction`] that can be executed now,
+    /// For each [`EntityMessage`] that can be executed now,
     /// execute it and emit a corresponding event.
-    fn process_ready_actions<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
+    fn process_ready_messages<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
         &mut self,
         spawner: &mut dyn GlobalEntitySpawner<E>,
         global_world_manager: &dyn GlobalWorldManagerType,
         local_world_manager: &mut LocalWorldManager,
         world: &mut W,
-        incoming_actions: Vec<EntityAction<RemoteEntity>>,
+        incoming_messages: Vec<EntityMessage<RemoteEntity>>,
         mut incoming_components: HashMap<(RemoteEntity, ComponentKind), Box<dyn Replicate>>,
     ) {
         // execute the action and emit an event
-        for action in incoming_actions {
-            match action {
-                EntityAction::SpawnEntity(remote_entity, components) => {
+        for message in incoming_messages {
+            match message {
+                EntityMessage::SpawnEntity(remote_entity, components) => {
                     // set up entity
                     let world_entity = world.spawn_entity();
                     let global_entity = spawner.spawn(world_entity, Some(remote_entity));
@@ -163,7 +163,7 @@ impl RemoteWorldManager {
                         );
                     }
                 }
-                EntityAction::DespawnEntity(remote_entity) => {
+                EntityMessage::DespawnEntity(remote_entity) => {
                     let global_entity = local_world_manager.remove_by_remote_entity(&remote_entity);
                     let world_entity = spawner.global_entity_to_entity(&global_entity).unwrap();
 
@@ -184,7 +184,7 @@ impl RemoteWorldManager {
                     self.outgoing_events
                         .push(EntityEvent::DespawnEntity(global_entity));
                 }
-                EntityAction::InsertComponent(remote_entity, component_kind) => {
+                EntityMessage::InsertComponent(remote_entity, component_kind) => {
                     let component = incoming_components
                         .remove(&(remote_entity, component_kind))
                         .unwrap();
@@ -209,14 +209,17 @@ impl RemoteWorldManager {
                         warn!("received InsertComponent message for nonexistant entity");
                     }
                 }
-                EntityAction::RemoveComponent(remote_entity, component_kind) => {
+                EntityMessage::RemoveComponent(remote_entity, component_kind) => {
                     let global_entity =
                         local_world_manager.global_entity_from_remote(&remote_entity);
                     let world_entity = spawner.global_entity_to_entity(&global_entity).unwrap();
                     self.process_remove(world, global_entity, world_entity, component_kind);
                 }
-                EntityAction::Noop => {
+                EntityMessage::Noop => {
                     // do nothing
+                }
+                _ => {
+                    todo!()
                 }
             }
         }
@@ -324,7 +327,7 @@ impl RemoteWorldManager {
         }
     }
 
-    fn process_waitlist_actions<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
+    fn process_waitlist_messages<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
         &mut self,
         local_converter: &dyn LocalEntityAndGlobalEntityConverter,
         world_converter: &dyn EntityAndGlobalEntityConverter<E>,
@@ -367,7 +370,7 @@ impl RemoteWorldManager {
 
     /// Process incoming Entity updates.
     ///
-    /// * Emits client events corresponding to any [`EntityAction`] received
+    /// * Emits client events corresponding to any [`EntityMessage`] received
     /// Store
     pub fn process_updates<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
         &mut self,

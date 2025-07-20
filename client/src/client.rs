@@ -4,16 +4,16 @@ use log::{info, warn};
 
 use naia_shared::{
     BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter,
-    EntityAuthStatus, EntityConverterMut, EntityDoesNotExistError, EntityEventMessage,
-    EntityResponseEvent, FakeEntityConverter, GameInstant, GlobalEntity, GlobalEntityMap,
+    EntityAuthStatus, EntityConverterMut, EntityDoesNotExistError,
+    EntityEvent, FakeEntityConverter, GameInstant, GlobalEntity, GlobalEntityMap,
+    EntityCommand,
     GlobalEntitySpawner, GlobalRequestId, GlobalResponseId, GlobalWorldManagerType, Instant,
     Message, MessageContainer, PacketType, Protocol, RemoteEntity, Replicate, ReplicatedComponent,
     Request, Response, ResponseReceiveKey, ResponseSendKey, Serde, SharedGlobalWorldManager,
-    SocketConfig, StandardHeader, SystemChannel, Tick, WorldMutType, WorldRefType,
+    SocketConfig, StandardHeader, Tick, WorldMutType, WorldRefType,
 };
 
 use super::{client_config::ClientConfig, error::NaiaClientError, world_events::WorldEvents};
-use crate::tick_events::TickEvents;
 use crate::{
     connection::{base_time_manager::BaseTimeManager, connection::Connection, io::Io},
     handshake::{HandshakeManager, HandshakeResult, Handshaker},
@@ -23,6 +23,7 @@ use crate::{
         global_world_manager::GlobalWorldManager,
     },
     ReplicationConfig,
+    tick_events::TickEvents,
 };
 
 /// Client can send/receive messages to/from a server, and has a pool of
@@ -227,7 +228,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         };
 
         // receive packets, process into events
-        let response_events = connection.process_packets(
+        let entity_events = connection.process_packets(
             &mut self.global_entity_map,
             &mut self.global_world_manager,
             &self.protocol,
@@ -236,7 +237,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             &mut self.incoming_world_events,
         );
 
-        self.process_response_events(&mut world, response_events);
+        self.process_entity_events(&mut world, entity_events);
     }
 
     pub fn take_world_events(&mut self) -> WorldEvents<E> {
@@ -668,11 +669,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     }
                     ReplicationConfig::Public => {
                         // private -> public
-                        self.publish_entity(&global_entity, world_entity, true);
+                        self.publish_entity(&global_entity, true);
                     }
                     ReplicationConfig::Delegated => {
                         // private -> delegated
-                        self.publish_entity(&global_entity, world_entity, true);
+                        self.publish_entity(&global_entity, true);
                         self.entity_enable_delegation(world, &global_entity, world_entity, true);
                     }
                 }
@@ -681,7 +682,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 match next_config {
                     ReplicationConfig::Private => {
                         // public -> private
-                        self.unpublish_entity(&global_entity, world_entity, true);
+                        self.unpublish_entity(&global_entity, true);
                     }
                     ReplicationConfig::Public => {
                         panic!("This should not be possible.");
@@ -735,13 +736,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 .local_world_manager
                 .host_reserve_entity(&global_entity);
 
-            // 2. Send request to Server
-            let message = EntityEventMessage::new_request_authority(
-                &self.global_entity_map,
-                world_entity,
-                new_host_entity,
-            );
-            self.send_message::<SystemChannel, EntityEventMessage>(&message);
+            // 2. Send request to Server via EntityActionEvent system
+            connection
+                .base
+                .host_world_manager
+                .world_channel
+                .send_outgoing_command(EntityCommand::RequestAuthority(
+                    global_entity,
+                    new_host_entity.to_remote(),
+                ));
         }
     }
 
@@ -774,10 +777,20 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     }
 
     fn send_entity_release_auth_message(&mut self, world_entity: &E) {
-        // 3. Send request to Server
-        let message =
-            EntityEventMessage::new_release_authority(&self.global_entity_map, world_entity);
-        self.send_message::<SystemChannel, EntityEventMessage>(&message);
+        // 3. Send request to Server via EntityActionEvent system
+        let global_entity = self
+            .global_entity_map
+            .entity_to_global_entity(world_entity)
+            .unwrap();
+        
+        let Some(connection) = &mut self.server_connection else {
+            return;
+        };
+        connection
+            .base
+            .host_world_manager
+            .world_channel
+            .send_outgoing_command(EntityCommand::ReleaseAuthority(global_entity));
     }
 
     // Connection
@@ -1055,13 +1068,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     pub(crate) fn publish_entity(
         &mut self,
         global_entity: &GlobalEntity,
-        world_entity: &E,
         client_is_origin: bool,
     ) {
         if client_is_origin {
-            // warn!("sending publish entity message");
-            let message = EntityEventMessage::new_publish(&self.global_entity_map, world_entity);
-            self.send_message::<SystemChannel, EntityEventMessage>(&message);
+            // Send PublishEntity action via EntityActionEvent system
+            let Some(connection) = &mut self.server_connection else {
+                return;
+            };
+            connection
+                .base
+                .host_world_manager
+                .world_channel
+                .send_outgoing_command(EntityCommand::PublishEntity(*global_entity));
         } else {
             if self
                 .global_world_manager
@@ -1078,12 +1096,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     pub(crate) fn unpublish_entity(
         &mut self,
         global_entity: &GlobalEntity,
-        world_entity: &E,
         client_is_origin: bool,
     ) {
         if client_is_origin {
-            let message = EntityEventMessage::new_unpublish(&self.global_entity_map, world_entity);
-            self.send_message::<SystemChannel, EntityEventMessage>(&message);
+            // Send UnpublishEntity action via EntityActionEvent system
+            let Some(connection) = &mut self.server_connection else {
+                return;
+            };
+            connection
+                .base
+                .host_world_manager
+                .world_channel
+                .send_outgoing_command(EntityCommand::UnpublishEntity(*global_entity));
         } else {
             if self
                 .global_world_manager
@@ -1109,11 +1133,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             .entity_register_auth_for_delegation(global_entity);
 
         if client_is_origin {
-            // send message to server
-            // warn!("sending enable delegation for entity message");
-            let message =
-                EntityEventMessage::new_enable_delegation(&self.global_entity_map, world_entity);
-            self.send_message::<SystemChannel, EntityEventMessage>(&message);
+            // Send EnableDelegationEntity action via EntityActionEvent system
+            let Some(connection) = &mut self.server_connection else {
+                return;
+            };
+            connection
+                .base
+                .host_world_manager
+                .world_channel
+                .send_outgoing_command(EntityCommand::EnableDelegationEntity(*global_entity));
         } else {
             self.entity_complete_delegation(world, global_entity, world_entity);
             self.global_world_manager
@@ -1529,10 +1557,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             &self.global_world_manager,
             remote_entities,
         );
-        let response_events = self
-            .incoming_world_events
-            .receive_world_events(&self.global_entity_map, entity_events);
-        self.process_response_events(world, response_events);
+        self.process_entity_events(world, entity_events);
     }
 
     fn disconnect_reset_connection(&mut self) {
@@ -1559,14 +1584,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         self.io.server_addr().expect("connection not established!")
     }
 
-    fn process_response_events<W: WorldMutType<E>>(
+    fn process_entity_events<W: WorldMutType<E>>(
         &mut self,
         world: &mut W,
-        response_events: Vec<EntityResponseEvent>,
+        entity_events: Vec<EntityEvent>,
     ) {
-        for response_event in response_events {
+        for response_event in entity_events {
             match response_event {
-                EntityResponseEvent::SpawnEntity(global_entity) => {
+                EntityEvent::SpawnEntity(global_entity) => {
+                    let world_entity = self
+                        .global_entity_map
+                        .global_entity_to_entity(&global_entity)
+                        .unwrap();
+                    self.incoming_world_events.push_spawn(world_entity);
                     self.global_world_manager
                         .remote_spawn_entity(&global_entity);
                     let Some(connection) = self.server_connection.as_mut() else {
@@ -1581,11 +1611,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                             &global_entity
                         );
                 }
-                EntityResponseEvent::DespawnEntity(global_entity) => {
+                EntityEvent::DespawnEntity(global_entity) => {
                     let world_entity = self
                         .global_entity_map
                         .global_entity_to_entity(&global_entity)
                         .unwrap();
+                    self.incoming_world_events.push_despawn(world_entity);
                     if self
                         .global_world_manager
                         .entity_is_delegated(&global_entity)
@@ -1607,11 +1638,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         .remove_entity_record(&global_entity);
                     self.global_entity_map.despawn_by_global(&global_entity);
                 }
-                EntityResponseEvent::InsertComponent(global_entity, component_kind) => {
+                EntityEvent::InsertComponent(global_entity, component_kind) => {
                     let world_entity = self
                         .global_entity_map
                         .global_entity_to_entity(&global_entity)
                         .unwrap();
+                    self.incoming_world_events.push_insert(world_entity, component_kind);
                     self.global_world_manager.insert_component_record(&global_entity, &component_kind);
 
                     if self.global_world_manager.entity_is_delegated(&global_entity) {
@@ -1639,85 +1671,102 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         );
                     }
                 }
-                EntityResponseEvent::RemoveComponent(global_entity, component_kind) => {
+                EntityEvent::RemoveComponent(global_entity, component_box) => {
+                    let component_kind = component_box.kind();
+                    let world_entity = self
+                        .global_entity_map
+                        .global_entity_to_entity(&global_entity)
+                        .unwrap();
+                    self.incoming_world_events.push_remove(world_entity, component_box);
                     if self.global_world_manager.entity_is_delegated(&global_entity) {
-                        let world_entity = self
-                            .global_entity_map
-                            .global_entity_to_entity(&global_entity)
-                            .unwrap();
                         self.remove_component_worldless(&world_entity, &component_kind);
                     } else {
                         self.global_world_manager
                             .remove_component_record(&global_entity, &component_kind);
                     }
                 }
-                EntityResponseEvent::PublishEntity(global_entity) => {
+                EntityEvent::PublishEntity(global_entity) => {
                     let world_entity = self
                         .global_entity_map
                         .global_entity_to_entity(&global_entity)
                         .unwrap();
-                    self.publish_entity(&global_entity, &world_entity, false);
+                    self.publish_entity(&global_entity, false);
                     self.incoming_world_events.push_publish(world_entity);
                 }
-                EntityResponseEvent::UnpublishEntity(global_entity) => {
+                EntityEvent::UnpublishEntity(global_entity) => {
                     let world_entity = self
                         .global_entity_map
                         .global_entity_to_entity(&global_entity)
                         .unwrap();
-                    self.unpublish_entity(&global_entity, &world_entity, false);
+                    self.unpublish_entity(&global_entity, false);
                     self.incoming_world_events.push_unpublish(world_entity);
                 }
-                EntityResponseEvent::EnableDelegationEntity(global_entity) => {
-                    info!("Client process_response_events(): EnableDelegationEntity, for entity: {:?}", global_entity);
+                EntityEvent::EnableDelegationEntity(global_entity) => {
                     let world_entity = self
                         .global_entity_map
                         .global_entity_to_entity(&global_entity)
                         .unwrap();
                     self.entity_enable_delegation(world, &global_entity, &world_entity, false);
 
-                    // send response
-                    let message = EntityEventMessage::new_enable_delegation_response(
-                        &self.global_entity_map,
-                        &world_entity,
-                    );
-                    self.send_message::<SystemChannel, EntityEventMessage>(&message);
+                    // Send EnableDelegationEntityResponse action via EntityActionEvent system
+                    let Some(connection) = &mut self.server_connection else {
+                        return;
+                    };
+                    connection
+                        .base
+                        .host_world_manager
+                        .world_channel
+                        .send_outgoing_command(EntityCommand::EnableDelegationEntityResponse(
+                            global_entity,
+                        ));
                 }
-                EntityResponseEvent::EnableDelegationEntityResponse(_) => {
+                EntityEvent::EnableDelegationEntityResponse(_) => {
                     panic!("Client should never receive an EnableDelegationEntityResponse event");
                 }
-                EntityResponseEvent::DisableDelegationEntity(global_entity) => {
+                EntityEvent::DisableDelegationEntity(global_entity) => {
                     let world_entity = self
                         .global_entity_map
                         .global_entity_to_entity(&global_entity)
                         .unwrap();
                     self.entity_disable_delegation(world, &global_entity, &world_entity, false);
                 }
-                EntityResponseEvent::EntityRequestAuthority(_global_entity, _remote_entity) => {
+                EntityEvent::EntityRequestAuthority(_global_entity, _remote_entity) => {
                     panic!("Client should never receive an EntityRequestAuthority event");
                 }
-                EntityResponseEvent::EntityReleaseAuthority(_global_entity) => {
+                EntityEvent::EntityReleaseAuthority(_global_entity) => {
                     panic!("Client should never receive an EntityReleaseAuthority event");
                 }
-                EntityResponseEvent::EntityUpdateAuthority(global_entity, new_auth_status) => {
+                EntityEvent::EntityUpdateAuthority(global_entity, new_auth_status) => {
                     let world_entity = self
                         .global_entity_map
                         .global_entity_to_entity(&global_entity)
                         .unwrap();
                     self.entity_update_authority(&global_entity, &world_entity, new_auth_status);
                 }
-                EntityResponseEvent::EntityMigrateResponse(global_entity, remote_entity) => {
+                EntityEvent::EntityMigrateResponse(global_entity, host_entity) => {
                     let world_entity = self
                         .global_entity_map
                         .global_entity_to_entity(&global_entity)
                         .unwrap();
                     info!("Client process_response_events(): EntityMigrateResponse, for entity: {:?}", global_entity);
                     self.entity_complete_delegation(world, &global_entity, &world_entity);
-                    self.add_redundant_remote_entity_to_host(&world_entity, remote_entity);
+                    self.add_redundant_remote_entity_to_host(&world_entity, host_entity.to_remote());
 
                     self.global_world_manager
                         .entity_update_authority(&global_entity, EntityAuthStatus::Granted);
 
                     self.incoming_world_events.push_auth_grant(world_entity);
+                }
+                EntityEvent::UpdateComponent(tick, global_entity, component_kind) => {
+                    let world_entity = self
+                        .global_entity_map
+                        .global_entity_to_entity(&global_entity)
+                        .unwrap();
+                    self.incoming_world_events.push_update(
+                        tick,
+                        world_entity,
+                        component_kind,
+                    );
                 }
             }
         }

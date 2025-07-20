@@ -7,33 +7,31 @@ use std::{
 use log::warn;
 
 use super::{
-    entity_action_event::EntityActionEvent, host_world_manager::ActionId,
+    entity_command::EntityCommand, host_world_manager::CommandId,
     user_diff_handler::UserDiffHandler,
 };
 use crate::{
     world::{host::entity_channel::EntityChannel, local_world_manager::LocalWorldManager},
-    ChannelSender, ComponentKind, EntityAction, EntityActionReceiver,
+    ChannelSender, ComponentKind, EntityMessage, EntityMessageReceiver,
     EntityAndGlobalEntityConverter, GlobalEntity, GlobalWorldManagerType, HostEntity, Instant,
     ReliableSender, WorldRefType,
 };
 
-const RESEND_ACTION_RTT_FACTOR: f32 = 1.5;
-
-// WorldChannel
+const RESEND_COMMAND_RTT_FACTOR: f32 = 1.5;
 
 /// Channel to perform ECS replication between server and client
-/// Only handles entity actions (Spawn/despawn entity and insert/remove components)
+/// Only handles entity commands (Spawn/despawn entity and insert/remove components)
 /// Will use a reliable sender.
 /// Will wait for acks from the client to know the state of the client's ECS world ("remote")
-pub struct WorldChannel {
+pub struct EntityCommandSender {
     /// ECS World that exists currently on the server
     host_world: CheckedMap<GlobalEntity, CheckedSet<ComponentKind>>,
     /// ECS World that exists on the client. Uses packet acks to receive confirmation of the
-    /// EntityActions (Entity spawned, component inserted) that were actually received on the client
+    /// EntityCommands (Entity spawned, component inserted) that were actually received on the client
     remote_world: CheckedMap<GlobalEntity, CheckedSet<ComponentKind>>,
     entity_channels: CheckedMap<GlobalEntity, EntityChannel>,
-    outgoing_actions: ReliableSender<EntityActionEvent>,
-    delivered_actions: EntityActionReceiver<GlobalEntity>,
+    outgoing_commands: ReliableSender<EntityCommand>,
+    delivered_commands: EntityMessageReceiver<GlobalEntity>,
 
     address: Option<SocketAddr>,
     pub diff_handler: UserDiffHandler,
@@ -41,7 +39,7 @@ pub struct WorldChannel {
     outgoing_release_auth_messages: Vec<GlobalEntity>,
 }
 
-impl WorldChannel {
+impl EntityCommandSender {
     pub fn new(
         address: &Option<SocketAddr>,
         global_world_manager: &dyn GlobalWorldManagerType,
@@ -50,8 +48,8 @@ impl WorldChannel {
             host_world: CheckedMap::new(),
             remote_world: CheckedMap::new(),
             entity_channels: CheckedMap::new(),
-            outgoing_actions: ReliableSender::new(RESEND_ACTION_RTT_FACTOR),
-            delivered_actions: EntityActionReceiver::new(),
+            outgoing_commands: ReliableSender::new(RESEND_COMMAND_RTT_FACTOR),
+            delivered_commands: EntityMessageReceiver::new(),
 
             address: *address,
             diff_handler: UserDiffHandler::new(global_world_manager),
@@ -110,8 +108,8 @@ impl WorldChannel {
             // spawn entity
             self.entity_channels
                 .insert(*entity, EntityChannel::new_spawning());
-            self.outgoing_actions
-                .send_message(EntityActionEvent::SpawnEntity(
+            self.outgoing_commands
+                .send_message(EntityCommand::SpawnEntity(
                     *entity,
                     component_kinds.clone(),
                 ));
@@ -142,8 +140,8 @@ impl WorldChannel {
 
         entity_channel.despawn();
 
-        self.outgoing_actions
-            .send_message(EntityActionEvent::DespawnEntity(*entity));
+        self.outgoing_commands
+            .send_message(EntityCommand::DespawnEntity(*entity));
 
         for component_kind in removing_components {
             self.on_component_channel_closing(entity, &component_kind);
@@ -194,8 +192,8 @@ impl WorldChannel {
             if entity_channel.is_spawned() && !entity_channel.has_component(component_kind) {
                 // insert component
                 entity_channel.insert_component(component_kind, false);
-                self.outgoing_actions
-                    .send_message(EntityActionEvent::InsertComponent(*entity, *component_kind));
+                self.outgoing_commands
+                    .send_message(EntityCommand::InsertComponent(*entity, *component_kind));
             }
         }
     }
@@ -217,8 +215,8 @@ impl WorldChannel {
         if let Some(entity_channel) = self.entity_channels.get_mut(world_entity) {
             if entity_channel.is_spawned() {
                 if entity_channel.remove_component(component_kind) {
-                    self.outgoing_actions
-                        .send_message(EntityActionEvent::RemoveComponent(
+                    self.outgoing_commands
+                        .send_message(EntityCommand::RemoveComponent(
                             *world_entity,
                             *component_kind,
                         ));
@@ -249,7 +247,7 @@ impl WorldChannel {
 
         let new_host_entity = self.on_entity_channel_opening(local_world_manager, entity);
 
-        self.delivered_actions
+        self.delivered_commands
             .track_hosts_redundant_remote_entity(entity, component_kinds);
 
         new_host_entity
@@ -274,7 +272,7 @@ impl WorldChannel {
 
         local_world_manager.set_primary_to_remote(entity);
 
-        self.delivered_actions
+        self.delivered_commands
             .untrack_hosts_redundant_remote_entity(entity);
     }
 
@@ -319,7 +317,7 @@ impl WorldChannel {
         }
     }
 
-    // Remote Actions
+    // Remote Commands
 
     pub fn on_remote_spawn_entity(
         &mut self,
@@ -377,15 +375,15 @@ impl WorldChannel {
                     entity_channel.insert_component(component_kind, true);
                 }
 
-                let send_insert_action_component_kinds: HashSet<&ComponentKind> = host_components
+                let send_insert_command_component_kinds: HashSet<&ComponentKind> = host_components
                     .inner
                     .difference(&inserted_component_kinds)
                     .collect();
 
-                for component in send_insert_action_component_kinds {
-                    // send insert action
-                    self.outgoing_actions
-                        .send_message(EntityActionEvent::InsertComponent(*entity, *component));
+                for component in send_insert_command_component_kinds {
+                    // send insert command
+                    self.outgoing_commands
+                        .send_message(EntityCommand::InsertComponent(*entity, *component));
                 }
 
                 // receive inserted components
@@ -397,8 +395,8 @@ impl WorldChannel {
             // despawn entity
             entity_channel.despawn();
 
-            self.outgoing_actions
-                .send_message(EntityActionEvent::DespawnEntity(*entity));
+            self.outgoing_commands
+                .send_message(EntityCommand::DespawnEntity(*entity));
         }
     }
 
@@ -427,8 +425,8 @@ impl WorldChannel {
             // spawn entity
             self.entity_channels
                 .insert(*entity, EntityChannel::new_spawning());
-            self.outgoing_actions
-                .send_message(EntityActionEvent::SpawnEntity(
+            self.outgoing_commands
+                .send_message(EntityCommand::SpawnEntity(
                     *entity,
                     self.host_component_kinds(entity),
                 ));
@@ -489,8 +487,8 @@ impl WorldChannel {
         } else {
             // if component doesn't exist in host, start removal
             entity_channel.remove_component(component_kind);
-            self.outgoing_actions
-                .send_message(EntityActionEvent::RemoveComponent(*entity, *component_kind));
+            self.outgoing_commands
+                .send_message(EntityCommand::RemoveComponent(*entity, *component_kind));
             self.on_component_channel_closing(entity, component_kind);
         }
     }
@@ -533,8 +531,8 @@ impl WorldChannel {
             if host_has_component {
                 // insert component
                 entity_channel.insert_component(component_kind, false);
-                self.outgoing_actions
-                    .send_message(EntityActionEvent::InsertComponent(*entity, *component_kind));
+                self.outgoing_commands
+                    .send_message(EntityCommand::InsertComponent(*entity, *component_kind));
             }
         } else {
             // entity channel may be despawning, which is okay at this point
@@ -590,40 +588,43 @@ impl WorldChannel {
             .deregister_component(entity, component_kind);
     }
 
-    // Action Delivery
+    // Command Delivery
 
-    pub fn action_delivered(
+    pub fn command_delivered(
         &mut self,
         local_world_manager: &mut LocalWorldManager,
-        action_id: ActionId,
-        action: EntityAction<GlobalEntity>,
+        command_id: CommandId,
+        command: EntityMessage<GlobalEntity>,
     ) {
-        if self.outgoing_actions.deliver_message(&action_id).is_some() {
-            self.delivered_actions.buffer_action(action_id, action);
-            self.process_delivered_actions(local_world_manager);
+        if self.outgoing_commands.deliver_message(&command_id).is_some() {
+            self.delivered_commands.buffer_message(command_id, command);
+            self.process_delivered_commands(local_world_manager);
         }
     }
 
-    fn process_delivered_actions(&mut self, local_world_manager: &mut LocalWorldManager) {
-        let delivered_actions = self.delivered_actions.receive_actions();
-        for action in delivered_actions {
-            match action {
-                EntityAction::SpawnEntity(entity, components) => {
+    fn process_delivered_commands(&mut self, local_world_manager: &mut LocalWorldManager) {
+        let delivered_commands = self.delivered_commands.receive_messages();
+        for command in delivered_commands {
+            match command {
+                EntityMessage::SpawnEntity(entity, components) => {
                     let component_set: HashSet<ComponentKind> =
                         components.iter().copied().collect();
                     self.on_remote_spawn_entity(&entity, &component_set);
                 }
-                EntityAction::DespawnEntity(entity) => {
+                EntityMessage::DespawnEntity(entity) => {
                     self.on_remote_despawn_entity(local_world_manager, &entity);
                 }
-                EntityAction::InsertComponent(entity, component_kind) => {
+                EntityMessage::InsertComponent(entity, component_kind) => {
                     self.on_remote_insert_component(&entity, &component_kind);
                 }
-                EntityAction::RemoveComponent(entity, component) => {
+                EntityMessage::RemoveComponent(entity, component) => {
                     self.on_remote_remove_component(&entity, &component);
                 }
-                EntityAction::Noop => {
+                EntityMessage::Noop => {
                     // do nothing
+                }
+                _ => {
+                    todo!();
                 }
             }
         }
@@ -631,13 +632,13 @@ impl WorldChannel {
 
     // Collect
 
-    pub fn take_next_actions(
+    pub fn take_next_commands(
         &mut self,
         now: &Instant,
         rtt_millis: &f32,
-    ) -> VecDeque<(ActionId, EntityActionEvent)> {
-        self.outgoing_actions.collect_messages(now, rtt_millis);
-        self.outgoing_actions.take_next_messages()
+    ) -> VecDeque<(CommandId, EntityCommand)> {
+        self.outgoing_commands.collect_messages(now, rtt_millis);
+        self.outgoing_commands.take_next_messages()
     }
 
     pub fn collect_next_updates<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
@@ -689,6 +690,13 @@ impl WorldChannel {
             return None;
         }
         Some(std::mem::take(&mut self.outgoing_release_auth_messages))
+    }
+
+    pub fn send_outgoing_command(
+        &mut self,
+        command: EntityCommand,
+    ) {
+        self.outgoing_commands.send_message(command);
     }
 }
 

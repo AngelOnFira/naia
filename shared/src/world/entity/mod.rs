@@ -1,7 +1,6 @@
-pub mod entity_action;
-pub mod entity_action_receiver;
-pub mod entity_action_type;
-pub mod entity_auth_event;
+pub mod entity_message;
+pub mod entity_message_receiver;
+pub mod entity_message_type;
 pub mod entity_converters;
 pub mod error;
 pub mod global_entity;

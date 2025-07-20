@@ -11,25 +11,25 @@ use crate::{
     world::{
         entity::entity_converters::GlobalWorldManagerType, local_world_manager::LocalWorldManager,
     },
-    ComponentKind, DiffMask, EntityAction, EntityAndGlobalEntityConverter, GlobalEntity,
+    ComponentKind, DiffMask, EntityMessage, EntityAndGlobalEntityConverter, GlobalEntity,
     HostEntity, Instant, MessageIndex, PacketIndex, WorldRefType,
 };
 
-use super::{entity_action_event::EntityActionEvent, world_channel::WorldChannel};
+use super::{entity_command::EntityCommand, entity_command_sender::EntityCommandSender};
 
 const DROP_UPDATE_RTT_FACTOR: f32 = 1.5;
-const ACTION_RECORD_TTL: Duration = Duration::from_secs(60);
+const COMMAND_RECORD_TTL: Duration = Duration::from_secs(60);
 
-pub type ActionId = MessageIndex;
+pub type CommandId = MessageIndex;
 
 /// Manages Entities for a given Client connection and keeps them in
 /// sync on the Client
 pub struct HostWorldManager {
     // World
-    pub world_channel: WorldChannel,
+    pub world_channel: EntityCommandSender,
 
-    // Actions
-    pub sent_action_packets: SequenceList<(Instant, Vec<(ActionId, EntityAction<GlobalEntity>)>)>,
+    // Commands
+    pub sent_command_packets: SequenceList<(Instant, Vec<(CommandId, EntityMessage<GlobalEntity>)>)>,
 
     // Updates
     /// Map of component updates and [`DiffMask`] that were written into each packet
@@ -40,13 +40,13 @@ pub struct HostWorldManager {
 }
 
 pub struct HostWorldEvents {
-    pub next_send_actions: VecDeque<(ActionId, EntityActionEvent)>,
+    pub next_send_commands: VecDeque<(CommandId, EntityCommand)>,
     pub next_send_updates: HashMap<GlobalEntity, HashSet<ComponentKind>>,
 }
 
 impl HostWorldEvents {
     pub fn has_events(&self) -> bool {
-        !self.next_send_actions.is_empty() || !self.next_send_updates.is_empty()
+        !self.next_send_commands.is_empty() || !self.next_send_updates.is_empty()
     }
 }
 
@@ -58,8 +58,8 @@ impl HostWorldManager {
     ) -> Self {
         HostWorldManager {
             // World
-            world_channel: WorldChannel::new(address, global_world_manager),
-            sent_action_packets: SequenceList::new(),
+            world_channel: EntityCommandSender::new(address, global_world_manager),
+            sent_command_packets: SequenceList::new(),
 
             // Update
             sent_updates: HashMap::new(),
@@ -172,24 +172,24 @@ impl HostWorldManager {
 
     pub fn handle_dropped_packets(&mut self, now: &Instant, rtt_millis: &f32) {
         self.handle_dropped_update_packets(now, rtt_millis);
-        self.handle_dropped_action_packets(now);
+        self.handle_dropped_command_packets(now);
     }
 
     // Collecting
 
-    fn handle_dropped_action_packets(&mut self, now: &Instant) {
+    fn handle_dropped_command_packets(&mut self, now: &Instant) {
         let mut pop = false;
 
         loop {
-            if let Some((_, (time_sent, _))) = self.sent_action_packets.front() {
-                if time_sent.elapsed(now) > ACTION_RECORD_TTL {
+            if let Some((_, (time_sent, _))) = self.sent_command_packets.front() {
+                if time_sent.elapsed(now) > COMMAND_RECORD_TTL {
                     pop = true;
                 }
             } else {
                 return;
             }
             if pop {
-                self.sent_action_packets.pop_front();
+                self.sent_command_packets.pop_front();
             } else {
                 return;
             }
@@ -257,7 +257,7 @@ impl HostWorldManager {
         rtt_millis: &f32,
     ) -> HostWorldEvents {
         HostWorldEvents {
-            next_send_actions: self.world_channel.take_next_actions(now, rtt_millis),
+            next_send_commands: self.world_channel.take_next_commands(now, rtt_millis),
             next_send_updates: self.world_channel.collect_next_updates(
                 world,
                 converter,
@@ -276,14 +276,14 @@ impl HostWorldManager {
         // Updates
         self.sent_updates.remove(&packet_index);
 
-        // Actions
-        if let Some((_, action_list)) = self
-            .sent_action_packets
+        // Commands
+        if let Some((_, command_list)) = self
+            .sent_command_packets
             .remove_scan_from_front(&packet_index)
         {
-            for (action_id, action) in action_list {
+            for (command_id, command) in command_list {
                 self.world_channel
-                    .action_delivered(local_world_manager, action_id, action);
+                    .command_delivered(local_world_manager, command_id, command);
             }
         }
     }

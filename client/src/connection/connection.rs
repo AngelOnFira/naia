@@ -1,8 +1,8 @@
-use std::{any::Any, hash::Hash};
+use std::hash::Hash;
 
 use log::warn;
 
-use naia_shared::{BaseConnection, BitReader, BitWriter, ChannelKind, ChannelKinds, ComponentKinds, ConnectionConfig, EntityAndGlobalEntityConverter, EntityEventMessage, EntityEventMessageAction, EntityResponseEvent, GlobalEntitySpawner, GlobalWorldManagerType, HostType, HostWorldEvents, Instant, MessageKinds, OwnedBitReader, PacketType, Protocol, Serde, SerdeErr, StandardHeader, SystemChannel, Tick, Timer, WorldMutType, WorldRefType};
+use naia_shared::{BaseConnection, BitReader, BitWriter, ChannelKinds, ComponentKinds, ConnectionConfig, EntityAndGlobalEntityConverter, EntityEvent, GlobalEntitySpawner, GlobalWorldManagerType, HostType, HostWorldEvents, Instant, MessageKinds, OwnedBitReader, PacketType, Protocol, Serde, SerdeErr, StandardHeader, Tick, Timer, WorldMutType, WorldRefType};
 
 use crate::{
     connection::{
@@ -134,8 +134,7 @@ impl Connection {
         world: &mut W,
         now: &Instant,
         incoming_events: &mut WorldEvents<E>,
-    ) -> Vec<EntityResponseEvent> {
-        let mut response_events = Vec::new();
+    ) -> Vec<EntityEvent> {
         // Receive Message Events
         let messages = self.base.message_manager.receive_messages(
             &protocol.message_kinds,
@@ -144,39 +143,8 @@ impl Connection {
             &mut self.base.remote_world_manager.entity_waitlist,
         );
         for (channel_kind, messages) in messages {
-            if channel_kind == ChannelKind::of::<SystemChannel>() {
-                for message in messages {
-                    let Some(event_message) = Box::<dyn Any + 'static>::downcast::<
-                        EntityEventMessage,
-                    >(message.to_boxed_any())
-                    .ok()
-                    .map(|boxed_m| *boxed_m) else {
-                        panic!("Received unknown message over SystemChannel!");
-                    };
-                    match event_message.entity.get_inner() {
-                        Some(global_entity) => {
-                            response_events
-                                .push(event_message.action.to_response_event(&global_entity));
-                        }
-                        None => {
-                            match &event_message.action {
-                                EntityEventMessageAction::UpdateAuthority(auth_status) => {
-                                    warn!("Received UpdateAuthority({:?}) message for unknown entity.", auth_status);
-                                    continue;
-                                }
-                                _ => {}
-                            }
-                            panic!(
-                                "System Event message has no entity... `{:?}`",
-                                event_message.action
-                            );
-                        }
-                    };
-                }
-            } else {
-                for message in messages {
-                    incoming_events.push_message(&channel_kind, message);
-                }
+            for message in messages {
+                incoming_events.push_message(&channel_kind, message);
             }
         }
 
@@ -199,7 +167,7 @@ impl Connection {
 
         // Receive World Events
         let remote_events = self.base.remote_world_reader.take_incoming_events();
-        let world_events = self.base.remote_world_manager.process_world_events(
+        self.base.remote_world_manager.process_world_events(
             global_entity_map,
             global_world_manager,
             &mut self.base.local_world_manager,
@@ -207,11 +175,7 @@ impl Connection {
             world,
             now,
             remote_events,
-        );
-        response_events.extend(
-            incoming_events.receive_world_events(global_entity_map.to_converter(), world_events),
-        );
-        response_events
+        )
     }
 
     // Outgoing data

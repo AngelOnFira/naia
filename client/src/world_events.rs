@@ -3,8 +3,8 @@ use std::{
 };
 
 use naia_shared::{
-    Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter, EntityEvent,
-    EntityResponseEvent, GlobalResponseId, Message, MessageContainer, MessageKind, Replicate,
+    Channel, ChannelKind, ComponentKind,
+    GlobalResponseId, Message, MessageContainer, MessageKind, Replicate,
     Request, ResponseSendKey, Tick,
 };
 
@@ -251,52 +251,6 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvents<E> {
         let list = self.removes.get_mut(&component_kind).unwrap();
         list.push((world_entity, component));
         self.empty = false;
-    }
-
-    pub(crate) fn receive_world_events(
-        &mut self,
-        converter: &dyn EntityAndGlobalEntityConverter<E>,
-        entity_events: Vec<EntityEvent>,
-    ) -> Vec<EntityResponseEvent> {
-        let mut response_events = Vec::new();
-        for event in entity_events {
-            match event {
-                EntityEvent::SpawnEntity(global_entity) => {
-                    if let Ok(world_entity) = converter.global_entity_to_entity(&global_entity) {
-                        self.push_spawn(world_entity);
-                    }
-                    response_events.push(EntityResponseEvent::SpawnEntity(global_entity));
-                }
-                EntityEvent::DespawnEntity(global_entity) => {
-                    if let Ok(world_entity) = converter.global_entity_to_entity(&global_entity) {
-                        self.push_despawn(world_entity);
-                    }
-                    response_events.push(EntityResponseEvent::DespawnEntity(global_entity));
-                }
-                EntityEvent::InsertComponent(global_entity, component_kind) => {
-                    if let Ok(world_entity) = converter.global_entity_to_entity(&global_entity) {
-                        self.push_insert(world_entity, component_kind);
-                    }
-                    response_events.push(EntityResponseEvent::InsertComponent(
-                        global_entity,
-                        component_kind,
-                    ));
-                }
-                EntityEvent::RemoveComponent(global_entity, component_box) => {
-                    let kind = component_box.kind();
-                    if let Ok(world_entity) = converter.global_entity_to_entity(&global_entity) {
-                        self.push_remove(world_entity, component_box);
-                    }
-                    response_events.push(EntityResponseEvent::RemoveComponent(global_entity, kind));
-                }
-                EntityEvent::UpdateComponent(tick, global_entity, component_kind) => {
-                    if let Ok(world_entity) = converter.global_entity_to_entity(&global_entity) {
-                        self.push_update(tick, world_entity, component_kind);
-                    }
-                }
-            }
-        }
-        response_events
     }
 
     pub(crate) fn clear(&mut self) {

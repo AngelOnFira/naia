@@ -82,7 +82,6 @@ pub use messages::{
             reliable_sender::ReliableSender,
             request_sender::LocalResponseId,
         },
-        system_channel::SystemChannel,
     },
     message::{Message, Message as MessageBevy, Message as MessageHecs, MessageBuilder},
     message_container::MessageContainer,
@@ -117,10 +116,9 @@ pub use world::{
         host_auth_handler::HostAuthHandler,
     },
     entity::{
-        entity_action::EntityAction,
-        entity_action_receiver::EntityActionReceiver,
-        entity_action_type::EntityActionType,
-        entity_auth_event::{EntityEventMessage, EntityEventMessageAction},
+        entity_message::EntityMessage,
+        entity_message_receiver::EntityMessageReceiver,
+        entity_message_type::EntityMessageType,
         entity_converters::{
             EntityAndGlobalEntityConverter, EntityConverterMut, FakeEntityConverter,
             GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter,
@@ -133,14 +131,14 @@ pub use world::{
         in_scope_entities::InScopeEntities,
     },
     host::{
+        entity_command::EntityCommand,
         global_diff_handler::GlobalDiffHandler,
         host_world_manager::{HostWorldEvents, HostWorldManager},
         mut_channel::{MutChannelType, MutReceiver},
     },
     local_world_manager::LocalWorldManager,
     remote::{
-        entity_action_event::EntityActionEvent,
-        entity_event::{EntityEvent, EntityResponseEvent},
+        entity_event::EntityEvent,
         remote_world_manager::RemoteWorldManager,
     },
     shared_global_world_manager::SharedGlobalWorldManager,

@@ -1,18 +1,13 @@
-use crate::{ComponentKind, EntityAuthStatus, GlobalEntity, RemoteEntity, Replicate, Tick};
+use crate::{ComponentKind, EntityAuthStatus, GlobalEntity, HostEntity, RemoteEntity, Replicate, Tick};
 
 pub enum EntityEvent {
+    // ECS Lifecycle Events
     SpawnEntity(GlobalEntity),
     DespawnEntity(GlobalEntity),
     InsertComponent(GlobalEntity, ComponentKind),
     RemoveComponent(GlobalEntity, Box<dyn Replicate>),
     UpdateComponent(Tick, GlobalEntity, ComponentKind),
-}
 
-pub enum EntityResponseEvent {
-    SpawnEntity(GlobalEntity),
-    DespawnEntity(GlobalEntity),
-    InsertComponent(GlobalEntity, ComponentKind),
-    RemoveComponent(GlobalEntity, ComponentKind),
     PublishEntity(GlobalEntity),
     UnpublishEntity(GlobalEntity),
     EnableDelegationEntity(GlobalEntity),
@@ -21,5 +16,5 @@ pub enum EntityResponseEvent {
     EntityRequestAuthority(GlobalEntity, RemoteEntity),
     EntityReleaseAuthority(GlobalEntity),
     EntityUpdateAuthority(GlobalEntity, EntityAuthStatus),
-    EntityMigrateResponse(GlobalEntity, RemoteEntity),
+    EntityMigrateResponse(GlobalEntity, HostEntity),
 }

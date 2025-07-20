@@ -1,4 +1,4 @@
-use crate::{world::host::world_channel::CheckedMap, ComponentKind};
+use crate::{world::host::entity_command_sender::CheckedMap, ComponentKind};
 
 // ComponentChannel
 

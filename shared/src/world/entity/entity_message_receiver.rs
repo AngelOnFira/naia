@@ -4,18 +4,15 @@ use std::{
     marker::PhantomData,
 };
 
-use crate::{
-    messages::channels::receivers::reliable_receiver::ReliableReceiver, sequence_less_than,
-    world::component::component_kinds::ComponentKind, EntityAction, MessageIndex as ActionIndex,
-};
+use crate::{messages::channels::receivers::reliable_receiver::ReliableReceiver, sequence_less_than, world::component::component_kinds::ComponentKind, EntityMessage, MessageIndex};
 
 // keep E here! TODO: remove
-pub struct EntityActionReceiver<E: Copy + Hash + Eq> {
-    receiver: ReliableReceiver<EntityAction<E>>,
+pub struct EntityMessageReceiver<E: Copy + Hash + Eq> {
+    receiver: ReliableReceiver<EntityMessage<E>>,
     entity_channels: HashMap<E, EntityChannel<E>>,
 }
 
-impl<E: Copy + Hash + Eq> EntityActionReceiver<E> {
+impl<E: Copy + Hash + Eq> EntityMessageReceiver<E> {
     pub fn new() -> Self {
         Self {
             receiver: ReliableReceiver::new(),
@@ -42,25 +39,25 @@ impl<E: Copy + Hash + Eq> EntityActionReceiver<E> {
         self.entity_channels.remove(entity);
     }
 
-    /// Buffer a read [`EntityAction`] so that it can be processed later
-    pub fn buffer_action(&mut self, action_index: ActionIndex, action: EntityAction<E>) {
-        self.receiver.buffer_message(action_index, action);
+    /// Buffer a read [`EntityMessage`] so that it can be processed later
+    pub fn buffer_message(&mut self, message_index: MessageIndex, message: EntityMessage<E>) {
+        self.receiver.buffer_message(message_index, message);
     }
 
-    /// Read all buffered [`EntityAction`] inside the `receiver` and process them.
+    /// Read all buffered [`EntityMessage`] inside the `receiver` and process them.
     ///
-    /// Outputs the list of [`EntityAction`] that can be executed now, buffer the rest
+    /// Outputs the list of [`EntityMessage`] that can be executed now, buffer the rest
     /// into each entity's [`EntityChannel`]
-    pub fn receive_actions(&mut self) -> Vec<EntityAction<E>> {
-        let mut outgoing_actions = Vec::new();
-        let incoming_actions = self.receiver.receive_messages();
-        for (action_index, action) in incoming_actions {
-            if let Some(entity) = action.entity() {
+    pub fn receive_messages(&mut self) -> Vec<EntityMessage<E>> {
+        let mut outgoing_messages = Vec::new();
+        let incoming_messages = self.receiver.receive_messages();
+        for (message_index, message) in incoming_messages {
+            if let Some(entity) = message.entity() {
                 self.entity_channels
                     .entry(entity)
                     .or_insert_with(|| EntityChannel::new(entity));
                 let entity_channel = self.entity_channels.get_mut(&entity).unwrap();
-                entity_channel.receive_action(action_index, action, &mut outgoing_actions);
+                entity_channel.receive_message(message_index, message, &mut outgoing_messages);
             }
         }
 
@@ -69,7 +66,7 @@ impl<E: Copy + Hash + Eq> EntityActionReceiver<E> {
         // RIGHT NOW THIS IS LEAKING MEMORY!
         // a TTL for these Entity Channels after they've been despawned is probably the way to go
 
-        outgoing_actions
+        outgoing_messages
     }
 }
 
@@ -78,7 +75,7 @@ impl<E: Copy + Hash + Eq> EntityActionReceiver<E> {
 // keep E here! TODO: remove
 struct EntityChannel<E: Copy + Hash + Eq> {
     entity: E,
-    last_canonical_index: Option<ActionIndex>,
+    last_canonical_index: Option<MessageIndex>,
     spawned: bool,
     components: HashMap<ComponentKind, ComponentChannel<E>>,
     waiting_spawns: OrderedIds<Vec<ComponentKind>>,
@@ -97,83 +94,83 @@ impl<E: Copy + Hash + Eq> EntityChannel<E> {
         }
     }
 
-    /// Process the provided [`EntityAction`]:
+    /// Process the provided [`EntityMessage`]:
     ///
-    /// * Checks that [`EntityAction`] can be executed now
-    /// * If so, add it to `outgoing_actions`
-    /// * Else, add it to internal "waiting" buffers so we can check when the [`EntityAction`]
+    /// * Checks that [`EntityMessage`] can be executed now
+    /// * If so, add it to `outgoing_messages`
+    /// * Else, add it to internal "waiting" buffers so we can check when the [`EntityMessage`]
     ///   can be executed
     ///
-    /// ([`EntityAction`]s might not be executable now, for example is an InsertComponent
+    /// ([`EntityMessage`]s might not be executable now, for example is an InsertComponent
     ///  is processed before the corresponding entity has been spawned)
-    pub fn receive_action(
+    pub fn receive_message(
         &mut self,
-        incoming_action_index: ActionIndex,
-        incoming_action: EntityAction<E>,
-        outgoing_actions: &mut Vec<EntityAction<E>>,
+        incoming_message_index: MessageIndex,
+        incoming_message: EntityMessage<E>,
+        outgoing_messages: &mut Vec<EntityMessage<E>>,
     ) {
-        match incoming_action {
-            EntityAction::SpawnEntity(_, components) => {
-                self.receive_spawn_entity_action(
-                    incoming_action_index,
+        match incoming_message {
+            EntityMessage::SpawnEntity(_, components) => {
+                self.receive_spawn_entity_message(
+                    incoming_message_index,
                     components,
-                    outgoing_actions,
+                    outgoing_messages,
                 );
             }
-            EntityAction::DespawnEntity(_) => {
-                self.receive_despawn_entity_action(incoming_action_index, outgoing_actions);
+            EntityMessage::DespawnEntity(_) => {
+                self.receive_despawn_entity_message(incoming_message_index, outgoing_messages);
             }
-            EntityAction::InsertComponent(_, component) => {
-                self.receive_insert_component_action(
-                    incoming_action_index,
+            EntityMessage::InsertComponent(_, component) => {
+                self.receive_insert_component_message(
+                    incoming_message_index,
                     component,
-                    outgoing_actions,
+                    outgoing_messages,
                 );
             }
-            EntityAction::RemoveComponent(_, component) => {
-                self.receive_remove_component_action(
-                    incoming_action_index,
+            EntityMessage::RemoveComponent(_, component) => {
+                self.receive_remove_component_message(
+                    incoming_message_index,
                     component,
-                    outgoing_actions,
+                    outgoing_messages,
                 );
             }
-            EntityAction::Noop => {}
+            EntityMessage::Noop => {}
             _ => {}
         }
     }
 
-    /// Process the entity action.
+    /// Process the entity message.
     /// When the entity is actually spawned on the client, send back an ack event
     /// to the server.
-    pub fn receive_spawn_entity_action(
+    pub fn receive_spawn_entity_message(
         &mut self,
-        action_index: ActionIndex,
+        message_index: MessageIndex,
         components: Vec<ComponentKind>,
-        outgoing_actions: &mut Vec<EntityAction<E>>,
+        outgoing_messages: &mut Vec<EntityMessage<E>>,
     ) {
         // this is the problem:
-        // the point of the receiver is to de-dup a given event, like a Spawn Action here
-        // we only only convert the NEWEST spawn packet into a SpawnAction
+        // the point of the receiver is to de-dup a given event, like a Spawn Message here
+        // we only only convert the NEWEST spawn packet into a SpawnMessage
         // so the problem we're running into is that: Two Spawn Packets are sent, 1 with components A, B, and 1 with components A, B, C
-        // action_index will be the same for both, however ...
+        // message_index will be the same for both, however ...
 
         // do not process any spawn OLDER than last received spawn index / despawn index
         if let Some(last_index) = self.last_canonical_index {
-            if sequence_less_than(action_index, last_index) {
+            if sequence_less_than(message_index, last_index) {
                 return;
             }
         }
 
         if !self.spawned {
             self.spawned = true;
-            outgoing_actions.push(EntityAction::SpawnEntity(self.entity, components));
+            outgoing_messages.push(EntityMessage::SpawnEntity(self.entity, components));
 
             // pop ALL waiting spawns, despawns, inserts, and removes OLDER than spawn_index
-            self.receive_canonical(action_index);
+            self.receive_canonical(message_index);
 
             // process any waiting despawns
             if let Some((despawn_index, _)) = self.waiting_despawns.inner.pop_front() {
-                self.receive_despawn_entity_action(despawn_index, outgoing_actions);
+                self.receive_despawn_entity_message(despawn_index, outgoing_messages);
             } else {
                 // process any waiting inserts
                 let mut inserted_components = Vec::new();
@@ -184,22 +181,22 @@ impl<E: Copy + Hash + Eq> EntityChannel<E> {
                 }
 
                 for ((index, _), component) in inserted_components {
-                    self.receive_insert_component_action(index, component, outgoing_actions);
+                    self.receive_insert_component_message(index, component, outgoing_messages);
                 }
             }
         } else {
             // buffer spawn for later
-            self.waiting_spawns.push_back(action_index, components);
+            self.waiting_spawns.push_back(message_index, components);
         }
     }
 
-    /// Process the entity despawn action
+    /// Process the entity despawn message
     /// When the entity has actually been despawned on the client, add an ack to the
-    /// `outgoing_actions`
-    pub fn receive_despawn_entity_action(
+    /// `outgoing_messages`
+    pub fn receive_despawn_entity_message(
         &mut self,
-        index: ActionIndex,
-        outgoing_actions: &mut Vec<EntityAction<E>>,
+        index: MessageIndex,
+        outgoing_messages: &mut Vec<EntityMessage<E>>,
     ) {
         // do not process any despawn OLDER than last received spawn index / despawn index
         if let Some(last_index) = self.last_canonical_index {
@@ -210,7 +207,7 @@ impl<E: Copy + Hash + Eq> EntityChannel<E> {
 
         if self.spawned {
             self.spawned = false;
-            outgoing_actions.push(EntityAction::DespawnEntity(self.entity));
+            outgoing_messages.push(EntityMessage::DespawnEntity(self.entity));
 
             // pop ALL waiting spawns, despawns, inserts, and removes OLDER than despawn_index
             self.receive_canonical(index);
@@ -222,7 +219,7 @@ impl<E: Copy + Hash + Eq> EntityChannel<E> {
 
             // process any waiting spawns
             if let Some((spawn_index, components)) = self.waiting_spawns.inner.pop_front() {
-                self.receive_spawn_entity_action(spawn_index, components, outgoing_actions);
+                self.receive_spawn_entity_message(spawn_index, components, outgoing_messages);
             }
         } else {
             // buffer despawn for later
@@ -230,11 +227,11 @@ impl<E: Copy + Hash + Eq> EntityChannel<E> {
         }
     }
 
-    pub fn receive_insert_component_action(
+    pub fn receive_insert_component_message(
         &mut self,
-        index: ActionIndex,
+        index: MessageIndex,
         component: ComponentKind,
-        outgoing_actions: &mut Vec<EntityAction<E>>,
+        outgoing_messages: &mut Vec<EntityMessage<E>>,
     ) {
         // do not process any insert OLDER than last received spawn index / despawn index
         if let Some(last_index) = self.last_canonical_index {
@@ -263,7 +260,7 @@ impl<E: Copy + Hash + Eq> EntityChannel<E> {
 
         if !component_state.inserted {
             component_state.inserted = true;
-            outgoing_actions.push(EntityAction::InsertComponent(self.entity, component));
+            outgoing_messages.push(EntityMessage::InsertComponent(self.entity, component));
 
             // pop ALL waiting inserts, and removes OLDER than insert_index (in reference to
             // component)
@@ -271,7 +268,7 @@ impl<E: Copy + Hash + Eq> EntityChannel<E> {
 
             // process any waiting removes
             if let Some((remove_index, _)) = component_state.waiting_removes.inner.pop_front() {
-                self.receive_remove_component_action(remove_index, component, outgoing_actions);
+                self.receive_remove_component_message(remove_index, component, outgoing_messages);
             }
         } else {
             // buffer insert
@@ -279,11 +276,11 @@ impl<E: Copy + Hash + Eq> EntityChannel<E> {
         }
     }
 
-    pub fn receive_remove_component_action(
+    pub fn receive_remove_component_message(
         &mut self,
-        index: ActionIndex,
+        index: MessageIndex,
         component: ComponentKind,
-        outgoing_actions: &mut Vec<EntityAction<E>>,
+        outgoing_messages: &mut Vec<EntityMessage<E>>,
     ) {
         // do not process any remove OLDER than last received spawn index / despawn index
         if let Some(last_index) = self.last_canonical_index {
@@ -307,7 +304,7 @@ impl<E: Copy + Hash + Eq> EntityChannel<E> {
 
         if component_state.inserted {
             component_state.inserted = false;
-            outgoing_actions.push(EntityAction::RemoveComponent(self.entity, component));
+            outgoing_messages.push(EntityMessage::RemoveComponent(self.entity, component));
 
             // pop ALL waiting inserts, and removes OLDER than remove_index (in reference to
             // component)
@@ -315,7 +312,7 @@ impl<E: Copy + Hash + Eq> EntityChannel<E> {
 
             // process any waiting inserts
             if let Some((insert_index, _)) = component_state.waiting_inserts.inner.pop_front() {
-                self.receive_insert_component_action(insert_index, component, outgoing_actions);
+                self.receive_insert_component_message(insert_index, component, outgoing_messages);
             }
         } else {
             // buffer remove
@@ -323,7 +320,7 @@ impl<E: Copy + Hash + Eq> EntityChannel<E> {
         }
     }
 
-    pub fn receive_canonical(&mut self, index: ActionIndex) {
+    pub fn receive_canonical(&mut self, index: MessageIndex) {
         // pop ALL waiting spawns, despawns, inserts, and removes OLDER than index
         self.waiting_spawns.pop_front_until_and_including(index);
         self.waiting_despawns.pop_front_until_and_including(index);
@@ -341,7 +338,7 @@ impl<E: Copy + Hash + Eq> EntityChannel<E> {
 // keep E here! TODO: remove
 pub struct ComponentChannel<E: Copy + Hash + Eq> {
     pub inserted: bool,
-    pub last_canonical_index: Option<ActionIndex>,
+    pub last_canonical_index: Option<MessageIndex>,
     pub waiting_inserts: OrderedIds<()>,
     pub waiting_removes: OrderedIds<()>,
 
@@ -349,7 +346,7 @@ pub struct ComponentChannel<E: Copy + Hash + Eq> {
 }
 
 impl<E: Copy + Hash + Eq> ComponentChannel<E> {
-    pub fn new(canonical_index: Option<ActionIndex>) -> Self {
+    pub fn new(canonical_index: Option<MessageIndex>) -> Self {
         Self {
             inserted: false,
             waiting_inserts: OrderedIds::new(),
@@ -360,7 +357,7 @@ impl<E: Copy + Hash + Eq> ComponentChannel<E> {
         }
     }
 
-    pub fn receive_canonical(&mut self, index: ActionIndex) {
+    pub fn receive_canonical(&mut self, index: MessageIndex) {
         // pop ALL waiting inserts, and removes OLDER than index
         self.waiting_inserts.pop_front_until_and_including(index);
         self.waiting_removes.pop_front_until_and_including(index);
@@ -371,7 +368,7 @@ impl<E: Copy + Hash + Eq> ComponentChannel<E> {
 
 pub struct OrderedIds<P> {
     // front small, back big
-    inner: VecDeque<(ActionIndex, P)>,
+    inner: VecDeque<(MessageIndex, P)>,
 }
 
 impl<P> OrderedIds<P> {
@@ -381,7 +378,7 @@ impl<P> OrderedIds<P> {
         }
     }
 
-    // pub fn push_front(&mut self, index: ActionIndex) {
+    // pub fn push_front(&mut self, index: MessageIndex) {
     //     let mut index = 0;
     //
     //     loop {
@@ -400,26 +397,26 @@ impl<P> OrderedIds<P> {
     //     }
     // }
 
-    pub fn push_back(&mut self, action_index: ActionIndex, item: P) {
+    pub fn push_back(&mut self, message_index: MessageIndex, item: P) {
         let mut current_index = self.inner.len();
 
         loop {
             if current_index == 0 {
-                self.inner.push_front((action_index, item));
+                self.inner.push_front((message_index, item));
                 return;
             }
 
             current_index -= 1;
 
             let (old_index, _) = self.inner.get(current_index).unwrap();
-            if sequence_less_than(*old_index, action_index) {
-                self.inner.insert(current_index + 1, (action_index, item));
+            if sequence_less_than(*old_index, message_index) {
+                self.inner.insert(current_index + 1, (message_index, item));
                 return;
             }
         }
     }
 
-    pub fn pop_front_until_and_including(&mut self, index: ActionIndex) {
+    pub fn pop_front_until_and_including(&mut self, index: MessageIndex) {
         let mut pop = false;
 
         if let Some((old_index, _)) = self.inner.front() {
@@ -442,92 +439,92 @@ mod tests {
 
     #[test]
     fn spawn_then_insert_emitted_in_order() {
-        let mut receiver: EntityActionReceiver<u8> = EntityActionReceiver::new();
+        let mut receiver: EntityMessageReceiver<u8> = EntityMessageReceiver::new();
 
         let entity_id: u8 = 1;
         let comp = ComponentKind::from(TypeId::of::<u32>());
 
         // spawn first
-        receiver.buffer_action(1, EntityAction::SpawnEntity(entity_id, Vec::new()));
+        receiver.buffer_message(1, EntityMessage::SpawnEntity(entity_id, Vec::new()));
         // insert next
-        receiver.buffer_action(2, EntityAction::InsertComponent(entity_id, comp));
+        receiver.buffer_message(2, EntityMessage::InsertComponent(entity_id, comp));
 
-        let actions = receiver.receive_actions();
+        let messages = receiver.receive_messages();
 
-        assert_eq!(actions.len(), 2);
-        matches!(actions[0], EntityAction::SpawnEntity(e, _) if e == entity_id);
-        matches!(actions[1], EntityAction::InsertComponent(e, k) if e == entity_id && k == comp);
+        assert_eq!(messages.len(), 2);
+        matches!(messages[0], EntityMessage::SpawnEntity(e, _) if e == entity_id);
+        matches!(messages[1], EntityMessage::InsertComponent(e, k) if e == entity_id && k == comp);
     }
 
     #[test]
     fn insert_before_spawn_reorders_correctly() {
-        let mut receiver: EntityActionReceiver<u8> = EntityActionReceiver::new();
+        let mut receiver: EntityMessageReceiver<u8> = EntityMessageReceiver::new();
 
         let entity_id: u8 = 2;
         let comp = ComponentKind::from(TypeId::of::<u64>());
 
         // buffer Insert (idx 2) before Spawn (idx 1)
-        receiver.buffer_action(2, EntityAction::InsertComponent(entity_id, comp));
+        receiver.buffer_message(2, EntityMessage::InsertComponent(entity_id, comp));
 
         // Now buffer Spawn (idx 1) after Insert already queued
-        receiver.buffer_action(1, EntityAction::SpawnEntity(entity_id, Vec::new()));
+        receiver.buffer_message(1, EntityMessage::SpawnEntity(entity_id, Vec::new()));
 
-        let actions = receiver.receive_actions();
+        let messages = receiver.receive_messages();
 
-        assert_eq!(actions.len(), 2);
-        matches!(actions[0], EntityAction::SpawnEntity(e, _) if e == entity_id);
-        matches!(actions[1], EntityAction::InsertComponent(e, k) if e == entity_id && k == comp);
+        assert_eq!(messages.len(), 2);
+        matches!(messages[0], EntityMessage::SpawnEntity(e, _) if e == entity_id);
+        matches!(messages[1], EntityMessage::InsertComponent(e, k) if e == entity_id && k == comp);
     }
 
     #[test]
     fn remove_blocked_until_insert() {
-        let mut receiver: EntityActionReceiver<u8> = EntityActionReceiver::new();
+        let mut receiver: EntityMessageReceiver<u8> = EntityMessageReceiver::new();
 
         let entity_id: u8 = 3;
         let comp = ComponentKind::from(TypeId::of::<u16>());
 
         // Spawn arrives first (idx 1)
-        receiver.buffer_action(1, EntityAction::SpawnEntity(entity_id, Vec::new()));
+        receiver.buffer_message(1, EntityMessage::SpawnEntity(entity_id, Vec::new()));
 
         // Remove arrives before Insert (idx 3)
-        receiver.buffer_action(3, EntityAction::RemoveComponent(entity_id, comp));
+        receiver.buffer_message(3, EntityMessage::RemoveComponent(entity_id, comp));
 
         // Now Insert arrives later (idx 2)
-        receiver.buffer_action(2, EntityAction::InsertComponent(entity_id, comp));
+        receiver.buffer_message(2, EntityMessage::InsertComponent(entity_id, comp));
 
-        let actions = receiver.receive_actions();
+        let messages = receiver.receive_messages();
 
-        assert_eq!(actions.len(), 3);
-        matches!(actions[0], EntityAction::SpawnEntity(e, _) if e == entity_id);
-        matches!(actions[1], EntityAction::InsertComponent(e, k) if e == entity_id && k == comp);
-        matches!(actions[2], EntityAction::RemoveComponent(e, k) if e == entity_id && k == comp);
+        assert_eq!(messages.len(), 3);
+        matches!(messages[0], EntityMessage::SpawnEntity(e, _) if e == entity_id);
+        matches!(messages[1], EntityMessage::InsertComponent(e, k) if e == entity_id && k == comp);
+        matches!(messages[2], EntityMessage::RemoveComponent(e, k) if e == entity_id && k == comp);
     }
 
     #[test]
     fn despawn_blocked_until_spawn() {
-        let mut receiver: EntityActionReceiver<u8> = EntityActionReceiver::new();
+        let mut receiver: EntityMessageReceiver<u8> = EntityMessageReceiver::new();
 
         let entity_id: u8 = 4;
 
         // Despawn arrives first (idx 2), before Spawn
-        receiver.buffer_action(2, EntityAction::DespawnEntity(entity_id));
+        receiver.buffer_message(2, EntityMessage::DespawnEntity(entity_id));
 
-        // No action should be emitted yet
-        assert!(receiver.receive_actions().is_empty());
+        // No message should be emitted yet
+        assert!(receiver.receive_messages().is_empty());
 
         // Spawn arrives later (idx 1)
-        receiver.buffer_action(1, EntityAction::SpawnEntity(entity_id, Vec::new()));
+        receiver.buffer_message(1, EntityMessage::SpawnEntity(entity_id, Vec::new()));
 
-        let actions = receiver.receive_actions();
+        let messages = receiver.receive_messages();
 
-        assert_eq!(actions.len(), 2);
-        matches!(actions[0], EntityAction::SpawnEntity(e, _) if e == entity_id);
-        matches!(actions[1], EntityAction::DespawnEntity(e) if e == entity_id);
+        assert_eq!(messages.len(), 2);
+        matches!(messages[0], EntityMessage::SpawnEntity(e, _) if e == entity_id);
+        matches!(messages[1], EntityMessage::DespawnEntity(e) if e == entity_id);
     }
 
     #[test]
     fn per_entity_independence() {
-        let mut receiver: EntityActionReceiver<u8> = EntityActionReceiver::new();
+        let mut receiver: EntityMessageReceiver<u8> = EntityMessageReceiver::new();
 
         let entity_a: u8 = 5;
         let entity_b: u8 = 6;
@@ -535,25 +532,64 @@ mod tests {
         let comp = ComponentKind::from(TypeId::of::<u32>());
 
         // 1) Insert for entity A (idx 2) arrives before its Spawn
-        receiver.buffer_action(2, EntityAction::InsertComponent(entity_a, comp));
+        receiver.buffer_message(2, EntityMessage::InsertComponent(entity_a, comp));
 
         // 2) Spawn & Insert for entity B (idx 3 & 4)
-        receiver.buffer_action(3, EntityAction::SpawnEntity(entity_b, Vec::new()));
-        receiver.buffer_action(4, EntityAction::InsertComponent(entity_b, comp));
+        receiver.buffer_message(3, EntityMessage::SpawnEntity(entity_b, Vec::new()));
+        receiver.buffer_message(4, EntityMessage::InsertComponent(entity_b, comp));
 
-        // At this point we expect only actions for entity B, none for A yet
-        let first_actions = receiver.receive_actions();
-        assert!(first_actions.len() == 2);
-        assert!(first_actions[0] == EntityAction::SpawnEntity(entity_b, Vec::new()));
-        assert!(first_actions[1] == EntityAction::InsertComponent(entity_b, comp));
+        // At this point we expect only messages for entity B, none for A yet
+        let first_messages = receiver.receive_messages();
+        assert!(first_messages.len() == 2);
+        assert!(first_messages[0] == EntityMessage::SpawnEntity(entity_b, Vec::new()));
+        assert!(first_messages[1] == EntityMessage::InsertComponent(entity_b, comp));
 
         // 3) Spawn for entity A (idx 1)
-        receiver.buffer_action(1, EntityAction::SpawnEntity(entity_a, Vec::new()));
+        receiver.buffer_message(1, EntityMessage::SpawnEntity(entity_a, Vec::new()));
 
         // We expect Spawn A & Insert A now
-        let second_actions = receiver.receive_actions();
-        assert!(second_actions.len() == 2);
-        assert!(second_actions[0] == EntityAction::SpawnEntity(entity_a, Vec::new()));
-        assert!(second_actions[1] == EntityAction::InsertComponent(entity_a, comp));
+        let second_messages = receiver.receive_messages();
+        assert!(second_messages.len() == 2);
+        assert!(second_messages[0] == EntityMessage::SpawnEntity(entity_a, Vec::new()));
+        assert!(second_messages[1] == EntityMessage::InsertComponent(entity_a, comp));
+    }
+
+    #[test]
+    fn re_spawn_allowed_after_despawn() {
+        let mut receiver: EntityMessageReceiver<u8> = EntityMessageReceiver::new();
+
+        let entity_id: u8 = 7;
+
+        receiver.buffer_message(3, EntityMessage::SpawnEntity(entity_id, Vec::new()));
+        receiver.buffer_message(2, EntityMessage::DespawnEntity(entity_id));
+        receiver.buffer_message(1, EntityMessage::SpawnEntity(entity_id, Vec::new()));
+        
+        let messages = receiver.receive_messages();
+
+        assert_eq!(messages.len(), 3);
+        matches!(messages[0], EntityMessage::SpawnEntity(e, _) if e == entity_id);
+        matches!(messages[1], EntityMessage::DespawnEntity(e) if e == entity_id);
+        matches!(messages[2], EntityMessage::SpawnEntity(e, _) if e == entity_id);
+    }
+
+    #[test]
+    fn re_insert_after_remove() {
+        let mut receiver: EntityMessageReceiver<u8> = EntityMessageReceiver::new();
+
+        let entity_id: u8 = 8;
+        let comp = ComponentKind::from(TypeId::of::<u32>());
+
+        receiver.buffer_message(4, EntityMessage::InsertComponent(entity_id, comp));
+        receiver.buffer_message(2, EntityMessage::InsertComponent(entity_id, comp));
+        receiver.buffer_message(3, EntityMessage::RemoveComponent(entity_id, comp));
+        receiver.buffer_message(1, EntityMessage::SpawnEntity(entity_id, Vec::new()));
+
+        let messages = receiver.receive_messages();
+
+        assert_eq!(messages.len(), 4);
+        matches!(messages[0], EntityMessage::SpawnEntity(e, _) if e == entity_id);
+        matches!(messages[1], EntityMessage::InsertComponent(e, k) if e == entity_id && k == comp);
+        matches!(messages[2], EntityMessage::RemoveComponent(e, k) if e == entity_id && k == comp);
+        matches!(messages[3], EntityMessage::InsertComponent(e, k) if e == entity_id && k == comp);
     }
 }
