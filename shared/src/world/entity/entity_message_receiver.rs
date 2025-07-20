@@ -1,10 +1,11 @@
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::HashMap,
     hash::Hash,
     marker::PhantomData,
 };
 
 use crate::{messages::channels::receivers::reliable_receiver::ReliableReceiver, sequence_less_than, world::component::component_kinds::ComponentKind, EntityMessage, MessageIndex};
+use crate::world::entity::ordered_ids::OrderedIds;
 
 // keep E here! TODO: remove
 pub struct EntityMessageReceiver<E: Copy + Hash + Eq> {
@@ -169,13 +170,13 @@ impl<E: Copy + Hash + Eq> EntityChannel<E> {
             self.receive_canonical(message_index);
 
             // process any waiting despawns
-            if let Some((despawn_index, _)) = self.waiting_despawns.inner.pop_front() {
+            if let Some((despawn_index, _)) = self.waiting_despawns.pop_front() {
                 self.receive_despawn_entity_message(despawn_index, outgoing_messages);
             } else {
                 // process any waiting inserts
                 let mut inserted_components = Vec::new();
                 for (component, component_state) in &mut self.components {
-                    if let Some(insert_index) = component_state.waiting_inserts.inner.pop_front() {
+                    if let Some(insert_index) = component_state.waiting_inserts.pop_front() {
                         inserted_components.push((insert_index, *component));
                     }
                 }
@@ -218,7 +219,7 @@ impl<E: Copy + Hash + Eq> EntityChannel<E> {
             }
 
             // process any waiting spawns
-            if let Some((spawn_index, components)) = self.waiting_spawns.inner.pop_front() {
+            if let Some((spawn_index, components)) = self.waiting_spawns.pop_front() {
                 self.receive_spawn_entity_message(spawn_index, components, outgoing_messages);
             }
         } else {
@@ -267,7 +268,7 @@ impl<E: Copy + Hash + Eq> EntityChannel<E> {
             component_state.receive_canonical(index);
 
             // process any waiting removes
-            if let Some((remove_index, _)) = component_state.waiting_removes.inner.pop_front() {
+            if let Some((remove_index, _)) = component_state.waiting_removes.pop_front() {
                 self.receive_remove_component_message(remove_index, component, outgoing_messages);
             }
         } else {
@@ -311,7 +312,7 @@ impl<E: Copy + Hash + Eq> EntityChannel<E> {
             component_state.receive_canonical(index);
 
             // process any waiting inserts
-            if let Some((insert_index, _)) = component_state.waiting_inserts.inner.pop_front() {
+            if let Some((insert_index, _)) = component_state.waiting_inserts.pop_front() {
                 self.receive_insert_component_message(insert_index, component, outgoing_messages);
             }
         } else {
@@ -363,71 +364,6 @@ impl<E: Copy + Hash + Eq> ComponentChannel<E> {
         self.waiting_removes.pop_front_until_and_including(index);
 
         self.last_canonical_index = Some(index);
-    }
-}
-
-pub struct OrderedIds<P> {
-    // front small, back big
-    inner: VecDeque<(MessageIndex, P)>,
-}
-
-impl<P> OrderedIds<P> {
-    pub fn new() -> Self {
-        Self {
-            inner: VecDeque::new(),
-        }
-    }
-
-    // pub fn push_front(&mut self, index: MessageIndex) {
-    //     let mut index = 0;
-    //
-    //     loop {
-    //         if index == self.inner.len() {
-    //             self.inner.push_back(index);
-    //             return;
-    //         }
-    //
-    //         let old_index = self.inner.get(index).unwrap();
-    //         if sequence_greater_than(*old_index, index) {
-    //             self.inner.insert(index, index);
-    //             return;
-    //         }
-    //
-    //         index += 1
-    //     }
-    // }
-
-    pub fn push_back(&mut self, message_index: MessageIndex, item: P) {
-        let mut current_index = self.inner.len();
-
-        loop {
-            if current_index == 0 {
-                self.inner.push_front((message_index, item));
-                return;
-            }
-
-            current_index -= 1;
-
-            let (old_index, _) = self.inner.get(current_index).unwrap();
-            if sequence_less_than(*old_index, message_index) {
-                self.inner.insert(current_index + 1, (message_index, item));
-                return;
-            }
-        }
-    }
-
-    pub fn pop_front_until_and_including(&mut self, index: MessageIndex) {
-        let mut pop = false;
-
-        if let Some((old_index, _)) = self.inner.front() {
-            if *old_index == index || sequence_less_than(*old_index, index) {
-                pop = true;
-            }
-        }
-
-        if pop {
-            self.inner.pop_front();
-        }
     }
 }
 
