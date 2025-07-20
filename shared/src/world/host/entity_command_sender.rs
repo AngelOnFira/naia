@@ -3,19 +3,14 @@ use std::{
     hash::Hash,
     net::SocketAddr,
 };
-
+use std::sync::RwLockReadGuard;
 use log::warn;
 
 use super::{
     entity_command::EntityCommand, host_world_manager::CommandId,
     user_diff_handler::UserDiffHandler,
 };
-use crate::{
-    world::{host::entity_channel::EntityChannel, local_world_manager::LocalWorldManager},
-    ChannelSender, ComponentKind, EntityMessage, EntityMessageReceiver,
-    EntityAndGlobalEntityConverter, GlobalEntity, GlobalWorldManagerType, HostEntity, Instant,
-    ReliableSender, WorldRefType,
-};
+use crate::{world::{host::entity_channel::EntityChannel, local_world_manager::LocalWorldManager}, ChannelSender, ComponentKind, EntityMessage, EntityMessageReceiver, EntityAndGlobalEntityConverter, GlobalEntity, GlobalWorldManagerType, HostEntity, Instant, ReliableSender, WorldRefType, DiffMask};
 
 const RESEND_COMMAND_RTT_FACTOR: f32 = 1.5;
 
@@ -34,7 +29,7 @@ pub struct EntityCommandSender {
     delivered_commands: EntityMessageReceiver<GlobalEntity>,
 
     address: Option<SocketAddr>,
-    pub diff_handler: UserDiffHandler,
+    diff_handler: UserDiffHandler,
 
     outgoing_release_auth_messages: Vec<GlobalEntity>,
 }
@@ -62,6 +57,22 @@ impl EntityCommandSender {
 
     pub fn host_has_entity(&self, entity: &GlobalEntity) -> bool {
         self.host_world.contains_key(entity)
+    }
+    
+    pub fn diff_handler_has_component(&self, entity: &GlobalEntity, component_kind: &ComponentKind) -> bool {
+        self.diff_handler.has_component(entity, component_kind)
+    }
+    
+    pub fn or_diff_mask(&mut self, entity: &GlobalEntity, component_kind: &ComponentKind, new_diff_mask: &DiffMask) {
+        self.diff_handler.or_diff_mask(entity, component_kind, new_diff_mask);
+    }
+    
+    pub fn get_diff_mask(&self, entity: &GlobalEntity, component_kind: &ComponentKind) -> RwLockReadGuard<DiffMask> {
+        self.diff_handler.diff_mask(entity, component_kind)
+    }
+    
+    pub fn clear_diff_mask(&mut self, entity: &GlobalEntity, component_kind: &ComponentKind) {
+        self.diff_handler.clear_diff_mask(entity, component_kind);
     }
 
     pub fn entity_channel_is_open(&self, entity: &GlobalEntity) -> bool {

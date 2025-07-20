@@ -699,8 +699,7 @@ impl HostWorldWriter {
             // get diff mask
             let diff_mask = host_manager
                 .world_channel
-                .diff_handler
-                .diff_mask(global_entity, component_kind)
+                .get_diff_mask(global_entity, component_kind)
                 .clone();
 
             let mut converter = EntityConverterMut::new(global_world_manager, local_world_manager);
@@ -759,7 +758,6 @@ impl HostWorldWriter {
             // having copied the diff mask for this update, clear the component
             host_manager
                 .world_channel
-                .diff_handler
                 .clear_diff_mask(global_entity, component_kind);
         }
 

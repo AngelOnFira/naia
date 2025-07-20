@@ -220,8 +220,7 @@ impl HostWorldManager {
                 let (entity, component) = component_index;
                 if !self
                     .world_channel
-                    .diff_handler
-                    .has_component(entity, component)
+                    .diff_handler_has_component(entity, component)
                 {
                     continue;
                 }
@@ -241,9 +240,7 @@ impl HostWorldManager {
                     }
                 }
 
-                self.world_channel
-                    .diff_handler
-                    .or_diff_mask(entity, component, &new_diff_mask);
+                self.world_channel.or_diff_mask(entity, component, &new_diff_mask);
             }
         }
     }
