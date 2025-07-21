@@ -244,4 +244,62 @@ pub struct EntityMessageReceiver<E: Copy + Hash + Eq> {
 
 ---
 
-*(End of latest revisions)*
+## 17 · Session Progress Snapshot — 2025-07-21
+
+### 17.1 Current Code State
+
+* `sync::engine` exists but is a stub – it naïvely pushes every inbound message straight to `outgoing_events`.  
+  * Lacks: half-range ordering, backlog, guard-band, generation gate, path routing, etc.
+* `sync::config` contains constants and default `EngineConfig` with `max_in_flight=32767` and `flush_threshold=65 536-max_in_flight`.
+* No `path.rs`, `stream.rs`, or `templates/` yet – only placeholders in the plan.
+* All unit tests in `sync/tests/engine.rs` **currently fail** (they compile though)
+
+### 17.2 Insights from the Tests
+
+The invariants encoded in `tests/engine.rs` map directly to the requirements:
+
+1. `engine_basic` – Happy-path causal ordering on a single entity.
+2. `engine_invalidate_spawn_event` – Despawn arriving before Spawn must drop both messages for that path.
+3. `engine_invalidate_insert_event` – Insert that precedes its Spawn must be suppressed.
+4. `*_channels_do_not_block` – Streams are isolated by `Path` (entity vs component).
+5. `wrap_ordering_simple` – Pre-wrap high seq (≥65 534) followed by post-wrap 0 must deliver in causal order.
+6. `backlog_window_cap` – Enforces `max_in_flight` circular buffer drop‐policy.
+7. `guard_band_flush` – Near-wrap purge exactly as spec §5.5.
+8. `generation_gate_reuse` – Spawn/Despawn lifetime gate prevents old epoch packets.
+9. `backlog_drains_on_prereq_arrival` – Buffered events are released when prerequisite Spawn arrives.
+10. `component_remove_before_insert` – Remove that arrives before first Insert is discarded.
+11. `empty_drain_safe` – `drain()` must be idempotent & panic-free when empty.
+
+Use these as acceptance criteria while implementing each subsystem.
+
+### 17.3 Minimal Implementation Roadmap (immediately actionable)
+
+P ≈ 1 day:
+
+1. Implement `Stream` (`stream.rs`):  
+    ```rust
+    struct Stream {
+        last_seq: u16,
+        spawn_seq: u16,
+        backlog: VecDeque<(u16, EntityMessage<RemoteEntity>)>,
+        near_wrap: bool,
+    }
+    ```
+    Provide `push()` → `Option<EntityMessage>` and `drain_backlog()`.
+2. Flesh out `Engine::push`:
+    * Compute `Path` (enum) from message – **no separate `PathKey` needed**; just `#[derive(Hash)]` on `Path` and use it as the `HashMap` key.
+    * Use helpers already available in `wrapping_number.rs` for half-range comparisons (no new `ahead/not_ahead` helpers).
+    * Route to stream, apply §5 algorithm, push delivered events to `outgoing_events`.
+3. Update `Engine::drain` to call `drain_backlog` on all streams, then `mem::take`.
+ 
+ Implement strictly enough to satisfy `tests/engine.rs`; templates are not required yet because tests deal with raw `EntityMessage`s.
+
+### 17.4 Next Steps (after tests pass)
+
+* Integrate `context` & template callbacks.  
+* Write collision test for `PathKey`.
+* Expand fuzz harness.
+
+---
+
+*(Session snapshot appended automatically – remove/replace in later PRs.)*
