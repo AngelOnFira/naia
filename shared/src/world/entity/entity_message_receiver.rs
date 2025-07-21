@@ -1,15 +1,18 @@
 use std::hash::Hash;
 
 use crate::{messages::channels::receivers::reliable_receiver::ReliableReceiver, world::component::component_kinds::ComponentKind, EntityMessage, MessageIndex};
+use crate::world::sync::Engine;
 
 pub struct EntityMessageReceiver<E: Copy + Hash + Eq> {
     receiver: ReliableReceiver<EntityMessage<E>>,
+    engine: Engine<E>,
 }
 
 impl<E: Copy + Hash + Eq> EntityMessageReceiver<E> {
     pub fn new() -> Self {
         Self {
             receiver: ReliableReceiver::new(),
+            engine: Engine::new(),
         }
     }
 
@@ -35,11 +38,10 @@ impl<E: Copy + Hash + Eq> EntityMessageReceiver<E> {
     /// Outputs the list of [`EntityMessage`] that can be executed now, buffer the rest
     /// into each entity's [`EntityChannel`]
     pub fn receive_messages(&mut self) -> Vec<EntityMessage<E>> {
-        let mut outgoing_messages = Vec::new();
         let incoming_messages = self.receiver.receive_messages();
         for (message_index, message) in incoming_messages {
-            todo!();
+            self.engine.push(message_index, message);
         }
-        outgoing_messages
+        self.engine.drain()
     }
 }
