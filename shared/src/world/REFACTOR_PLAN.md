@@ -48,17 +48,16 @@ This document is the single **source of truth** for the Naia networking refactor
 \### 3.1 Data types
 
 ```rust
-pub struct Event {
-    pub seq: u16,                     // MessageIndex on the wire
-    pub path: SmallVec<[PathSeg; 2]>, // EntityId [, ComponentKind]
-    pub kind: MsgKind,               // part of payload schema (may evolve)
-    pub payload: Bytes,               // opaque to Engine
+pub enum Path {
+    Entity(EntityId),
+    EntityComponent { entity: EntityId, component: ComponentKind },
 }
 
-#[derive(Copy,Clone,Eq,PartialEq)]
-pub enum PathSeg {
-    Entity(EntityId),
-    Comp(ComponentKind),
+pub struct Event {
+    pub seq: u16,
+    pub path: Path,
+    pub kind: MsgKind,
+    pub payload: Bytes,
 }
 ```
 
@@ -67,7 +66,7 @@ pub enum PathSeg {
 | Symbol                       | Fields                                                 | Notes                                                                                                                                 |
 | ---------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
 | **Stream**                   | `{ template_id, state, last_seq, spawn_seq, backlog }` | `backlog` is a `VecDeque<Event>` pre‑reserved to `MAX_IN_FLIGHT`. Push refuses if full (drops).                                       |
-| **Engine\<T: RootTemplate>** | `HashMap<PathKey, Stream>`                             | `PathKey` = 64‑bit hash of `(depth, EntityId, CompKind?)`; collision‑safe because authoritative servers may store full tuple instead. |
+| **Engine<T: RootTemplate>** | `HashMap<Path, Stream>`                                | `Path` is either `Entity(id)` or `EntityComponent(id,kind)`. |
 
 \### 3.3 Templates & Callbacks (stable)
 
@@ -80,10 +79,9 @@ pub enum PathSeg {
 ```rust
 pub const MAX_IN_FLIGHT: u16 = 32_767;                    // half‑range window (must stay < 32_768)
 pub const FLUSH_THRESHOLD: u16 = 65_536 - MAX_IN_FLIGHT;  // 32 769 — do NOT edit directly
-pub const MAX_DEPTH: usize = 2;                           // compile‑time lock
 ```
 
-> **Compile‑time guards** — `static_assert!(MAX_IN_FLIGHT < 32_768);`
+Remove `MAX_DEPTH`; paths are fixed to the two variants.
 
 ---
 
@@ -228,7 +226,7 @@ pub struct EntityMessageReceiver<E: Copy + Hash + Eq> {
 - Translate each `(index, msg)` produced by the receiver into a `sync::Event`:
   * `seq`  ← `MessageIndex`
   * `path` ← `[PathSeg::Entity(id)]` _(depth 0)_ **or** `[Entity, CompKind]` _(depth 1)_
-  * `kind` ← derived `MsgKind` (`Spawn`, `Despawn`, `Insert`, `Remove`, …)
+  * Event variant itself conveys the semantic (`SpawnEntity`, `InsertComponent`, etc.) – no separate kind enum.
   * `payload` ← empty `Bytes` for now – actual component diff bytes will be added later.
 - Push the event into `inner.push(event)`.
 - Each call to `receive_messages()` drains `inner.context().drain_commands()` and returns the vector, preserving current API.
