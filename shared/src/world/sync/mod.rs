@@ -7,7 +7,7 @@ pub mod config;
 pub mod engine;
 
 // Re-export the main types so callers can `use naia_shared::world::sync::*`.
-pub use config::*;
+// pub use config::*;
 pub use engine::Engine;
 
 #[cfg(test)]

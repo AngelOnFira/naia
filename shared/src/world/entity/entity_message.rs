@@ -1,7 +1,7 @@
 use crate::{EntityAuthStatus, HostEntity, RemoteEntity, world::component::component_kinds::ComponentKind};
 
 // Keep E here! TODO: remove
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub enum EntityMessage<E: Copy + Eq + PartialEq> {
     SpawnEntity(E, Vec<ComponentKind>),
     DespawnEntity(E),
