@@ -4,7 +4,4 @@
 
 #![cfg(test)]
 
-// mod seq; // redundant; logic tested elsewhere
-mod stream;
-mod engine_spawn;
-mod component;
+mod engine;
