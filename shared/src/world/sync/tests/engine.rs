@@ -30,7 +30,7 @@ impl AssertList {
 #[test]
 fn engine_basic() {
 
-    let mut engine: Engine<RemoteEntity> = Engine::new();
+    let mut engine: Engine<RemoteEntity> = Engine::default();
     
     let entity = RemoteEntity::new(1);
     let comp = ComponentKind::from(std::any::TypeId::of::<u32>());
@@ -52,7 +52,7 @@ fn engine_basic() {
 #[test]
 fn engine_invalidate_spawn_event() {
 
-    let mut engine: Engine<RemoteEntity> = Engine::new();
+    let mut engine: Engine<RemoteEntity> = Engine::default();
     
     let entity = RemoteEntity::new(1);
 
@@ -66,7 +66,7 @@ fn engine_invalidate_spawn_event() {
 #[test]
 fn engine_invalidate_insert_event() {
 
-    let mut engine: Engine<RemoteEntity> = Engine::new();
+    let mut engine: Engine<RemoteEntity> = Engine::default();
     
     let entity = RemoteEntity::new(1);
     let comp = ComponentKind::from(std::any::TypeId::of::<u32>());
@@ -84,7 +84,7 @@ fn engine_invalidate_insert_event() {
 #[test]
 fn engine_entity_channels_do_not_block() {
 
-    let mut engine: Engine<RemoteEntity> = Engine::new();
+    let mut engine: Engine<RemoteEntity> = Engine::default();
 
     let entityA = RemoteEntity::new(1);
     let entityB = RemoteEntity::new(2);
@@ -105,7 +105,7 @@ fn engine_entity_channels_do_not_block() {
 #[test]
 fn engine_component_channels_do_not_block() {
 
-    let mut engine: Engine<RemoteEntity> = Engine::new();
+    let mut engine: Engine<RemoteEntity> = Engine::default();
 
     let entity = RemoteEntity::new(1);
     let compA = ComponentKind::from(std::any::TypeId::of::<u8>());
@@ -125,4 +125,135 @@ fn engine_component_channels_do_not_block() {
     asserts.push(EntityMessage::InsertComponent(entity, compC));
 
     asserts.check(&mut engine);
+}
+
+#[test]
+fn wrap_ordering_simple() {
+    let mut engine: Engine<RemoteEntity> = Engine::default();
+
+    let entity = RemoteEntity::new(1);
+    let comp = ComponentKind::from(std::any::TypeId::of::<u8>());
+
+    // Pre-wrap packet (high seq)
+    engine.push(65_534, EntityMessage::SpawnEntity(entity, Vec::new()));
+    // Post-wrap packet (low seq)
+    engine.push(0, EntityMessage::InsertComponent(entity, comp));
+
+    let mut asserts = AssertList::new();
+    asserts.push(EntityMessage::SpawnEntity(entity, Vec::new()));
+    asserts.push(EntityMessage::InsertComponent(entity, comp));
+
+    asserts.check(&mut engine);
+}
+
+#[test]
+fn backlog_window_cap() {
+
+    let mut engine: Engine<RemoteEntity> = Engine::default();
+    // Reduced max_in_flight for testing
+    engine.config.max_in_flight = 4;
+
+    // Push 5 out-of-order packets within half-range window size 4
+    for seq in 1..=5 {
+        let entity = RemoteEntity::new(seq);
+        engine.push(seq, EntityMessage::SpawnEntity(entity, Vec::new()));
+    }
+
+    let out = engine.drain();
+    assert_eq!(out.len(), engine.config.max_in_flight as usize, "5th packet should be dropped due to window cap");
+}
+
+#[test]
+fn guard_band_flush() {
+
+    let mut engine: Engine<RemoteEntity> = Engine::default();
+    let entity = RemoteEntity::new(1);
+
+    let near_flush_seq = engine.config.flush_threshold - 2;
+    let wrap_beyond_seq = engine.config.flush_threshold + 1;
+
+    engine.push(near_flush_seq, EntityMessage::SpawnEntity(entity, Vec::new()));
+    engine.push(wrap_beyond_seq, EntityMessage::SpawnEntity(entity, Vec::new()));
+
+    // We expect only the later packet to be delivered
+    let mut asserts = AssertList::new();
+    asserts.push(EntityMessage::SpawnEntity(entity, Vec::new()));
+    asserts.check(&mut engine);
+}
+
+#[test]
+fn noop_safe() {
+    let mut engine: Engine<RemoteEntity> = Engine::default();
+
+    engine.push(10, EntityMessage::Noop);
+
+    let asserts = AssertList::new();
+    asserts.check(&mut engine);
+}
+
+#[test]
+fn generation_gate_reuse() {
+    let mut engine: Engine<RemoteEntity> = Engine::default();
+    let entity = RemoteEntity::new(1);
+
+    // First lifetime
+    engine.push(1, EntityMessage::SpawnEntity(entity, Vec::new()));
+    engine.push(2, EntityMessage::DespawnEntity(entity));
+
+    // Wrap…
+    engine.push(65_535, EntityMessage::Noop); // filler
+
+    // Second lifetime after wrap
+    engine.push(0, EntityMessage::SpawnEntity(entity, Vec::new()));
+
+    let mut asserts = AssertList::new();
+    asserts.push(EntityMessage::SpawnEntity(entity, Vec::new()));
+
+    asserts.check(&mut engine);
+}
+
+#[test]
+fn backlog_drains_on_prereq_arrival() {
+    let mut engine: Engine<RemoteEntity> = Engine::default();
+    let entity = RemoteEntity::new(1);
+    let comp = ComponentKind::from(std::any::TypeId::of::<u16>());
+
+    // Insert arrives first, should backlog
+    engine.push(5, EntityMessage::InsertComponent(entity, comp));
+    // Spawn arrives second
+    engine.push(6, EntityMessage::SpawnEntity(entity, Vec::new()));
+
+    let mut asserts = AssertList::new();
+    asserts.push(EntityMessage::SpawnEntity(entity, Vec::new()));
+    asserts.push(EntityMessage::InsertComponent(entity, comp));
+
+    asserts.check(&mut engine);
+}
+
+#[test]
+fn component_remove_before_insert() {
+    let mut engine: Engine<RemoteEntity> = Engine::default();
+    let entity = RemoteEntity::new(1);
+    let comp = ComponentKind::from(std::any::TypeId::of::<u8>());
+
+    engine.push(1, EntityMessage::SpawnEntity(entity, Vec::new()));
+    engine.push(3, EntityMessage::RemoveComponent(entity, comp));
+    engine.push(2, EntityMessage::InsertComponent(entity, comp));
+
+    let mut asserts = AssertList::new();
+    asserts.push(EntityMessage::SpawnEntity(entity, Vec::new()));
+    asserts.check(&mut engine);
+}
+
+#[test]
+fn empty_drain_safe() {
+    let mut engine: Engine<RemoteEntity> = Engine::default();
+
+    // Drain when empty
+    let out1 = engine.drain();
+    assert!(out1.is_empty());
+
+    // After guard-band purge scenario – no panic even if drain again
+    let out2 = engine.drain();
+    assert!(out2.is_empty());
 }

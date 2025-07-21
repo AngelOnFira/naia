@@ -12,7 +12,7 @@ impl<E: Copy + Hash + Eq> EntityMessageReceiver<E> {
     pub fn new() -> Self {
         Self {
             receiver: ReliableReceiver::new(),
-            engine: Engine::new(),
+            engine: Engine::default(),
         }
     }
 

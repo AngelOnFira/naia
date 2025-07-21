@@ -4,17 +4,23 @@
 use std::hash::Hash;
 
 use crate::{world::entity::entity_message::EntityMessage, MessageIndex};
+use crate::world::sync::config::EngineConfig;
 
 pub struct Engine<E: Copy + Hash + Eq> {
+    pub config: EngineConfig,
     outgoing_events: Vec<EntityMessage<E>>,
 }
 
-impl<E: Copy + Hash + Eq> Engine<E> {
-    pub fn new() -> Self {
+impl<E: Copy + Hash + Eq> Default for Engine<E> {
+    fn default() -> Self {
         Self {
+            config: EngineConfig::default(),
             outgoing_events: Vec::new(),
         }
     }
+}
+
+impl<E: Copy + Hash + Eq> Engine<E> {
 
     /// Feed a de-duplicated, unordered message into the engine.
     pub fn push(
