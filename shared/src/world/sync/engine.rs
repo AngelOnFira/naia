@@ -6,45 +6,26 @@ use std::marker::PhantomData;
 use crate::world::entity::entity_message::EntityMessage;
 use crate::world::entity::local_entity::RemoteEntity;
 
-/// Minimal placeholder for `Context` so callers can drain pending commands.
-/// For now it just stores a `Vec<Evt>` and returns an empty vec by default.
-pub struct Context {
-    pending: Vec<EntityMessage<RemoteEntity>>,
-}
-
-impl Context {
-    pub fn new() -> Self {
-        Self { pending: Vec::new() }
-    }
-
-    pub fn drain(&mut self) -> Vec<EntityMessage<RemoteEntity>> {
-        std::mem::take(&mut self.pending)
-    }
-
-    #[allow(dead_code)]
-    pub fn push(&mut self, msg: EntityMessage<RemoteEntity>) {
-        self.pending.push(msg);
-    }
-}
-
 /// Generic sync engine – heavily simplified stub.
 pub struct Engine<Tmpl> {
+    outgoing_events: Vec<EntityMessage<RemoteEntity>>,
     _phantom: PhantomData<Tmpl>,
-    // In a real implementation: HashMap<PathKey, Stream>
+    // In a real implementation: HashMap<Path, Stream>
 }
 
 impl<Tmpl> Engine<Tmpl> {
     pub fn new() -> Self {
-        Self { _phantom: PhantomData }
+        Self { outgoing_events: Vec::new(), _phantom: PhantomData }
     }
 
-    /// Feed an event into the engine – currently a no-op.
-    pub fn push(&mut self, _msg: EntityMessage<RemoteEntity>) {
-        // TODO: buffering & state machine
+    /// Feed a message into the engine.
+    pub fn push(&mut self, msg: EntityMessage<RemoteEntity>) {
+        // For now, immediately queue the message for output.
+        self.outgoing_events.push(msg);
     }
 
-    /// Access a mutable context to drain emitted commands.
-    pub fn context(&mut self) -> Context {
-        Context::new()
+    /// Drain emitted events in FIFO order.
+    pub fn drain(&mut self) -> Vec<EntityMessage<RemoteEntity>> {
+        std::mem::take(&mut self.outgoing_events)
     }
 } 

@@ -18,7 +18,9 @@ fn engine_basic() {
     engine.push(EntityMessage::SpawnEntity(entity, Vec::new()));
     engine.push(EntityMessage::InsertComponent(entity, comp));
 
-    // Drain context – stub engine emits nothing for now
-    let out = engine.context().drain();
-    assert!(out.is_empty(), "Stub engine should not output events yet");
+    // Drain context – should contain the two messages in order
+    let out = engine.drain();
+    assert_eq!(out.len(), 2);
+    assert!(matches!(out[0], EntityMessage::SpawnEntity(e, _) if e == entity));
+    assert!(matches!(out[1], EntityMessage::InsertComponent(e, k) if e == entity && k == comp));
 } 
