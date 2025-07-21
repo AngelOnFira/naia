@@ -3,40 +3,27 @@ use std::{
     collections::{HashMap, HashSet, VecDeque},
     hash::Hash,
     net::SocketAddr,
-    time::Duration,
 };
+use std::sync::RwLockReadGuard;
 
-use crate::{
-    sequence_list::SequenceList,
-    world::{
-        entity::entity_converters::GlobalWorldManagerType, local_world_manager::LocalWorldManager,
-    },
-    ComponentKind, DiffMask, EntityMessage, EntityAndGlobalEntityConverter, GlobalEntity,
-    HostEntity, Instant, MessageIndex, PacketIndex, WorldRefType,
-};
-
-use super::{entity_command::EntityCommand, entity_command_sender::EntityCommandSender};
-
-const DROP_UPDATE_RTT_FACTOR: f32 = 1.5;
-const COMMAND_RECORD_TTL: Duration = Duration::from_secs(60);
+use crate::{world::{
+    entity::entity_converters::GlobalWorldManagerType, local_world_manager::LocalWorldManager,
+}, ComponentKind, DiffMask, EntityAndGlobalEntityConverter, EntityMessage, GlobalEntity, HostEntity, Instant, MessageIndex, PacketIndex, WorldRefType};
+use crate::world::host::checked_map::{CheckedMap, CheckedSet};
+use crate::world::host::entity_update_manager::EntityUpdateManager;
+use super::{entity_command::EntityCommand, entity_command_sender::EntityCommandManager};
 
 pub type CommandId = MessageIndex;
 
 /// Manages Entities for a given Client connection and keeps them in
 /// sync on the Client
 pub struct HostWorldManager {
-    // World
-    pub world_channel: EntityCommandSender,
 
-    // Commands
-    pub sent_command_packets: SequenceList<(Instant, Vec<(CommandId, EntityMessage<GlobalEntity>)>)>,
-
-    // Updates
-    /// Map of component updates and [`DiffMask`] that were written into each packet
-    pub sent_updates:
-        HashMap<PacketIndex, (Instant, HashMap<(GlobalEntity, ComponentKind), DiffMask>)>,
-    /// Last [`PacketIndex`] where a component update was written by the server
-    pub last_update_packet_index: PacketIndex,
+    host_world: CheckedMap<GlobalEntity, CheckedSet<ComponentKind>>,
+    remote_world: CheckedMap<GlobalEntity, CheckedSet<ComponentKind>>,
+    
+    entity_command_manager: EntityCommandManager,
+    entity_update_manager: EntityUpdateManager,
 }
 
 pub struct HostWorldEvents {
@@ -56,73 +43,146 @@ impl HostWorldManager {
         address: &Option<SocketAddr>,
         global_world_manager: &dyn GlobalWorldManagerType,
     ) -> Self {
-        HostWorldManager {
-            // World
-            world_channel: EntityCommandSender::new(address, global_world_manager),
-            sent_command_packets: SequenceList::new(),
+        Self {
+            host_world: CheckedMap::new(),
+            remote_world: CheckedMap::new(),
+            entity_command_manager: EntityCommandManager::new(),
+            entity_update_manager: EntityUpdateManager::new(address, global_world_manager),
+        }
+    }
+    
+    // Host World
 
-            // Update
-            sent_updates: HashMap::new(),
-            last_update_packet_index: 0,
+    pub fn host_has_entity(&self, global_entity: &GlobalEntity) -> bool {
+        self.host_world.contains_key(global_entity)
+    }
+
+    pub fn host_component_kinds(&self, entity: &GlobalEntity) -> Vec<ComponentKind> {
+        if let Some(component_kinds) = self.host_world.get(entity) {
+            component_kinds.iter().cloned().collect()
+        } else {
+            Vec::new()
         }
     }
 
-    // World
-
     // used when Entity first comes into Connection's scope
-    pub fn init_entity(
+    pub fn host_init_entity(
         &mut self,
         world_manager: &mut LocalWorldManager,
         global_entity: &GlobalEntity,
         component_kinds: Vec<ComponentKind>,
     ) {
         // add entity
-        self.spawn_entity(world_manager, global_entity, &component_kinds);
+        self.host_spawn_entity(world_manager, global_entity, &component_kinds);
         // add components
         for component_kind in component_kinds {
-            self.insert_component(global_entity, &component_kind);
+            self.host_insert_component(global_entity, &component_kind);
         }
     }
 
-    pub fn spawn_entity(
+    pub fn host_spawn_entity(
         &mut self,
-        world_manager: &mut LocalWorldManager,
+        local_world_manager: &mut LocalWorldManager,
         global_entity: &GlobalEntity,
         component_kinds: &Vec<ComponentKind>,
     ) {
-        self.world_channel
-            .host_spawn_entity(world_manager, global_entity, component_kinds);
+        self.host_world.insert(*global_entity, CheckedSet::new());
+
+        on_entity_channel_opening(local_world_manager, global_entity);
+        
+        self.entity_command_manager.send_outgoing_command(EntityCommand::SpawnEntity(
+            *global_entity,
+            component_kinds.clone(),
+        ));
     }
 
-    pub fn despawn_entity(&mut self, global_entity: &GlobalEntity) {
-        self.world_channel.host_despawn_entity(global_entity);
+    pub fn host_despawn_entity(&mut self, global_entity: &GlobalEntity) {
+        self.host_world.remove(global_entity);
+        
+        self.entity_command_manager.send_outgoing_command(EntityCommand::DespawnEntity(*global_entity));
     }
 
-    pub fn client_initiated_despawn(&mut self, global_entity: &GlobalEntity) {
-        self.world_channel.client_initiated_despawn(global_entity);
-    }
-
-    pub fn insert_component(
+    pub fn host_insert_component(
         &mut self,
         global_entity: &GlobalEntity,
         component_kind: &ComponentKind,
     ) {
-        self.world_channel
-            .host_insert_component(global_entity, component_kind);
+        let Some(components) = self.host_world.get_mut(global_entity) else {
+            panic!("World Channel: cannot insert component into entity that doesn't exist");
+        };
+        components.insert(*component_kind);
+
+        self.entity_command_manager.send_outgoing_command(EntityCommand::InsertComponent(*global_entity, *component_kind));
     }
 
-    pub fn remove_component(
+    pub fn host_remove_component(
         &mut self,
         global_entity: &GlobalEntity,
         component_kind: &ComponentKind,
     ) {
-        self.world_channel
-            .host_remove_component(global_entity, component_kind);
-    }
+        let Some(components) = self.host_world.get_mut(global_entity) else {
+            panic!("World Channel: cannot remove component from non-existent entity");
+        };
+        components.remove(component_kind);
 
-    pub fn host_has_entity(&self, global_entity: &GlobalEntity) -> bool {
-        self.world_channel.host_has_entity(global_entity)
+        self.entity_command_manager.send_outgoing_command(EntityCommand::RemoveComponent(*global_entity, *component_kind));
     }
+    
+    // Remote World
+
+    pub fn remote_despawn_entity(&mut self, local_world_manager: &mut LocalWorldManager, global_entity: &GlobalEntity) {
+        self.host_world.remove(global_entity);
+        self.on_remote_despawn_entity(local_world_manager, global_entity);
+    }
+    
+    fn on_remote_spawn_entity(
+        &mut self,
+        global_entity: &GlobalEntity,
+        component_kinds: Vec<ComponentKind>,
+    ) {
+        let mut component_set = CheckedSet::<ComponentKind>::new();
+        for component_kind in &component_kinds {
+            component_set.insert(*component_kind);
+        }
+        self.remote_world.insert(*global_entity, component_set);
+    }
+    
+    fn on_remote_despawn_entity(
+        &mut self,
+        local_world_manager: &mut LocalWorldManager,
+        global_entity: &GlobalEntity,
+    ) {
+        self.remote_world.remove(global_entity);
+        on_remote_entity_channel_closed(local_world_manager, global_entity);
+    }
+    
+    fn on_remote_insert_component(
+        &mut self,
+        global_entity: &GlobalEntity,
+        component_kind: &ComponentKind,
+    ) {
+        let Some(components) = self.remote_world.get_mut(global_entity) else {
+            panic!("World Channel: cannot insert component into remote entity that doesn't exist");
+        };
+        components.insert(*component_kind);
+
+        self.entity_update_manager.register_component(global_entity, component_kind);
+    }
+    
+    fn on_remote_remove_component(
+        &mut self,
+        global_entity: &GlobalEntity,
+        component_kind: &ComponentKind,
+    ) {
+        let Some(components) = self.remote_world.get_mut(global_entity) else {
+            panic!("World Channel: cannot remove component from remote entity that doesn't exist");
+        };
+        components.remove(component_kind);
+
+        self.entity_update_manager.deregister_component(global_entity, component_kind);
+    }
+    
+    // Tracking Remote Entities
 
     // used when Remote Entity gains Write Authority (delegation)
     pub fn track_remote_entity(
@@ -131,12 +191,10 @@ impl HostWorldManager {
         global_entity: &GlobalEntity,
         component_kinds: Vec<ComponentKind>,
     ) -> HostEntity {
-        // add entity
-        let new_host_entity = self.world_channel.track_remote_entity(
-            local_world_manager,
-            global_entity,
-            &component_kinds,
-        );
+        self.host_world.insert(*global_entity, CheckedSet::new());
+        self.remote_world.insert(*global_entity, CheckedSet::new());
+
+        let new_host_entity = on_entity_channel_opening(local_world_manager, global_entity);
 
         // info!("--- tracking remote entity ---");
 
@@ -155,8 +213,10 @@ impl HostWorldManager {
         local_world_manager: &mut LocalWorldManager,
         global_entity: &GlobalEntity,
     ) {
-        self.world_channel
-            .untrack_remote_entity(local_world_manager, global_entity);
+        self.host_world.remove(global_entity);
+        self.remote_world.remove(global_entity);
+
+        local_world_manager.set_primary_to_remote(global_entity);
     }
 
     pub fn track_remote_component(
@@ -164,85 +224,46 @@ impl HostWorldManager {
         global_entity: &GlobalEntity,
         component_kind: &ComponentKind,
     ) {
-        self.world_channel
-            .track_remote_component(global_entity, component_kind);
+        {
+            let Some(components) = self.host_world.get_mut(global_entity) else {
+                panic!("World Channel: cannot insert component into host entity that doesn't exist");
+            };
+            components.insert(*component_kind);
+        }
+        
+        {
+            let Some(components) = self.remote_world.get_mut(global_entity) else {
+                panic!("World Channel: cannot insert component into remote entity that doesn't exist");
+            };
+            components.insert(*component_kind);
+        }
     }
 
     // Messages
 
+    pub fn insert_sent_command_packet(&mut self, packet_index: &PacketIndex, now: Instant) {
+        self.entity_command_manager.insert_sent_command_packet(packet_index, now);
+    }
+    
+    pub fn record_command_written(
+        &mut self,
+        packet_index: &PacketIndex,
+        command_id: &CommandId,
+        message: EntityMessage<GlobalEntity>,
+    ) {
+        self.entity_command_manager.record_command_written(packet_index, command_id, message);
+    }
+
     pub fn handle_dropped_packets(&mut self, now: &Instant, rtt_millis: &f32) {
-        self.handle_dropped_update_packets(now, rtt_millis);
-        self.handle_dropped_command_packets(now);
+        self.entity_update_manager.handle_dropped_update_packets(now, rtt_millis);
+        self.entity_command_manager.handle_dropped_command_packets(now);
     }
 
-    // Collecting
-
-    fn handle_dropped_command_packets(&mut self, now: &Instant) {
-        let mut pop = false;
-
-        loop {
-            if let Some((_, (time_sent, _))) = self.sent_command_packets.front() {
-                if time_sent.elapsed(now) > COMMAND_RECORD_TTL {
-                    pop = true;
-                }
-            } else {
-                return;
-            }
-            if pop {
-                self.sent_command_packets.pop_front();
-            } else {
-                return;
-            }
-        }
-    }
-
-    fn handle_dropped_update_packets(&mut self, now: &Instant, rtt_millis: &f32) {
-        let drop_duration = Duration::from_millis((DROP_UPDATE_RTT_FACTOR * rtt_millis) as u64);
-
-        {
-            let mut dropped_packets = Vec::new();
-            for (packet_index, (time_sent, _)) in &self.sent_updates {
-                let elapsed_since_send = time_sent.elapsed(now);
-                if elapsed_since_send > drop_duration {
-                    dropped_packets.push(*packet_index);
-                }
-            }
-
-            for packet_index in dropped_packets {
-                self.dropped_update_cleanup(packet_index);
-            }
-        }
-    }
-
-    fn dropped_update_cleanup(&mut self, dropped_packet_index: PacketIndex) {
-        if let Some((_, diff_mask_map)) = self.sent_updates.remove(&dropped_packet_index) {
-            for (component_index, diff_mask) in &diff_mask_map {
-                let (entity, component) = component_index;
-                if !self
-                    .world_channel
-                    .diff_handler_has_component(entity, component)
-                {
-                    continue;
-                }
-                let mut new_diff_mask = diff_mask.clone();
-
-                // walk from dropped packet up to most recently sent packet
-                if dropped_packet_index != self.last_update_packet_index {
-                    let mut packet_index = dropped_packet_index.wrapping_add(1);
-                    while packet_index != self.last_update_packet_index {
-                        if let Some((_, diff_mask_map)) = self.sent_updates.get(&packet_index) {
-                            if let Some(next_diff_mask) = diff_mask_map.get(component_index) {
-                                new_diff_mask.nand(next_diff_mask);
-                            }
-                        }
-
-                        packet_index = packet_index.wrapping_add(1);
-                    }
-                }
-
-                self.world_channel.or_diff_mask(entity, component, &new_diff_mask);
-            }
-        }
+    pub fn send_outgoing_command(
+        &mut self,
+        command: EntityCommand,
+    ) {
+        self.entity_command_manager.send_outgoing_command(command);
     }
 
     pub fn take_outgoing_events<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
@@ -254,34 +275,113 @@ impl HostWorldManager {
         rtt_millis: &f32,
     ) -> HostWorldEvents {
         HostWorldEvents {
-            next_send_commands: self.world_channel.take_next_commands(now, rtt_millis),
-            next_send_updates: self.world_channel.collect_next_updates(
+            next_send_commands: self.entity_command_manager.take_outgoing_commands(now, rtt_millis),
+            next_send_updates: self.entity_update_manager.collect_next_updates(
                 world,
                 converter,
                 global_world_manager,
+                &self.host_world,
+                &self.remote_world,
             ),
         }
     }
-}
 
-impl HostWorldManager {
     pub fn notify_packet_delivered(
         &mut self,
         packet_index: PacketIndex,
         local_world_manager: &mut LocalWorldManager,
     ) {
         // Updates
-        self.sent_updates.remove(&packet_index);
+        self.entity_update_manager.notify_packet_delivered(packet_index);
 
         // Commands
-        if let Some((_, command_list)) = self
-            .sent_command_packets
-            .remove_scan_from_front(&packet_index)
-        {
-            for (command_id, command) in command_list {
-                self.world_channel
-                    .command_delivered(local_world_manager, command_id, command);
+        self.entity_command_manager.notify_packet_delivered(packet_index);
+        self.process_delivered_commands(local_world_manager)
+    }
+
+    fn process_delivered_commands(&mut self, local_world_manager: &mut LocalWorldManager) {
+        let delivered_commands = self.entity_command_manager.take_delivered_commands();
+        for command in delivered_commands {
+            match command {
+                EntityMessage::SpawnEntity(entity, components) => {
+                    self.on_remote_spawn_entity(&entity, components);
+                }
+                EntityMessage::DespawnEntity(entity) => {
+                    self.on_remote_despawn_entity(local_world_manager, &entity);
+                }
+                EntityMessage::InsertComponent(entity, component_kind) => {
+                    self.on_remote_insert_component(&entity, &component_kind);
+                }
+                EntityMessage::RemoveComponent(entity, component) => {
+                    self.on_remote_remove_component(&entity, &component);
+                }
+                EntityMessage::Noop => {
+                    // do nothing
+                }
+                _ => {
+                    todo!();
+                }
             }
         }
     }
+
+    // Updates
+
+    pub fn get_diff_mask(
+        &self,
+        global_entity: &GlobalEntity,
+        component_kind: &ComponentKind,
+    ) -> RwLockReadGuard<DiffMask> {
+        self.entity_update_manager.get_diff_mask(global_entity, component_kind)
+    }
+
+    pub fn record_update(
+        &mut self,
+        now: &Instant,
+        packet_index: &PacketIndex,
+        global_entity: &GlobalEntity,
+        component_kind: &ComponentKind,
+        diff_mask: DiffMask
+    ) {
+        self.entity_update_manager.record_update(
+            now,
+            packet_index,
+            global_entity,
+            component_kind,
+            diff_mask,
+        );
+    }
+
+    // Auth
+
+    pub fn entity_release_authority(
+        &mut self,
+        global_entity: &GlobalEntity,
+    ) {
+        self.entity_command_manager.send_outgoing_command(EntityCommand::ReleaseAuthority(*global_entity));
+    }
+}
+
+fn on_entity_channel_opening(
+    local_world_manager: &mut LocalWorldManager,
+    global_entity: &GlobalEntity,
+) -> HostEntity {
+    if let Some(host_entity) = local_world_manager.remove_reserved_host_entity(global_entity) {
+        // info!(
+        //     "World Channel: entity channel opening with reserved host entity: {:?}",
+        //     host_entity
+        // );
+        return host_entity;
+    } else {
+        let host_entity = local_world_manager.generate_host_entity();
+        local_world_manager.insert_host_entity(*global_entity, host_entity);
+        return host_entity;
+    }
+}
+
+fn on_remote_entity_channel_closed(
+    local_world_manager: &mut LocalWorldManager,
+    global_entity: &GlobalEntity,
+) {
+    local_world_manager.remove_by_global_entity(global_entity);
 }

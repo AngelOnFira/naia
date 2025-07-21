@@ -643,7 +643,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                     connection
                         .base
                         .host_world_manager
-                        .world_channel
                         .send_outgoing_command(EntityCommand::UpdateAuthority(
                             *global_entity,
                             EntityAuthStatus::Available,
@@ -812,7 +811,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         connection
                             .base
                             .host_world_manager
-                            .world_channel
                             .send_outgoing_command(EntityCommand::UpdateAuthority(
                                 global_entity,
                                 new_status,
@@ -847,7 +845,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         connection
                             .base
                             .host_world_manager
-                            .world_channel
                             .send_outgoing_command(EntityCommand::UpdateAuthority(
                                 *global_entity,
                                 auth_status,
@@ -1194,7 +1191,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         for (_, connection) in self.user_connections.iter_mut() {
             if connection.base.host_world_manager.host_has_entity(entity) {
                 //remove entity from user connection
-                connection.base.host_world_manager.despawn_entity(entity);
+                connection.base.host_world_manager.host_despawn_entity(entity);
             }
         }
     }
@@ -1340,7 +1337,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 connection
                     .base
                     .host_world_manager
-                    .insert_component(global_entity, &component_kind);
+                    .host_insert_component(global_entity, &component_kind);
             }
         }
     }
@@ -1389,7 +1386,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 connection
                     .base
                     .host_world_manager
-                    .remove_component(global_entity, &component_kind);
+                    .host_remove_component(global_entity, &component_kind);
             }
         }
     }
@@ -1418,7 +1415,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                     connection
                         .base
                         .host_world_manager
-                        .world_channel
                         .send_outgoing_command(EntityCommand::PublishEntity(*global_entity));
                 }
             }
@@ -1455,7 +1451,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                     connection
                         .base
                         .host_world_manager
-                        .world_channel
                         .send_outgoing_command(EntityCommand::UnpublishEntity(*global_entity));
                 }
             }
@@ -1492,7 +1487,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         connection
                             .base
                             .host_world_manager
-                            .world_channel
                             .send_outgoing_command(EntityCommand::EnableDelegationEntity(*global_entity));
                     }
                 }
@@ -1593,7 +1587,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         connection
             .base
             .host_world_manager
-            .world_channel
             .send_outgoing_command(EntityCommand::EntityMigrateResponse(
                 *global_entity,
                 new_host_entity,
@@ -1641,7 +1634,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         connection
                             .base
                             .host_world_manager
-                            .world_channel
                             .send_outgoing_command(EntityCommand::DisableDelegationEntity(*global_entity));
                     }
                 }
@@ -2210,7 +2202,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         connection
                             .base
                             .host_world_manager
-                            .client_initiated_despawn(&global_entity);
+                            .remote_despawn_entity(&mut connection.base.local_world_manager, &global_entity);
 
                         self.despawn_entity_worldless(&world_entity);
                     } else {
@@ -2363,7 +2355,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                     connection
                         .base
                         .host_world_manager
-                        .despawn_entity(&removed_entity);
+                        .host_despawn_entity(&removed_entity);
                 }
             }
         }
@@ -2416,7 +2408,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                             .component_kinds(global_entity)
                             .unwrap();
                         // add entity & components to the connections local scope
-                        connection.base.host_world_manager.init_entity(
+                        connection.base.host_world_manager.host_init_entity(
                             &mut connection.base.local_world_manager,
                             global_entity,
                             component_kinds,
@@ -2429,14 +2421,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         connection
                             .base
                             .host_world_manager
-                            .world_channel
                             .send_outgoing_command(EntityCommand::EnableDelegationEntity(*global_entity));
                     } else if currently_in_scope {
                         // remove entity from the connections local scope
                         connection
                             .base
                             .host_world_manager
-                            .despawn_entity(global_entity);
+                            .host_despawn_entity(global_entity);
                     }
                 }
             }

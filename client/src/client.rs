@@ -46,8 +46,6 @@ pub struct Client<E: Copy + Eq + Hash + Send + Sync> {
     // Events
     incoming_world_events: WorldEvents<E>,
     incoming_tick_events: TickEvents,
-    // Hacky
-    queued_entity_auth_release_messages: Vec<E>,
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
@@ -85,8 +83,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             // Events
             incoming_world_events: WorldEvents::new(),
             incoming_tick_events: TickEvents::new(),
-            // Hacky
-            queued_entity_auth_release_messages: Vec::new(),
         }
     }
 
@@ -280,21 +276,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         }
 
         if let Some((prev_sending_tick, current_sending_tick)) = sending_tick_happened {
-            // collect waiting auth release messages
-            if let Some(global_entities) = connection
-                .base
-                .host_world_manager
-                .world_channel
-                .collect_auth_release_messages()
-            {
-                for global_entity in global_entities {
-                    let world_entity = self
-                        .global_entity_map
-                        .global_entity_to_entity(&global_entity)
-                        .unwrap();
-                    self.queued_entity_auth_release_messages.push(world_entity);
-                }
-            }
 
             // insert tick events in total range
             let mut index_tick = prev_sending_tick.wrapping_add(1);
@@ -312,7 +293,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     }
 
     pub fn send_all_packets<W: WorldRefType<E>>(&mut self, world: W) {
-        self.send_queued_auth_release_messages();
 
         if let Some(connection) = &mut self.server_connection {
             let now = Instant::now();
@@ -554,7 +534,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 .global_world_manager
                 .component_kinds(&global_entity)
                 .unwrap();
-            connection.base.host_world_manager.init_entity(
+            connection.base.host_world_manager.host_init_entity(
                 &mut connection.base.local_world_manager,
                 &global_entity,
                 component_kinds,
@@ -740,7 +720,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             connection
                 .base
                 .host_world_manager
-                .world_channel
                 .send_outgoing_command(EntityCommand::RequestAuthority(
                     global_entity,
                     new_host_entity.to_remote(),
@@ -765,32 +744,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             let Some(connection) = &mut self.server_connection else {
                 return;
             };
-            let send_release_message = connection
+            connection
                 .base
                 .host_world_manager
-                .world_channel
                 .entity_release_authority(&global_entity);
-            if send_release_message {
-                self.send_entity_release_auth_message(world_entity);
-            }
         }
-    }
-
-    fn send_entity_release_auth_message(&mut self, world_entity: &E) {
-        // 3. Send request to Server via EntityActionEvent system
-        let global_entity = self
-            .global_entity_map
-            .entity_to_global_entity(world_entity)
-            .unwrap();
-        
-        let Some(connection) = &mut self.server_connection else {
-            return;
-        };
-        connection
-            .base
-            .host_world_manager
-            .world_channel
-            .send_outgoing_command(EntityCommand::ReleaseAuthority(global_entity));
     }
 
     // Connection
@@ -938,7 +896,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             connection
                 .base
                 .host_world_manager
-                .despawn_entity(&global_entity);
+                .host_despawn_entity(&global_entity);
         }
 
         // Remove from ECS Record
@@ -1001,7 +959,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 connection
                     .base
                     .host_world_manager
-                    .insert_component(&global_entity, &component_kind);
+                    .host_insert_component(&global_entity, &component_kind);
             } else {
                 warn!("Attempting to insert component into a non-existent entity in the server connection. This should not happen.");
             }
@@ -1057,7 +1015,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             connection
                 .base
                 .host_world_manager
-                .remove_component(&global_entity, &component_kind);
+                .host_remove_component(&global_entity, &component_kind);
         }
 
         // cleanup all other loose ends
@@ -1078,7 +1036,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             connection
                 .base
                 .host_world_manager
-                .world_channel
                 .send_outgoing_command(EntityCommand::PublishEntity(*global_entity));
         } else {
             if self
@@ -1106,7 +1063,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             connection
                 .base
                 .host_world_manager
-                .world_channel
                 .send_outgoing_command(EntityCommand::UnpublishEntity(*global_entity));
         } else {
             if self
@@ -1140,7 +1096,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             connection
                 .base
                 .host_world_manager
-                .world_channel
                 .send_outgoing_command(EntityCommand::EnableDelegationEntity(*global_entity));
         } else {
             self.entity_complete_delegation(world, global_entity, world_entity);
@@ -1576,7 +1531,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
         self.manual_disconnect = false;
         self.global_world_manager = GlobalWorldManager::new();
-        self.queued_entity_auth_release_messages = Vec::new();
     }
 
     fn server_address_unwrapped(&self) -> SocketAddr {
@@ -1715,7 +1669,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     connection
                         .base
                         .host_world_manager
-                        .world_channel
                         .send_outgoing_command(EntityCommand::EnableDelegationEntityResponse(
                             global_entity,
                         ));
@@ -1801,16 +1754,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             .base
             .remote_world_reader
             .track_hosts_redundant_remote_entity(&remote_entity, &component_kinds);
-    }
-
-    fn send_queued_auth_release_messages(&mut self) {
-        if self.queued_entity_auth_release_messages.is_empty() {
-            return;
-        }
-        let world_entities = std::mem::take(&mut self.queued_entity_auth_release_messages);
-        for world_entity in world_entities {
-            self.send_entity_release_auth_message(&world_entity);
-        }
     }
 }
 

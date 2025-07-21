@@ -8,7 +8,6 @@ use log::warn;
 
 use crate::{
     messages::channels::senders::indexed_message_writer::IndexedMessageWriter,
-    sequence_list::SequenceList,
     world::{
         entity::entity_converters::GlobalWorldManagerType, local_world_manager::LocalWorldManager,
     },
@@ -17,18 +16,16 @@ use crate::{
     HostWorldEvents, HostWorldManager, Instant, MessageIndex, PacketIndex, Serde,
     UnsignedVariableInteger, WorldRefType,
 };
-
+use crate::world::host::host_world_manager::CommandId;
 use super::entity_command::EntityCommand;
-
-pub type ActionId = MessageIndex;
 
 pub struct HostWorldWriter;
 
 impl HostWorldWriter {
-    fn write_action_id(
+    fn write_command_id(
         writer: &mut dyn BitWrite,
-        last_id_opt: &mut Option<ActionId>,
-        current_id: &ActionId,
+        last_id_opt: &mut Option<CommandId>,
+        current_id: &CommandId,
     ) {
         IndexedMessageWriter::write_message_index(writer, last_id_opt, current_id);
         *last_id_opt = Some(*current_id);
@@ -62,8 +59,8 @@ impl HostWorldWriter {
             &mut world_events.next_send_updates,
         );
 
-        // write entity actions
-        Self::write_actions(
+        // write entity commands
+        Self::write_commands(
             component_kinds,
             now,
             writer,
@@ -78,7 +75,7 @@ impl HostWorldWriter {
         );
     }
 
-    fn write_actions<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
+    fn write_commands<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
         component_kinds: &ComponentKinds,
         now: &Instant,
         writer: &mut BitWriter,
@@ -89,22 +86,22 @@ impl HostWorldWriter {
         local_world_manager: &mut LocalWorldManager,
         has_written: &mut bool,
         host_manager: &mut HostWorldManager,
-        next_send_actions: &mut VecDeque<(ActionId, EntityCommand)>,
+        next_send_commands: &mut VecDeque<(CommandId, EntityCommand)>,
     ) {
         let mut last_counted_id: Option<MessageIndex> = None;
         let mut last_written_id: Option<MessageIndex> = None;
 
         loop {
-            if next_send_actions.is_empty() {
+            if next_send_commands.is_empty() {
                 break;
             }
 
             // check that we can write the next message
             let mut counter = writer.counter();
-            // write ActionContinue bit
+            // write CommandContinue bit
             true.ser(&mut counter);
             // write data
-            Self::write_action(
+            Self::write_command(
                 component_kinds,
                 world,
                 entity_converter,
@@ -115,17 +112,17 @@ impl HostWorldWriter {
                 &mut last_counted_id,
                 false,
                 host_manager,
-                next_send_actions,
+                next_send_commands,
             );
             if counter.overflowed() {
                 // if nothing useful has been written in this packet yet,
                 // send warning about size of component being too big
                 if !*has_written {
-                    Self::warn_overflow_action(
+                    Self::warn_overflow_command(
                         component_kinds,
                         counter.bits_needed(),
                         writer.bits_free(),
-                        next_send_actions,
+                        next_send_commands,
                     );
                 }
                 break;
@@ -134,19 +131,15 @@ impl HostWorldWriter {
             *has_written = true;
 
             // optimization
-            if !host_manager
-                .sent_command_packets
-                .contains_scan_from_back(packet_index)
-            {
-                host_manager
-                    .sent_command_packets
-                    .insert_scan_from_back(*packet_index, (now.clone(), Vec::new()));
-            }
+            host_manager.insert_sent_command_packet(
+                packet_index,
+                now.clone(),
+            );
 
-            // write ActionContinue bit
+            // write CommandContinue bit
             true.ser(writer);
             // write data
-            Self::write_action(
+            Self::write_command(
                 component_kinds,
                 world,
                 entity_converter,
@@ -157,20 +150,20 @@ impl HostWorldWriter {
                 &mut last_written_id,
                 true,
                 host_manager,
-                next_send_actions,
+                next_send_commands,
             );
 
-            // pop action we've written
-            next_send_actions.pop_front();
+            // pop command we've written
+            next_send_commands.pop_front();
         }
 
-        // Finish actions by writing false ActionContinue bit
+        // Finish commands by writing false CommandContinue bit
         writer.release_bits(1);
         false.ser(writer);
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn write_action<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
+    fn write_command<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
         component_kinds: &ComponentKinds,
         world: &W,
         entity_converter: &dyn EntityAndGlobalEntityConverter<E>,
@@ -178,17 +171,17 @@ impl HostWorldWriter {
         local_world_manager: &mut LocalWorldManager,
         packet_index: &PacketIndex,
         writer: &mut dyn BitWrite,
-        last_written_id: &mut Option<ActionId>,
+        last_written_id: &mut Option<CommandId>,
         is_writing: bool,
         host_manager: &mut HostWorldManager,
-        next_send_actions: &mut VecDeque<(ActionId, EntityCommand)>,
+        next_send_commands: &mut VecDeque<(CommandId, EntityCommand)>,
     ) {
-        let (action_id, action) = next_send_actions.front().unwrap();
+        let (command_id, command) = next_send_commands.front().unwrap();
 
-        // write message id
-        Self::write_action_id(writer, last_written_id, action_id);
+        // write command id
+        Self::write_command_id(writer, last_written_id, command_id);
 
-        match action {
+        match command {
             EntityCommand::SpawnEntity(global_entity, component_kind_list) => {
                 EntityMessageType::SpawnEntity.ser(writer);
 
@@ -204,7 +197,7 @@ impl HostWorldWriter {
                     .global_entity_to_entity(global_entity) {
                     (Some(world_entity), component_kind_list.clone())
                 } else {
-                    warn!("EntityActionEvent::SpawnEntity: {:?} not found in world!", global_entity);
+                    warn!("EntityCommand::SpawnEntity: {:?} not found in world!", global_entity);
                     (None, Vec::new())
                 };
 
@@ -228,10 +221,9 @@ impl HostWorldWriter {
 
                 // if we are writing to this packet, add it to record
                 if is_writing {
-                    Self::record_action_written(
-                        &mut host_manager.sent_command_packets,
+                    host_manager.record_command_written(
                         packet_index,
-                        action_id,
+                        command_id,
                         EntityMessage::SpawnEntity(*global_entity, component_kind_list),
                     );
                 }
@@ -248,10 +240,9 @@ impl HostWorldWriter {
 
                 // if we are writing to this packet, add it to record
                 if is_writing {
-                    Self::record_action_written(
-                        &mut host_manager.sent_command_packets,
+                    host_manager.record_command_written(
                         packet_index,
-                        action_id,
+                        command_id,
                         EntityMessage::DespawnEntity(*global_entity),
                     );
                 }
@@ -262,20 +253,16 @@ impl HostWorldWriter {
                     .global_entity_to_entity(global_entity)
                     .unwrap();
 
-                if !host_manager
-                    .world_channel
-                    .entity_channel_is_open(global_entity)
-                    || !world.has_component_of_kind(&world_entity, component_kind)
+                if !host_manager.host_has_entity(global_entity) || !world.has_component_of_kind(&world_entity, component_kind)
                 {
                     EntityMessageType::Noop.ser(writer);
 
                     // if we are actually writing this packet
                     if is_writing {
-                        // add it to action record
-                        Self::record_action_written(
-                            &mut host_manager.sent_command_packets,
+                        // add it to command record
+                        host_manager.record_command_written(
                             packet_index,
-                            action_id,
+                            command_id,
                             EntityMessage::Noop,
                         );
                     }
@@ -300,30 +287,25 @@ impl HostWorldWriter {
 
                     // if we are actually writing this packet
                     if is_writing {
-                        // add it to action record
-                        Self::record_action_written(
-                            &mut host_manager.sent_command_packets,
+                        // add it to command record
+                        host_manager.record_command_written(
                             packet_index,
-                            action_id,
+                            command_id,
                             EntityMessage::InsertComponent(*global_entity, *component_kind),
                         );
                     }
                 }
             }
             EntityCommand::RemoveComponent(global_entity, component_kind) => {
-                if !host_manager
-                    .world_channel
-                    .entity_channel_is_open(global_entity)
-                {
+                if !host_manager.host_has_entity(global_entity) {
                     EntityMessageType::Noop.ser(writer);
 
                     // if we are actually writing this packet
                     if is_writing {
-                        // add it to action record
-                        Self::record_action_written(
-                            &mut host_manager.sent_command_packets,
+                        // add it to command record
+                        host_manager.record_command_written(
                             packet_index,
-                            action_id,
+                            command_id,
                             EntityMessage::Noop,
                         );
                     }
@@ -342,16 +324,15 @@ impl HostWorldWriter {
 
                     // if we are writing to this packet, add it to record
                     if is_writing {
-                        Self::record_action_written(
-                            &mut host_manager.sent_command_packets,
+                        host_manager.record_command_written(
                             packet_index,
-                            action_id,
+                            command_id,
                             EntityMessage::RemoveComponent(*global_entity, *component_kind),
                         );
                     }
                 }
             }
-            // Former SystemChannel messages - now serialized as EntityActionEvents
+            // Former SystemChannel messages - now serialized as EntityCommandEvents
             EntityCommand::PublishEntity(global_entity) => {
                 EntityMessageType::PublishEntity.ser(writer);
 
@@ -364,10 +345,9 @@ impl HostWorldWriter {
 
                 // if we are writing to this packet, add it to record
                 if is_writing {
-                    Self::record_action_written(
-                        &mut host_manager.sent_command_packets,
+                    host_manager.record_command_written(
                         packet_index,
-                        action_id,
+                        command_id,
                         EntityMessage::PublishEntity(*global_entity),
                     );
                 }
@@ -384,10 +364,9 @@ impl HostWorldWriter {
 
                 // if we are writing to this packet, add it to record
                 if is_writing {
-                    Self::record_action_written(
-                        &mut host_manager.sent_command_packets,
+                    host_manager.record_command_written(
                         packet_index,
-                        action_id,
+                        command_id,
                         EntityMessage::UnpublishEntity(*global_entity),
                     );
                 }
@@ -404,10 +383,9 @@ impl HostWorldWriter {
 
                 // if we are writing to this packet, add it to record
                 if is_writing {
-                    Self::record_action_written(
-                        &mut host_manager.sent_command_packets,
+                    host_manager.record_command_written(
                         packet_index,
-                        action_id,
+                        command_id,
                         EntityMessage::EnableDelegationEntity(*global_entity),
                     );
                 }
@@ -424,10 +402,9 @@ impl HostWorldWriter {
 
                 // if we are writing to this packet, add it to record
                 if is_writing {
-                    Self::record_action_written(
-                        &mut host_manager.sent_command_packets,
+                    host_manager.record_command_written(
                         packet_index,
-                        action_id,
+                        command_id,
                         EntityMessage::EnableDelegationEntityResponse(*global_entity),
                     );
                 }
@@ -444,10 +421,9 @@ impl HostWorldWriter {
 
                 // if we are writing to this packet, add it to record
                 if is_writing {
-                    Self::record_action_written(
-                        &mut host_manager.sent_command_packets,
+                    host_manager.record_command_written(
                         packet_index,
-                        action_id,
+                        command_id,
                         EntityMessage::DisableDelegationEntity(*global_entity),
                     );
                 }
@@ -467,10 +443,9 @@ impl HostWorldWriter {
 
                 // if we are writing to this packet, add it to record
                 if is_writing {
-                    Self::record_action_written(
-                        &mut host_manager.sent_command_packets,
+                    host_manager.record_command_written(
                         packet_index,
-                        action_id,
+                        command_id,
                         EntityMessage::EntityRequestAuthority(*global_entity, *remote_entity),
                     );
                 }
@@ -487,10 +462,9 @@ impl HostWorldWriter {
 
                 // if we are writing to this packet, add it to record
                 if is_writing {
-                    Self::record_action_written(
-                        &mut host_manager.sent_command_packets,
+                    host_manager.record_command_written(
                         packet_index,
-                        action_id,
+                        command_id,
                         EntityMessage::EntityReleaseAuthority(*global_entity),
                     );
                 }
@@ -510,10 +484,9 @@ impl HostWorldWriter {
 
                 // if we are writing to this packet, add it to record
                 if is_writing {
-                    Self::record_action_written(
-                        &mut host_manager.sent_command_packets,
+                    host_manager.record_command_written(
                         packet_index,
-                        action_id,
+                        command_id,
                         EntityMessage::EntityUpdateAuthority(*global_entity, *auth_status),
                     );
                 }
@@ -533,10 +506,9 @@ impl HostWorldWriter {
 
                 // if we are writing to this packet, add it to record
                 if is_writing {
-                    Self::record_action_written(
-                        &mut host_manager.sent_command_packets,
+                    host_manager.record_command_written(
                         packet_index,
-                        action_id,
+                        command_id,
                         EntityMessage::EntityMigrateResponse(*global_entity, *new_host_entity_value),
                     );
                 }
@@ -544,26 +516,15 @@ impl HostWorldWriter {
         }
     }
 
-    #[allow(clippy::type_complexity)]
-    fn record_action_written(
-        sent_actions: &mut SequenceList<(Instant, Vec<(ActionId, EntityMessage<GlobalEntity>)>)>,
-        packet_index: &PacketIndex,
-        action_id: &ActionId,
-        action_record: EntityMessage<GlobalEntity>,
-    ) {
-        let (_, sent_actions_list) = sent_actions.get_mut_scan_from_back(packet_index).unwrap();
-        sent_actions_list.push((*action_id, action_record));
-    }
-
-    fn warn_overflow_action(
+    fn warn_overflow_command(
         component_kinds: &ComponentKinds,
         bits_needed: u32,
         bits_free: u32,
-        next_send_actions: &VecDeque<(ActionId, EntityCommand)>,
+        next_send_commands: &VecDeque<(CommandId, EntityCommand)>,
     ) {
-        let (_action_id, action) = next_send_actions.front().unwrap();
+        let (_command_id, command) = next_send_commands.front().unwrap();
 
-        match action {
+        match command {
             EntityCommand::SpawnEntity(_entity, component_kind_list) => {
                 let mut component_names = "".to_owned();
                 let mut added = false;
@@ -597,12 +558,12 @@ impl HostWorldWriter {
             | EntityCommand::UpdateAuthority(_, _)
             | EntityCommand::EntityMigrateResponse(_, _) => {
                 panic!(
-                    "Packet Write Error: Blocking overflow detected! Authority/delegation action requires {bits_needed} bits, but packet only has {bits_free} bits available! These messages should be small and not cause overflow."
+                    "Packet Write Error: Blocking overflow detected! Authority/delegation command requires {bits_needed} bits, but packet only has {bits_free} bits available! These messages should be small and not cause overflow."
                 )
             }
             _ => {
                 panic!(
-                    "Packet Write Error: Blocking overflow detected! Action requires {bits_needed} bits, but packet only has {bits_free} bits available! This message should never display..."
+                    "Packet Write Error: Blocking overflow detected! Command requires {bits_needed} bits, but packet only has {bits_free} bits available! This message should never display..."
                 )
             }
         }
@@ -698,7 +659,6 @@ impl HostWorldWriter {
         for component_kind in component_kind_set {
             // get diff mask
             let diff_mask = host_manager
-                .world_channel
                 .get_diff_mask(global_entity, component_kind)
                 .clone();
 
@@ -744,21 +704,14 @@ impl HostWorldWriter {
 
             written_component_kinds.push(*component_kind);
 
-            // place diff mask in a special transmission record - like map
-            host_manager.last_update_packet_index = *packet_index;
 
-            if !host_manager.sent_updates.contains_key(packet_index) {
-                host_manager
-                    .sent_updates
-                    .insert(*packet_index, (now.clone(), HashMap::new()));
-            }
-            let (_, sent_updates_map) = host_manager.sent_updates.get_mut(packet_index).unwrap();
-            sent_updates_map.insert((*global_entity, *component_kind), diff_mask);
-
-            // having copied the diff mask for this update, clear the component
-            host_manager
-                .world_channel
-                .clear_diff_mask(global_entity, component_kind);
+            host_manager.record_update(
+                now,
+                packet_index,
+                global_entity,
+                component_kind,
+                diff_mask,
+            );
         }
 
         let update_kinds = next_send_updates.get_mut(global_entity).unwrap();

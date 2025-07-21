@@ -54,7 +54,7 @@ impl Connection {
         let existing_entities = global_world_manager.entities();
         for entity in existing_entities {
             let component_kinds = global_world_manager.component_kinds(&entity).unwrap();
-            connection.base.host_world_manager.init_entity(
+            connection.base.host_world_manager.host_init_entity(
                 &mut connection.base.local_world_manager,
                 &entity,
                 component_kinds,
