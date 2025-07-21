@@ -47,26 +47,29 @@ This document is the single **source of truth** for the Naia networking refactor
 
 \### 3.1 Data types
 
+Engine operates directly on the existing wire-level
+`EntityMessage<RemoteEntity>` enum that already encodes all semantic
+variants (`SpawnEntity`, `DespawnEntity`, `InsertComponent`, …).  No
+separate `Event` or `MsgKind` types are used anymore.  The only helper
+needed is:
+
 ```rust
 pub enum Path {
-    Entity(EntityId),
-    EntityComponent { entity: EntityId, component: ComponentKind },
-}
-
-pub struct Event {
-    pub seq: u16,
-    pub path: Path,
-    pub kind: MsgKind,
-    pub payload: Bytes,
+    Entity(RemoteEntity),
+    EntityComponent(RemoteEntity, ComponentKind),
 }
 ```
+
+`Path` is an internal key; its construction happens inside the facade
+when translating an `EntityMessage` into engine bookkeeping.  The
+caller never sees it.
 
 \### 3.2 Runtime objects
 
 | Symbol                       | Fields                                                 | Notes                                                                                                                                 |
 | ---------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
-| **Stream**                   | `{ template_id, state, last_seq, spawn_seq, backlog }` | `backlog` is a `VecDeque<Event>` pre‑reserved to `MAX_IN_FLIGHT`. Push refuses if full (drops).                                       |
-| **Engine<T: RootTemplate>** | `HashMap<Path, Stream>`                                | `Path` is either `Entity(id)` or `EntityComponent(id,kind)`. |
+| **Stream**                   | `{ template_id, state, last_seq, spawn_seq, backlog }` | `backlog` is a `VecDeque<EntityMessage>` pre-reserved to `MAX_IN_FLIGHT`. Push refuses if full (drops).                                       |
+| **Engine<T: RootTemplate>** | `{ streams: HashMap<Path, Stream>, outgoing: Vec<EntityMessage> }` | `push(msg)` routes the message; delivered events are queued in `outgoing` and drained each tick. |
 
 \### 3.3 Templates & Callbacks (stable)
 
@@ -244,10 +247,10 @@ pub struct EntityMessageReceiver<E: Copy + Hash + Eq> {
 | Step | Description | Target Path | Test File | Status |
 | ---- | ----------- | ----------- | --------- | ------ |
 | **S0** | Create `sync/` module, add `config.rs` + compile-time asserts | `config.rs` | `tests/config.rs` | ☐ |
-| **S1** | Implement pure functions: `sequence_greater_than`, `ahead(a,b)`; unit test all edge cases incl. wrap | `event.rs` | `tests/seq.rs` | ☐ |
-| **S2** | Add `Event`, `PathSeg`, `PathKey`; verify hashing collision rules | `event.rs`, `path.rs` | `tests/event.rs` | ☐ |
+| **S1** | Reuse existing helpers in `shared/src/wrapping_number.rs` (`sequence_greater_than`, `sequence_less_than`, `ahead`) and add dedicated wrap-around unit tests | *already exists* | `tests/seq.rs` | ☐ |
+| **S2** | Implement `Path` key hashing & collision tests | `path.rs` | `tests/path.rs` | ☐ |
 | **S3** | Implement `Stream` data structure with backlog & guard-band logic | `stream.rs` | `tests/stream.rs` | ☐ |
-| **S4** | Implement minimal `Engine` with `Spawn`/`Despawn` + backlog drain | `engine.rs` | `tests/engine_spawn.rs` | ☐ |
+| **S4** | Implement minimal `Engine` routing + backlog drain | `engine.rs` | `tests/engine_spawn.rs` | ☐ |
 | **S5** | Port legacy `EntityMessageReceiver` tests to `sync/tests/legacy_parity.rs` running through facade | `sync/tests` | same | ☐ |
 | **S6** | Flesh out component-level template + race rules | `templates/component_template.rs` | `tests/component.rs` | ☐ |
 | **S7** | Fuzz harness exercising ≤ `MAX_IN_FLIGHT` traces | `tests/fuzz.rs` | - | ☐ |
@@ -257,14 +260,14 @@ pub struct EntityMessageReceiver<E: Copy + Hash + Eq> {
 
 ---
 
-## 16 · Additional Notes  *(NEW)*
+## 16 · Additional Notes
 
 * The new `sync` module is `#![no_std]`-compatible except for `HashMap`/`VecDeque`; gating with the existing `std` feature is acceptable.
 * Use `smallvec::SmallVec` to avoid `Vec` allocations on the hot path.
 * `PathKey` hashing uses `xxhash_rust::xxh3::xxh3_64_with_seed` with a compile-time salt to keep CPU predictable.
-* `Context` exposes only **push** operations – no getters – enforcing unidirectional data-flow.
+* Engine exposes a plain `outgoing_events: Vec<EntityMessage>`; no extra context struct.
 * Eventually `EntityCommandSender`'s window enforcement will consume `MAX_IN_FLIGHT` directly from `sync::config` to keep values DRY.
 
 ---
 
-*(End of additions)*
+*(End of latest revisions)*
