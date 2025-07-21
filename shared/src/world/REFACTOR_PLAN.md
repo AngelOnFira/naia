@@ -144,7 +144,17 @@ Edge‑cases handled: duplicate packets, burst across wrap, RTT‑delayed old‑
 | ------------ | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Compile‑time | `static_assertions`       | Transition uniqueness; enum exhaustiveness; `MAX_DEPTH==2`; `MAX_IN_FLIGHT<32_768`.                                                                                                    |
 | Unit         | `#[test]`                 | Each transition row; Spawn/Despawn race; guard‑band flush; wrap trace `65 530→65 535→0→1`.                                                                                             |
-| Fuzz / Prop  | `proptest` / `cargo‑fuzz` | Generate ≤ `MAX_IN_FLIGHT` causal traces, permute loss/dup/OOO, force wrap; replay causal order in new engine and assert `(path,state,last_seq,spawn_seq)` equality (backlog ignored). |
+| Fuzz / Prop  | `proptest` / `cargo-fuzz` | Generate ≤ `MAX_IN_FLIGHT` causal traces, permute loss/dup/OOO, force wrap; replay causal order in new engine and assert `(path,state,last_seq,spawn_seq)` equality (backlog ignored). |
+
+**TDD quick loop:**
+
+Run only the sync-module tests with minimal noise:
+
+```bash
+RUSTFLAGS="-Awarnings" cargo test -q -p naia-shared --lib world::sync::tests
+```
+
+This compiles quietly (warnings suppressed), executes just the `shared/src/world/sync/tests` suite, and prints only the pass/fail summary.
 
 ---
 
@@ -167,3 +177,96 @@ Edge‑cases handled: duplicate packets, burst across wrap, RTT‑delayed old‑
 \## 12 · Appendix A — Formal Proof Sketch for Wrap‑Correctness
 
 *missing!*
+
+---
+
+## 13 · Directory Layout & Naming Conventions  *(NEW)*
+
+All new replication types live under the `sync` sub-module to keep a clean boundary with legacy code until full cut-over.
+
+```
+shared/
+  src/
+    world/
+      sync/
+        mod.rs                  // pub use {config, event, engine, templates::*}
+        config.rs               // MAX_IN_FLIGHT, FLUSH_THRESHOLD … (+ static_assert!)
+        event.rs                // `Event`, `PathSeg`, `MsgKind`, helpers
+        path.rs                 // `PathKey` 64-bit hash util
+        stream.rs               // `Stream` struct & impl
+        engine.rs               // `Engine<T: RootTemplate>`
+        templates/
+          mod.rs
+          entity_template.rs    // depth 0 rules
+          component_template.rs // depth 1 rules
+        tests/
+          mod.rs
+          engine.rs             // invariants & state transition table
+          wrap.rs               // near-wrap & guard-band behaviour
+          fuzz.rs               // cargo-fuzz harness (optional)
+```
+
+*Unit tests live **next to the code** under `sync/tests/` so `cargo test -p shared` keeps everything co-located.*
+
+---
+
+## 14 · Thin Facade: `EntityMessageReceiver`  *(NEW)*
+
+`EntityMessageReceiver<E>` remains the public entry-point exposed to higher-level crates but internally delegates **all** ordering & FSM logic to `sync::Engine`.
+
+````rust
+pub struct EntityMessageReceiver<E: Copy + Hash + Eq> {
+    inner: sync::Engine<templates::Root>, // new hotness
+    // Legacy reliable channel stays for now
+    receiver: ReliableReceiver<EntityMessage<E>>, // unchanged
+}
+````
+
+### 14.1  Responsibilities
+
+- Use `ReliableReceiver` to collect and **de-duplicate** incoming `EntityMessage<E>` packets (enforcing strict `MessageIndex` order).
+- Translate each `(index, msg)` produced by the receiver into a `sync::Event`:
+  * `seq`  ← `MessageIndex`
+  * `path` ← `[PathSeg::Entity(id)]` _(depth 0)_ **or** `[Entity, CompKind]` _(depth 1)_
+  * `kind` ← derived `MsgKind` (`Spawn`, `Despawn`, `Insert`, `Remove`, …)
+  * `payload` ← empty `Bytes` for now – actual component diff bytes will be added later.
+- Push the event into `inner.push(event)`.
+- Each call to `receive_messages()` drains `inner.context().drain_commands()` and returns the vector, preserving current API.
+- No per-entity state is stored here any more – memory leak fixed by engine’s tombstone GC.
+
+### 14.2 Migration Strategy
+
+* Step-zero: keep the existing `EntityMessageReceiver` tests GREEN by wrapping the new engine.  The behaviour must be byte-for-byte identical to legacy rules.
+* Once confidence is gained, swap call-sites to use the richer `sync` API directly and delete the facade.
+
+---
+
+## 15 · Test-Driven Refactor Plan  *(NEW – supersedes §8 table)*
+
+| Step | Description | Target Path | Test File | Status |
+| ---- | ----------- | ----------- | --------- | ------ |
+| **S0** | Create `sync/` module, add `config.rs` + compile-time asserts | `config.rs` | `tests/config.rs` | ☐ |
+| **S1** | Implement pure functions: `sequence_greater_than`, `ahead(a,b)`; unit test all edge cases incl. wrap | `event.rs` | `tests/seq.rs` | ☐ |
+| **S2** | Add `Event`, `PathSeg`, `PathKey`; verify hashing collision rules | `event.rs`, `path.rs` | `tests/event.rs` | ☐ |
+| **S3** | Implement `Stream` data structure with backlog & guard-band logic | `stream.rs` | `tests/stream.rs` | ☐ |
+| **S4** | Implement minimal `Engine` with `Spawn`/`Despawn` + backlog drain | `engine.rs` | `tests/engine_spawn.rs` | ☐ |
+| **S5** | Port legacy `EntityMessageReceiver` tests to `sync/tests/legacy_parity.rs` running through facade | `sync/tests` | same | ☐ |
+| **S6** | Flesh out component-level template + race rules | `templates/component_template.rs` | `tests/component.rs` | ☐ |
+| **S7** | Fuzz harness exercising ≤ `MAX_IN_FLIGHT` traces | `tests/fuzz.rs` | - | ☐ |
+| **S8** | Delete dead code paths, update docs, activate CI gate | repo-wide | - | ☐ |
+
+*Check-box table will be updated during implementation PRs.*
+
+---
+
+## 16 · Additional Notes  *(NEW)*
+
+* The new `sync` module is `#![no_std]`-compatible except for `HashMap`/`VecDeque`; gating with the existing `std` feature is acceptable.
+* Use `smallvec::SmallVec` to avoid `Vec` allocations on the hot path.
+* `PathKey` hashing uses `xxhash_rust::xxh3::xxh3_64_with_seed` with a compile-time salt to keep CPU predictable.
+* `Context` exposes only **push** operations – no getters – enforcing unidirectional data-flow.
+* Eventually `EntityCommandSender`'s window enforcement will consume `MAX_IN_FLIGHT` directly from `sync::config` to keep values DRY.
+
+---
+
+*(End of additions)*
