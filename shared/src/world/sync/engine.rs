@@ -23,7 +23,7 @@ impl<E: Copy + Hash + Eq> Default for Engine<E> {
 impl<E: Copy + Hash + Eq> Engine<E> {
 
     /// Feed a de-duplicated, unordered message into the engine.
-    pub fn push(
+    pub fn accept_message(
         &mut self,
         id: MessageIndex,
         msg: EntityMessage<E>
@@ -32,7 +32,7 @@ impl<E: Copy + Hash + Eq> Engine<E> {
     }
 
     /// Drain messages from the engine in appropriate order.
-    pub fn drain(&mut self) -> Vec<EntityMessage<E>> {
+    pub fn receive_messages(&mut self) -> Vec<EntityMessage<E>> {
         std::mem::take(&mut self.outgoing_events)
     }
 } 
