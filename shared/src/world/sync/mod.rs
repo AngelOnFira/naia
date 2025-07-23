@@ -11,4 +11,7 @@ pub mod engine;
 pub use engine::Engine;
 
 #[cfg(test)]
-pub mod tests; 
+pub mod tests;
+
+mod entity_channel;
+mod component_channel;

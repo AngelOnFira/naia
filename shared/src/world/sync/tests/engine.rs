@@ -27,13 +27,19 @@ impl AssertList {
     }
 }
 
+struct ComponentType<const T: u8>;
+
+fn component_kind<const T: u8>() -> ComponentKind {
+    ComponentKind::from(std::any::TypeId::of::<ComponentType<T>>())
+}
+
 #[test]
 fn engine_basic() {
 
     let mut engine: Engine<RemoteEntity> = Engine::default();
     
     let entity = RemoteEntity::new(1);
-    let comp = ComponentKind::from(std::any::TypeId::of::<u32>());
+    let comp = component_kind::<1>();
 
     engine.accept_message(1, EntityMessage::SpawnEntity(entity, Vec::new()));
     engine.accept_message(2, EntityMessage::InsertComponent(entity, comp));
@@ -50,45 +56,13 @@ fn engine_basic() {
 }
 
 #[test]
-fn engine_invalidate_spawn_event() {
-
-    let mut engine: Engine<RemoteEntity> = Engine::default();
-    
-    let entity = RemoteEntity::new(1);
-
-    engine.accept_message(2, EntityMessage::DespawnEntity(entity));
-    engine.accept_message(1, EntityMessage::SpawnEntity(entity, Vec::new()));
-
-    let asserts = AssertList::new();
-    asserts.check(&mut engine);
-} 
-
-#[test]
-fn engine_invalidate_insert_event() {
-
-    let mut engine: Engine<RemoteEntity> = Engine::default();
-    
-    let entity = RemoteEntity::new(1);
-    let comp = ComponentKind::from(std::any::TypeId::of::<u32>());
-
-    engine.accept_message(1, EntityMessage::SpawnEntity(entity, Vec::new()));
-    engine.accept_message(3, EntityMessage::RemoveComponent(entity, comp));
-    engine.accept_message(2, EntityMessage::InsertComponent(entity, comp));
-
-    let mut asserts = AssertList::new();
-    asserts.push(EntityMessage::SpawnEntity(entity, Vec::new()));
-
-    asserts.check(&mut engine);
-}
-
-#[test]
 fn engine_entity_channels_do_not_block() {
 
     let mut engine: Engine<RemoteEntity> = Engine::default();
 
     let entityA = RemoteEntity::new(1);
     let entityB = RemoteEntity::new(2);
-    let entityC = RemoteEntity::new(2);
+    let entityC = RemoteEntity::new(3);
 
     engine.accept_message(3, EntityMessage::SpawnEntity(entityA, Vec::new()));
     engine.accept_message(2, EntityMessage::SpawnEntity(entityB, Vec::new()));
@@ -108,9 +82,9 @@ fn engine_component_channels_do_not_block() {
     let mut engine: Engine<RemoteEntity> = Engine::default();
 
     let entity = RemoteEntity::new(1);
-    let compA = ComponentKind::from(std::any::TypeId::of::<u8>());
-    let compB = ComponentKind::from(std::any::TypeId::of::<u8>());
-    let compC = ComponentKind::from(std::any::TypeId::of::<u8>());
+    let compA = component_kind::<1>();
+    let compB = component_kind::<2>();
+    let compC = component_kind::<3>();
 
     engine.accept_message(1, EntityMessage::SpawnEntity(entity, Vec::new()));
     engine.accept_message(4, EntityMessage::InsertComponent(entity, compA));
@@ -132,7 +106,7 @@ fn wrap_ordering_simple() {
     let mut engine: Engine<RemoteEntity> = Engine::default();
 
     let entity = RemoteEntity::new(1);
-    let comp = ComponentKind::from(std::any::TypeId::of::<u8>());
+    let comp = component_kind::<1>();
 
     // Pre-wrap packet (high seq)
     engine.accept_message(65_534, EntityMessage::SpawnEntity(entity, Vec::new()));
@@ -216,7 +190,7 @@ fn generation_gate_reuse() {
 fn backlog_drains_on_prereq_arrival() {
     let mut engine: Engine<RemoteEntity> = Engine::default();
     let entity = RemoteEntity::new(1);
-    let comp = ComponentKind::from(std::any::TypeId::of::<u16>());
+    let comp = component_kind::<1>();
 
     // Insert arrives first, should backlog
     engine.accept_message(5, EntityMessage::InsertComponent(entity, comp));
@@ -231,10 +205,30 @@ fn backlog_drains_on_prereq_arrival() {
 }
 
 #[test]
+fn entity_despawn_before_spawn() {
+    let mut engine: Engine<RemoteEntity> = Engine::default();
+
+    let entity = RemoteEntity::new(1);
+    let comp = component_kind::<1>();
+
+    // Despawn before spawn
+    engine.accept_message(3, EntityMessage::DespawnEntity(entity));
+    engine.accept_message(2, EntityMessage::InsertComponent(entity, comp));
+    engine.accept_message(1, EntityMessage::SpawnEntity(entity, Vec::new()));
+
+    let mut asserts = AssertList::new();
+    asserts.push(EntityMessage::SpawnEntity(entity, Vec::new()));
+    asserts.push(EntityMessage::InsertComponent(entity, comp));
+    asserts.push(EntityMessage::DespawnEntity(entity));
+    asserts.check(&mut engine);
+}
+
+#[test]
 fn component_remove_before_insert() {
     let mut engine: Engine<RemoteEntity> = Engine::default();
+
     let entity = RemoteEntity::new(1);
-    let comp = ComponentKind::from(std::any::TypeId::of::<u8>());
+    let comp = component_kind::<1>();
 
     engine.accept_message(1, EntityMessage::SpawnEntity(entity, Vec::new()));
     engine.accept_message(3, EntityMessage::RemoveComponent(entity, comp));
@@ -242,6 +236,8 @@ fn component_remove_before_insert() {
 
     let mut asserts = AssertList::new();
     asserts.push(EntityMessage::SpawnEntity(entity, Vec::new()));
+    asserts.push(EntityMessage::InsertComponent(entity, comp));
+    asserts.push(EntityMessage::RemoveComponent(entity, comp));
     asserts.check(&mut engine);
 }
 

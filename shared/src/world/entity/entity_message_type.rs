@@ -1,8 +1,10 @@
 use naia_serde::SerdeInternal;
 
+use crate::{ComponentKind, EntityMessage};
+
 // Enum used as a shared network protocol, representing various message types
 // related to Entities/Components
-#[derive(Copy, PartialEq, Clone, SerdeInternal)]
+#[derive(Copy, PartialEq, Clone, SerdeInternal, Debug)]
 pub enum EntityMessageType {
     // Action indicating an Entity to be created
     SpawnEntity,
@@ -33,4 +35,14 @@ pub enum EntityMessageType {
     EntityMigrateResponse,
     // Action indicating a non-operation
     Noop,
+}
+
+impl EntityMessageType {
+    pub fn with_component_kind(&self, component_kind: &ComponentKind) -> EntityMessage<()> {
+        match self {
+            Self::InsertComponent => EntityMessage::InsertComponent((), *component_kind),
+            Self::RemoveComponent => EntityMessage::RemoveComponent((), *component_kind),
+            t => panic!("Cannot apply component kind to message type: {:?}", t),
+        }
+    }
 }

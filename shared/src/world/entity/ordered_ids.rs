@@ -51,6 +51,10 @@ impl<P> OrderedIds<P> {
             }
         }
     }
+    
+    pub fn peek_front(&self) -> Option<&(MessageIndex, P)> {
+        self.inner.front()
+    }
 
     pub fn pop_front(&mut self) -> Option<(MessageIndex, P)> {
         self.inner.pop_front()
