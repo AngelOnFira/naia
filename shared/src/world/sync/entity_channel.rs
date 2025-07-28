@@ -53,11 +53,7 @@ impl EntityChannel {
 
                     // Drain the component channel and append the messages to the outgoing events
                     for (component_kind, component_channel) in self.component_channels.iter_mut() {
-                        let mut received_messages = Vec::new();
-                        for msg_type in component_channel.receive_messages() {
-                            received_messages.push(msg_type.with_component_kind(component_kind));
-                        }
-                        self.outgoing_messages.append(&mut received_messages);
+                        Self::drain_component_messages(component_kind, component_channel, &mut self.outgoing_messages);
                     }
             },
             EntityMessageType::DespawnEntity => {
@@ -85,12 +81,7 @@ impl EntityChannel {
                         continue;
                     }
 
-                    // Drain the component channel and append the messages to the outgoing events
-                    let mut received_messages = Vec::new();
-                    for msg_type in component_channel.receive_messages() {
-                        received_messages.push(msg_type.with_component_kind(&component_kind));
-                    }
-                    self.outgoing_messages.append(&mut received_messages);
+                    Self::drain_component_messages(&component_kind, component_channel, &mut self.outgoing_messages);
                 }
                 EntityMessageType::RemoveComponent => {
 
@@ -107,17 +98,21 @@ impl EntityChannel {
                         continue;
                     }
 
-                    // Drain the component channel and append the messages to the outgoing events
-                    let mut received_messages = Vec::new();
-                    for msg_type in component_channel.receive_messages() {
-                        received_messages.push(msg_type.with_component_kind(&component_kind));
-                    }
-                    self.outgoing_messages.append(&mut received_messages);
+                    Self::drain_component_messages(&component_kind, component_channel, &mut self.outgoing_messages);
                 }
                 _ => {
                     todo!();
                 }
             }
         }
+    }
+
+    fn drain_component_messages(component_kind: &ComponentKind, component_channel: &mut ComponentChannel, outgoing_messages: &mut Vec<EntityMessage<()>>) {
+        // Drain the component channel and append the messages to the outgoing events
+        let mut received_messages = Vec::new();
+        for msg_type in component_channel.receive_messages() {
+            received_messages.push(msg_type.with_component_kind(&component_kind));
+        }
+        outgoing_messages.append(&mut received_messages);
     }
 }
