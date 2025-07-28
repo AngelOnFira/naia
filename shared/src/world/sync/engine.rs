@@ -1,12 +1,6 @@
-//! Stub implementation of the replication `Engine` as outlined in REFACTOR_PLAN.
-#![allow(dead_code)]
+use std::{hash::Hash, collections::HashMap};
 
-use std::collections::HashMap;
-use std::hash::Hash;
-
-use crate::{world::entity::entity_message::EntityMessage, ComponentKind, MessageIndex};
-use crate::world::sync::config::EngineConfig;
-use crate::world::sync::entity_channel::EntityChannel;
+use crate::{world::{sync::{entity_channel::EntityChannel, config::EngineConfig}, entity::entity_message::EntityMessage}, MessageIndex};
 
 pub struct Engine<E: Copy + Hash + Eq> {
     pub config: EngineConfig,
@@ -42,13 +36,8 @@ impl<E: Copy + Hash + Eq> Engine<E> {
             .or_insert_with(EntityChannel::new);
         
         entity_channel.accept_message(id, msg.strip_entity());
-        
-        // Drain the entity channel and append the messages to the outgoing events
-        let mut received_messages = Vec::new();
-        for rmsg in entity_channel.receive_messages() {
-            received_messages.push(rmsg.with_entity(entity));
-        }
-        self.outgoing_events.append(&mut received_messages);
+
+        entity_channel.drain_messages_into(entity, &mut self.outgoing_events);
     }
 
     /// Drain messages from the engine in appropriate order.

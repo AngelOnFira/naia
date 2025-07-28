@@ -1,19 +1,31 @@
-use crate::{EntityMessage, EntityMessageType, MessageIndex};
-use crate::world::entity::ordered_ids::OrderedIds;
+use crate::{world::entity::ordered_ids::OrderedIds, ComponentKind, EntityMessage, EntityMessageType, MessageIndex};
 
-pub struct ComponentChannel {
+pub(crate) struct ComponentChannel {
     outgoing_messages: Vec<EntityMessageType>,
     inserted: bool,
     buffered_messages: OrderedIds<bool>,
 }
 
 impl ComponentChannel {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             outgoing_messages: Vec::new(),
             inserted: false,
             buffered_messages: OrderedIds::new(),
         }
+    }
+
+    pub(crate) fn drain_messages_into(
+        &mut self,
+        component_kind: &ComponentKind,
+        outgoing_messages: &mut Vec<EntityMessage<()>>,
+    ) {
+        // Drain the component channel and append the messages to the outgoing events
+        let mut received_messages = Vec::new();
+        for msg_type in std::mem::take(&mut self.outgoing_messages) {
+            received_messages.push(msg_type.with_component_kind(&component_kind));
+        }
+        outgoing_messages.append(&mut received_messages);
     }
 
     pub(crate) fn accept_message(&mut self, id: MessageIndex, msg: EntityMessage<()>) {
@@ -60,9 +72,5 @@ impl ComponentChannel {
                 panic!("should pop if we reach here");
             }
         }
-    }
-    
-    pub fn receive_messages(&mut self) -> Vec<EntityMessageType> {
-        std::mem::take(&mut self.outgoing_messages)
     }
 }

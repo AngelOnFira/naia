@@ -1,8 +1,8 @@
-use std::collections::HashMap;
+use std::{hash::Hash, collections::HashMap};
 
 use crate::{world::{sync::component_channel::ComponentChannel, entity::ordered_ids::OrderedIds}, ComponentKind, EntityMessage, EntityMessageType, MessageIndex};
 
-pub struct EntityChannel {
+pub(crate) struct EntityChannel {
     component_channels: HashMap<ComponentKind, ComponentChannel>,
     outgoing_messages: Vec<EntityMessage<()>>,
     spawned: bool,
@@ -10,7 +10,7 @@ pub struct EntityChannel {
 }
 
 impl EntityChannel {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             component_channels: HashMap::new(),
             outgoing_messages: Vec::new(),
@@ -19,7 +19,7 @@ impl EntityChannel {
         }
     }
 
-    pub fn accept_message(
+    pub(crate) fn accept_message(
         &mut self,
         id: MessageIndex,
         msg: EntityMessage<()>,
@@ -28,9 +28,14 @@ impl EntityChannel {
 
         self.process_messages();
     }
-
-    pub fn receive_messages(&mut self) -> Vec<EntityMessage<()>> {
-        std::mem::take(&mut self.outgoing_messages)
+    
+    pub(crate) fn drain_messages_into<E: Copy + Hash + Eq>(&mut self, entity: E, outgoing_events: &mut Vec<EntityMessage<E>>) {
+        // Drain the entity channel and append the messages to the outgoing events
+        let mut received_messages = Vec::new();
+        for rmsg in std::mem::take(&mut self.outgoing_messages) {
+            received_messages.push(rmsg.with_entity(entity));
+        }
+        outgoing_events.append(&mut received_messages);
     }
 
     fn process_messages(&mut self) {
@@ -51,7 +56,7 @@ impl EntityChannel {
 
                     // Drain the component channel and append the messages to the outgoing events
                     for (component_kind, component_channel) in self.component_channels.iter_mut() {
-                        drain_component_messages(&mut self.outgoing_messages, component_kind, component_channel);
+                        component_channel.drain_messages_into(component_kind, &mut self.outgoing_messages);
                     }
             },
             EntityMessageType::DespawnEntity => {
@@ -79,7 +84,7 @@ impl EntityChannel {
                         continue;
                     }
 
-                    drain_component_messages(&mut self.outgoing_messages, &component_kind, component_channel);
+                    component_channel.drain_messages_into(&component_kind, &mut self.outgoing_messages);
                 }
                 EntityMessageType::RemoveComponent => {
 
@@ -96,7 +101,7 @@ impl EntityChannel {
                         continue;
                     }
 
-                    drain_component_messages(&mut self.outgoing_messages, &component_kind, component_channel);
+                    component_channel.drain_messages_into(&component_kind, &mut self.outgoing_messages);
                 }
                 _ => {
                     todo!();
@@ -104,17 +109,4 @@ impl EntityChannel {
             }
         }
     }
-}
-
-fn drain_component_messages(
-    outgoing_messages: &mut Vec<EntityMessage<()>>,
-    component_kind: &ComponentKind,
-    component_channel: &mut ComponentChannel,
-) {
-    // Drain the component channel and append the messages to the outgoing events
-    let mut received_messages = Vec::new();
-    for msg_type in component_channel.receive_messages() {
-        received_messages.push(msg_type.with_component_kind(&component_kind));
-    }
-    outgoing_messages.append(&mut received_messages);
 }
