@@ -1,5 +1,6 @@
 #![cfg(test)]
 
+use crate::EntityAuthStatus;
 use crate::world::{sync::Engine, component::component_kinds::ComponentKind, entity::{entity_message::EntityMessage, local_entity::RemoteEntity}};
 
 struct AssertList {
@@ -252,4 +253,57 @@ fn empty_drain_safe() {
     // After guard-band purge scenario – no panic even if drain again
     let out2 = engine.receive_messages();
     assert!(out2.is_empty());
+}
+
+#[test]
+fn entity_auth_basic() {
+    let mut engine: Engine<RemoteEntity> = Engine::default();
+
+    let entity = RemoteEntity::new(1);
+
+    engine.accept_message(1, EntityMessage::SpawnEntity(entity, Vec::new()));
+    engine.accept_message(2, EntityMessage::PublishEntity(entity));
+    engine.accept_message(3, EntityMessage::EnableDelegationEntity(entity));
+    engine.accept_message(4, EntityMessage::EntityUpdateAuthority(entity, EntityAuthStatus::Granted));
+    engine.accept_message(5, EntityMessage::EntityUpdateAuthority(entity, EntityAuthStatus::Available));
+    engine.accept_message(6, EntityMessage::DisableDelegationEntity(entity));
+    engine.accept_message(7, EntityMessage::UnpublishEntity(entity));
+    engine.accept_message(8, EntityMessage::DespawnEntity(entity));
+
+    let mut asserts = AssertList::new();
+    asserts.push(EntityMessage::SpawnEntity(entity, Vec::new()));
+    asserts.push(EntityMessage::PublishEntity(entity));
+    asserts.push(EntityMessage::EnableDelegationEntity(entity));
+    asserts.push(EntityMessage::EntityUpdateAuthority(entity, EntityAuthStatus::Granted));
+    asserts.push(EntityMessage::EntityUpdateAuthority(entity, EntityAuthStatus::Available));
+    asserts.push(EntityMessage::DisableDelegationEntity(entity));
+    asserts.push(EntityMessage::UnpublishEntity(entity));
+    asserts.push(EntityMessage::DespawnEntity(entity));
+    asserts.check(&mut engine);
+}
+
+#[test]
+fn entity_auth_scrambled() {
+    let mut engine: Engine<RemoteEntity> = Engine::default();
+
+    let entity = RemoteEntity::new(1);
+
+    engine.accept_message(8, EntityMessage::DespawnEntity(entity));
+    engine.accept_message(6, EntityMessage::DisableDelegationEntity(entity));
+    engine.accept_message(4, EntityMessage::EntityUpdateAuthority(entity, EntityAuthStatus::Granted));
+    engine.accept_message(2, EntityMessage::PublishEntity(entity));
+    engine.accept_message(1, EntityMessage::SpawnEntity(entity, Vec::new()));
+    engine.accept_message(3, EntityMessage::EnableDelegationEntity(entity));
+    engine.accept_message(5, EntityMessage::EntityUpdateAuthority(entity, EntityAuthStatus::Available)); // this will never be received
+    engine.accept_message(7, EntityMessage::UnpublishEntity(entity));
+
+    let mut asserts = AssertList::new();
+    asserts.push(EntityMessage::SpawnEntity(entity, Vec::new()));
+    asserts.push(EntityMessage::PublishEntity(entity));
+    asserts.push(EntityMessage::EnableDelegationEntity(entity));
+    asserts.push(EntityMessage::EntityUpdateAuthority(entity, EntityAuthStatus::Granted));
+    asserts.push(EntityMessage::DisableDelegationEntity(entity));
+    asserts.push(EntityMessage::UnpublishEntity(entity));
+    asserts.push(EntityMessage::DespawnEntity(entity));
+    asserts.check(&mut engine);
 }

@@ -15,3 +15,4 @@ pub mod tests;
 
 mod entity_channel;
 mod component_channel;
+mod auth_channel;

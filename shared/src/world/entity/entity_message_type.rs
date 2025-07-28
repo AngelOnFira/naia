@@ -38,6 +38,7 @@ pub enum EntityMessageType {
 }
 
 impl EntityMessageType {
+    
     pub fn with_component_kind(&self, component_kind: &ComponentKind) -> EntityMessage<()> {
         match self {
             Self::InsertComponent => EntityMessage::InsertComponent((), *component_kind),
