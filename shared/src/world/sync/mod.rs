@@ -40,8 +40,9 @@
 //! * **Per‑entity causal ordering** for spawns, despawns, and component
 //!   inserts/removes—achieved via wrap‑around‑safe sequence comparisons
 //!   and channel‑local buffering.
-//! * **Configurable guard‑band** (`EngineConfig::flush_threshold`) prevents
-//!   sequence‑number wrap chaos by forcing a flush before overlap.
+//! * **Configurable guard‑band** (`EngineConfig::flush_threshold`) obliges the
+//!   *sender* to flush before ID reuse; the *receiver* needs **no special logic**
+//!   at the wrap because all comparisons are already wrap‑safe.
 //!
 //! ## Reading map
 //! | Module | Role |

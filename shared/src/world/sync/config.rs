@@ -20,8 +20,10 @@ pub struct EngineConfig {
     pub max_in_flight: u16,
     /// *Guard‑band distance from the sequence‑number wrap point (65 536).*
     /// When the **oldest living packet ID ≥ flush_threshold**, the sender forces a
-    /// flush of pending data before issuing IDs that would overlap with still‑
-    /// un‑ACKed ones, guaranteeing the *“unique ID per flight epoch”* invariant.
+    /// flush of pending data **on the sender** before it reuses IDs that might
+    /// still be referenced by the receiver, guaranteeing the *“unique ID across
+    /// the sliding window”* invariant.  The receiver treats wrap‑around as an
+    /// ordinary comparison; no state reset occurs.
     pub flush_threshold: u16,
 }
 

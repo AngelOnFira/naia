@@ -37,10 +37,11 @@
 //!
 //! ---
 //! ### 3 · Message ingest algorithm
-//! 1. **Gating by `last_spawn_id`**  
-//!    A message whose `id ≤ last_spawn_id` is *by definition* older than the
+//! 1. **Gating by `last_epoch_id `**
+//!    A message whose `id ≤ last_epoch_id ` is *by definition* older than the
 //!    authoritative `SpawnEntity`; drop it to guarantee *at‑most‑once
-//!    semantics* during wrap‑around.
+//!    semantics*; wrap‑around itself is handled automatically by the
+//!    wrap‑safe `u16` comparison helpers—no epoch reset is performed.
 //! 2. **Buffered queue (`OrderedIds`)**  
 //!    Messages are pushed into `buffered_messages`, ordered by the `u16`
 //!    sequence with wrap‑safe comparison.  
@@ -99,7 +100,7 @@ pub(crate) struct EntityChannel {
     state: EntityChannelState,
     auth_channel: AuthChannel,
     buffered_messages: OrderedIds<EntityMessage<()>>,
-    last_spawn_id: Option<MessageIndex>,
+    last_epoch_id: Option<MessageIndex>,
 }
 
 impl EntityChannel {
@@ -110,7 +111,7 @@ impl EntityChannel {
             state: EntityChannelState::Despawned,
             auth_channel: AuthChannel::new(),
             buffered_messages: OrderedIds::new(),
-            last_spawn_id: None,
+            last_epoch_id: None,
         }
     }
 
@@ -119,8 +120,8 @@ impl EntityChannel {
         id: MessageIndex,
         msg: EntityMessage<()>,
     ) {
-        if let Some(last_spawn_id) = self.last_spawn_id {
-            if sequence_equal_or_less_than(id, last_spawn_id) {
+        if let Some(last_epoch_id) = self.last_epoch_id {
+            if sequence_equal_or_less_than(id, last_epoch_id) {
                 // This message is older than the last spawn message, ignore it
                 return;
             }
@@ -145,16 +146,16 @@ impl EntityChannel {
             let Some((id, msg)) = self.buffered_messages.peek_front() else {
                 break;
             };
+            let id = *id;
+
             match msg.get_type() {
                 EntityMessageType::SpawnEntity => {
                     if self.state != EntityChannelState::Despawned {
                         break;
                     }
 
-                    let id = *id;
-
                     self.state = EntityChannelState::Spawned;
-                    self.last_spawn_id = Some(id);
+                    self.last_epoch_id = Some(id);
                     // clear buffered messages less than or equal to the last spawn id
                     self.buffered_messages.pop_front_until_and_excluding(id);
 
@@ -176,7 +177,7 @@ impl EntityChannel {
                     }
 
                     self.state = EntityChannelState::Despawned;
-                    self.last_spawn_id = None;
+                    self.last_epoch_id = Some(id);
 
                     self.auth_channel.reset();
                     self.component_channels.clear();

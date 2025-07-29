@@ -37,8 +37,8 @@ use crate::{sequence_equal_or_less_than, world::entity::ordered_ids::OrderedIds,
 pub(crate) struct ComponentChannel {
     /// Current authoritative presence flag
     inserted: bool,
-    /// The *newest* message that set `inserted = true`; guards against replay / re‑order.
-    last_insert_id: Option<MessageIndex>,
+    /// The *newest* message that was valid; guards against replay / re‑order.
+    last_epoch_id: Option<MessageIndex>,
     /// Small ring of *pending* insert (`true`) / remove (`false`) flags keyed by their sequence IDs.
     buffered_messages: OrderedIds<bool>,
     outgoing_messages: Vec<EntityMessageType>,
@@ -48,7 +48,7 @@ impl ComponentChannel {
     pub(crate) fn new() -> Self {
         Self {
             inserted: false,
-            last_insert_id: None,
+            last_epoch_id: None,
             buffered_messages: OrderedIds::new(),
             outgoing_messages: Vec::new(),
         }
@@ -73,8 +73,8 @@ impl ComponentChannel {
 
     pub(crate) fn accept_message(&mut self, id: MessageIndex, msg: EntityMessage<()>) {
 
-        if let Some(last_insert_id) = self.last_insert_id {
-            if sequence_equal_or_less_than(id, last_insert_id) {
+        if let Some(last_epoch_id) = self.last_epoch_id {
+            if sequence_equal_or_less_than(id, last_epoch_id) {
                 // This message is older than the last insert message, ignore it
                 return;
             }
@@ -105,14 +105,14 @@ impl ComponentChannel {
                         break;
                     }
                     self.inserted = true;
-                    self.last_insert_id = Some(id);
+                    self.last_epoch_id = Some(id);
                 }
                 false => {
                     if !self.inserted {
                         break;
                     }
                     self.inserted = false;
-                    self.last_insert_id = None;
+                    self.last_epoch_id = Some(id);
                 }
             }
 
