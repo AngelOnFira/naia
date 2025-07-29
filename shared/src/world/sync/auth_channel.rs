@@ -1,3 +1,52 @@
+//! Authority & Delegation Channel  
+//! ==============================
+//! 
+//! Maintains the *authoritative‑owner* state for a single entity across an
+//! unordered‑reliable transport.  `AuthChannel` is a **tiny state machine**
+//! that filters, buffers, and eventually forwards only *causally‑legal*
+//! authority messages to the outer `EntityChannel`.
+//!
+//! ## High‑level purpose
+//! * Decouple global out‑of‑order arrival from the strict ordering
+//!   requirements of authority negotiation.
+//! * Guarantee that the ECS sees at most **one semantically valid sequence**
+//!   of publish / delegate / authority‑update events, even if the network
+//!   reorders packets.
+//!
+//! ## Accepted `EntityMessage` variants
+//! | Variant                              | Meaning on receive | Requires state |
+//! |--------------------------------------|--------------------|----------------|
+//! | `PublishEntity`                      | Make entity visible to client | `Unpublished` |
+//! | `UnpublishEntity`                    | Hide / delete entity          | `Published` |
+//! | `EnableDelegationEntity`             | Allow authority hand‑offs     | `Published` |
+//! | `DisableDelegationEntity`            | Revoke delegation             | `Delegated` |
+//! | `EntityUpdateAuthority { … }`        | Inform who currently owns it  | `Delegated` |
+//!
+//! ## State machine
+//! ```text
+//!             +--------------------+
+//!             |    Unpublished     |
+//!             +---------+----------+
+//!                       | PublishEntity
+//!                       v
+//!             +--------------------+
+//!             |     Published      |
+//!             +----+-----------+---+
+//!                  |           |
+//!  UnpublishEntity |           | EnableDelegationEntity
+//!                  v           v
+//!             +--------------------+
+//!             |     Delegated      |
+//!             +-----------+--------+
+//!                         | DisableDelegationEntity
+//!                         +-------------------------> back to *Published*
+//! ```
+//! `EntityUpdateAuthority` is a self‑loop in the **Delegated** state.
+//!
+//! **Invariant**: The channel never exports a message that would violate
+//! the canonical state graph above; thus consumers can apply events in
+//! arrival order without additional checks.
+
 use crate::{world::entity::ordered_ids::OrderedIds, EntityMessage, MessageIndex};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -22,6 +71,7 @@ impl AuthChannel {
         }
     }
 
+    /// Is invoked by `EntityChannel` when the entity despawns; this wipes all buffered state so a future *re‑spawn* starts clean.
     pub(crate) fn reset(&mut self) {
         self.state = EntityAuthChannelState::Unpublished;
         self.buffered_messages.clear();

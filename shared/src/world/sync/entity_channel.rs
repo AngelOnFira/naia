@@ -1,3 +1,78 @@
+//! ## `EntityChannel` – Per‑Entity Demultiplexer
+//!
+//! This module owns the **state machine and buffering logic for a *single
+//! entity*** travelling across an **unordered, reliable** transport.
+//!
+//! ---
+//! ### 1 · What problem does it solve?
+//! * Messages can arrive *out of order*
+//! * Certain message kinds must obey **strict causal order _within_ the
+//!   entity** (e.g. a component can’t be inserted before the entity exists).
+//!
+//! `EntityChannel` absorbs the raw `EntityMessage<()>` stream, re‑orders and
+//! filters it, and emits **ready‑to‑apply** messages in the *only* sequence
+//! the game‑logic needs to respect.
+//!
+//! ---
+//! ### 2 · State machine
+//!
+//! ```text
+//!                 +-----------------------------+
+//!                 |   Despawned (initial)       |
+//!                 +-----------------------------+
+//!                     | SpawnEntity(idₛ)  ▲
+//!                     v                   |
+//!                 +-----------------------------+
+//!                 |     Spawned                 |
+//!                 +-----------------------------+
+//!                     | DespawnEntity(id_d)     |
+//!                     +-------------------------+
+//! ```
+//!
+//! * **`Despawned`** – entity is not present; buffers *only* the next
+//!   `SpawnEntity` plus any later auth/component messages (they will flush
+//!   once the spawn occurs).
+//! * **`Spawned`** – entity is live; forwards component/auth messages to the
+//!   corresponding sub‑channels and drains their output immediately.
+//!
+//! ---
+//! ### 3 · Message ingest algorithm
+//! 1. **Gating by `last_spawn_id`**  
+//!    A message whose `id ≤ last_spawn_id` is *by definition* older than the
+//!    authoritative `SpawnEntity`; drop it to guarantee *at‑most‑once
+//!    semantics* during wrap‑around.
+//! 2. **Buffered queue (`OrderedIds`)**  
+//!    Messages are pushed into `buffered_messages`, ordered by the `u16`
+//!    sequence with wrap‑safe comparison.  
+//!    `process_messages()` iterates from the head while the next candidate is
+//!    *legal* under the current FSM state.
+//! 3. **Draining**  
+//!    Once a message is applied, it is moved into `outgoing_messages`.  
+//!    `Engine::drain_messages_into` later annotates them with the concrete
+//!    entity handle and forwards them to the ECS.
+//!
+//! ---
+//! ### 4 · Sub‑channels
+//! * **`AuthChannel`** – publishes, unpublishes, and delegates authority.
+//! * **`ComponentChannel`** (one per `ComponentKind`) – tracks insert/remove
+//!   toggles, guaranteeing idempotency via its own `last_insert_id` guard.
+//!
+//! `EntityChannel` coordinates these sub‑channels but *never* peers inside
+//! their logic; it merely aligns their buffers with the entity’s lifecycle
+//! (e.g., flush everything ≤ `idₛ` at spawn, reset on despawn).
+//!
+//! ---
+//! ### 5 · Key invariants
+//! * **Spawn barrier** – No component/auth message can overtake the spawn
+//!   that legitimises it.
+//! * **Monotonic visibility** – Once a message has been emitted to
+//!   `outgoing_messages`, the channel guarantees it will never retract or
+//!   reorder that message.
+//!
+//! Together, these guarantees let higher layers treat the engine as if every
+//! entity had its own perfect *ordered* stream—while the network enjoys the
+//! performance of a single unordered reliable channel.
+
 use std::{hash::Hash, collections::HashMap};
 
 use crate::{

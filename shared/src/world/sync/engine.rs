@@ -1,3 +1,36 @@
+//! # `engine.rs` — Top‑Level Orchestrator
+//!
+//! The **`Engine<E>`** is the *single entry/exit point* between the raw,
+//! unordered stream of `EntityMessage<E>` packets on the wire and the
+//! **ordered, per‑entity event queue** your game logic consumes.
+//! It owns *one* [`EntityChannel`] per live entity and two lightweight
+//! collections for runtime bookkeeping:
+//!
+//! | Field | Purpose |
+//! |-------|---------|
+//! | `config`            | Compile‑time knobs from [`EngineConfig`] that bound the sliding window and guard‑band for wrap‑around safety. |
+//! | `outgoing_events`   | Scratch buffer filled during `accept_message`; drained atomically via [`receive_messages`]. |
+//! | `entity_channels`   | `HashMap<E, EntityChannel>` lazily populated on first sight of an entity. |
+//!
+//! ## Responsibilities
+//! 1. **Channel dispatch** – routes each message to its entity’s channel,
+//!    creating channels on demand.
+//! 2. **Local ordering** – relies on per‑channel state machines to decide
+//!    *when* a message is safe to surface; glues their outputs into a
+//!    single, ready‑to‑apply Vec.
+//! 3. **Zero HoLB guarantee** – because messages for unrelated entities
+//!    never share the same queue, one delayed entity cannot stall others.
+//!
+//! ## API contracts
+
+
+//!
+//! ## Interaction with `EngineConfig`
+//! The `Engine` never mutates sequence numbers, but it does rely on the
+//! sender/receiver honouring `max_in_flight` and `flush_threshold` to
+//! avoid ambiguous wrapping (`u16` rolls over every 65 536).
+//! *If you change these constants, do so symmetrically on both ends.*
+
 use std::{hash::Hash, collections::HashMap};
 
 use crate::{world::{sync::{entity_channel::EntityChannel, config::EngineConfig}, entity::entity_message::EntityMessage}, MessageIndex};
@@ -20,7 +53,11 @@ impl<E: Copy + Hash + Eq> Default for Engine<E> {
 
 impl<E: Copy + Hash + Eq> Engine<E> {
 
-    /// Feed a de-duplicated, unordered message into the engine.
+    /// * Idempotent*: the caller must already have deduplicated on
+    /// `(MessageIndex, Entity)`; re‑injecting the same `(id, msg)` WILL panic!
+    ///
+    /// *Non‑blocking*: may push zero or more *ordered* events into the
+    /// engine’s outgoing buffer, but never touches the ECS directly.
     pub fn accept_message(
         &mut self,
         id: MessageIndex,
@@ -40,7 +77,9 @@ impl<E: Copy + Hash + Eq> Engine<E> {
         entity_channel.drain_messages_into(entity, &mut self.outgoing_events);
     }
 
-    /// Drain messages from the engine in appropriate order.
+    /// Atomically swaps out `outgoing_events`, giving the caller a Vec that
+    /// *is already topologically ordered across entities*; apply each event
+    /// in sequence and discard.
     pub fn receive_messages(&mut self) -> Vec<EntityMessage<E>> {
         std::mem::take(&mut self.outgoing_events)
     }

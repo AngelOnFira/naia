@@ -1,19 +1,56 @@
+//! # `ComponentChannel` – Per‑Component idempotent FSM
+//!
+//! This module owns the **insert / remove** lifecycle for a *single*
+//! component type (`ComponentKind`) on a *single* entity.  Its job is to
+//! translate an **unordered** stream of
+//! `EntityMessage::{InsertComponent, RemoveComponent}` into a *locally
+//! ordered, idempotent* stream that the ECS can apply safely.
+//!
+//! ## Why a dedicated channel?
+//! * **Locality** – Ordering is only meaningful *within the scope of one
+//!   component on one entity*; isolating that scope lets unrelated
+//!   components proceed even if this one stalls.
+//! * **HoLB elimination** – By buffering at this granularity we avoid a
+//!   stale component update blocking the entire entity.
+//!
+//! ## State machine
+//! ```text
+//! [inserted = false] --Insert→ [inserted = true]
+//! [inserted = true ] --Remove→ [inserted = false]
+//! ```
+//! Invalid transitions (e.g. Insert when `inserted = true`) are *buffered*
+//! until an intervening Remove makes them legal, or discarded if their
+//! `MessageIndex` is ≤ `last_insert_id` (wrap‑around‑safe comparison via
+//! `sequence_equal_or_less_than`).
+//!
+//! The result is an **at‑most‑once, causally ordered** stream of
+//! component‑level events, ready for `EntityChannel` to forward once the
+//! parent entity itself is confirmed `Spawned`.
+//!
+//! **Contract**: Every `InsertComponent` emitted by this channel is the
+//! *earliest not‑yet‑applied* insertion for that component, and every
+//! `RemoveComponent` is the matching inverse, guaranteeing the ECS sees a
+//! consistent on/off toggle without duplicates or reversals.
+
 use crate::{sequence_equal_or_less_than, world::entity::ordered_ids::OrderedIds, ComponentKind, EntityMessage, EntityMessageType, MessageIndex};
 
 pub(crate) struct ComponentChannel {
-    outgoing_messages: Vec<EntityMessageType>,
+    /// Current authoritative presence flag
     inserted: bool,
-    buffered_messages: OrderedIds<bool>,
+    /// The *newest* message that set `inserted = true`; guards against replay / re‑order.
     last_insert_id: Option<MessageIndex>,
+    /// Small ring of *pending* insert (`true`) / remove (`false`) flags keyed by their sequence IDs.
+    buffered_messages: OrderedIds<bool>,
+    outgoing_messages: Vec<EntityMessageType>,
 }
 
 impl ComponentChannel {
     pub(crate) fn new() -> Self {
         Self {
-            outgoing_messages: Vec::new(),
             inserted: false,
-            buffered_messages: OrderedIds::new(),
             last_insert_id: None,
+            buffered_messages: OrderedIds::new(),
+            outgoing_messages: Vec::new(),
         }
     }
 
