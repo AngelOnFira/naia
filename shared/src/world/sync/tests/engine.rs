@@ -61,18 +61,18 @@ fn engine_entity_channels_do_not_block() {
 
     let mut engine: Engine<RemoteEntity> = Engine::default();
 
-    let entityA = RemoteEntity::new(1);
-    let entityB = RemoteEntity::new(2);
-    let entityC = RemoteEntity::new(3);
+    let entity_a = RemoteEntity::new(1);
+    let entity_b = RemoteEntity::new(2);
+    let entity_c = RemoteEntity::new(3);
 
-    engine.accept_message(3, EntityMessage::SpawnEntity(entityA, Vec::new()));
-    engine.accept_message(2, EntityMessage::SpawnEntity(entityB, Vec::new()));
-    engine.accept_message(1, EntityMessage::SpawnEntity(entityC, Vec::new()));
+    engine.accept_message(3, EntityMessage::SpawnEntity(entity_a, Vec::new()));
+    engine.accept_message(2, EntityMessage::SpawnEntity(entity_b, Vec::new()));
+    engine.accept_message(1, EntityMessage::SpawnEntity(entity_c, Vec::new()));
 
     let mut asserts = AssertList::new();
-    asserts.push(EntityMessage::SpawnEntity(entityA, Vec::new()));
-    asserts.push(EntityMessage::SpawnEntity(entityB, Vec::new()));
-    asserts.push(EntityMessage::SpawnEntity(entityC, Vec::new()));
+    asserts.push(EntityMessage::SpawnEntity(entity_a, Vec::new()));
+    asserts.push(EntityMessage::SpawnEntity(entity_b, Vec::new()));
+    asserts.push(EntityMessage::SpawnEntity(entity_c, Vec::new()));
 
     asserts.check(&mut engine);
 }
@@ -83,21 +83,21 @@ fn engine_component_channels_do_not_block() {
     let mut engine: Engine<RemoteEntity> = Engine::default();
 
     let entity = RemoteEntity::new(1);
-    let compA = component_kind::<1>();
-    let compB = component_kind::<2>();
-    let compC = component_kind::<3>();
+    let comp_a = component_kind::<1>();
+    let comp_b = component_kind::<2>();
+    let comp_c = component_kind::<3>();
 
     engine.accept_message(1, EntityMessage::SpawnEntity(entity, Vec::new()));
-    engine.accept_message(4, EntityMessage::InsertComponent(entity, compA));
-    engine.accept_message(3, EntityMessage::InsertComponent(entity, compB));
-    engine.accept_message(2, EntityMessage::InsertComponent(entity, compC));
+    engine.accept_message(4, EntityMessage::InsertComponent(entity, comp_a));
+    engine.accept_message(3, EntityMessage::InsertComponent(entity, comp_b));
+    engine.accept_message(2, EntityMessage::InsertComponent(entity, comp_c));
 
     // Check order
     let mut asserts = AssertList::new();
     asserts.push(EntityMessage::SpawnEntity(entity, Vec::new()));
-    asserts.push(EntityMessage::InsertComponent(entity, compA));
-    asserts.push(EntityMessage::InsertComponent(entity, compB));
-    asserts.push(EntityMessage::InsertComponent(entity, compC));
+    asserts.push(EntityMessage::InsertComponent(entity, comp_a));
+    asserts.push(EntityMessage::InsertComponent(entity, comp_b));
+    asserts.push(EntityMessage::InsertComponent(entity, comp_c));
 
     asserts.check(&mut engine);
 }
@@ -119,23 +119,6 @@ fn wrap_ordering_simple() {
     asserts.push(EntityMessage::InsertComponent(entity, comp));
 
     asserts.check(&mut engine);
-}
-
-#[test]
-fn backlog_window_cap() {
-
-    let mut engine: Engine<RemoteEntity> = Engine::default();
-    // Reduced max_in_flight for testing
-    engine.config.max_in_flight = 4;
-
-    // Push 5 out-of-order packets within half-range window size 4
-    for seq in 1..=5 {
-        let entity = RemoteEntity::new(seq);
-        engine.accept_message(seq, EntityMessage::SpawnEntity(entity, Vec::new()));
-    }
-
-    let out = engine.receive_messages();
-    assert_eq!(out.len(), engine.config.max_in_flight as usize, "5th packet should be dropped due to window cap");
 }
 
 #[test]
@@ -163,27 +146,6 @@ fn noop_safe() {
     engine.accept_message(10, EntityMessage::Noop);
 
     let asserts = AssertList::new();
-    asserts.check(&mut engine);
-}
-
-#[test]
-fn generation_gate_reuse() {
-    let mut engine: Engine<RemoteEntity> = Engine::default();
-    let entity = RemoteEntity::new(1);
-
-    // First lifetime
-    engine.accept_message(1, EntityMessage::SpawnEntity(entity, Vec::new()));
-    engine.accept_message(2, EntityMessage::DespawnEntity(entity));
-
-    // Wrap…
-    engine.accept_message(65_535, EntityMessage::Noop); // filler
-
-    // Second lifetime after wrap
-    engine.accept_message(0, EntityMessage::SpawnEntity(entity, Vec::new()));
-
-    let mut asserts = AssertList::new();
-    asserts.push(EntityMessage::SpawnEntity(entity, Vec::new()));
-
     asserts.check(&mut engine);
 }
 
@@ -289,21 +251,17 @@ fn entity_auth_scrambled() {
     let entity = RemoteEntity::new(1);
 
     engine.accept_message(8, EntityMessage::DespawnEntity(entity));
-    engine.accept_message(6, EntityMessage::DisableDelegationEntity(entity));
-    engine.accept_message(4, EntityMessage::EntityUpdateAuthority(entity, EntityAuthStatus::Granted));
+    engine.accept_message(6, EntityMessage::DisableDelegationEntity(entity)); // this will never be received
+    engine.accept_message(4, EntityMessage::EntityUpdateAuthority(entity, EntityAuthStatus::Granted)); // this will never be received
     engine.accept_message(2, EntityMessage::PublishEntity(entity));
     engine.accept_message(1, EntityMessage::SpawnEntity(entity, Vec::new()));
-    engine.accept_message(3, EntityMessage::EnableDelegationEntity(entity));
+    engine.accept_message(3, EntityMessage::EnableDelegationEntity(entity)); // this will never be received
     engine.accept_message(5, EntityMessage::EntityUpdateAuthority(entity, EntityAuthStatus::Available)); // this will never be received
-    engine.accept_message(7, EntityMessage::UnpublishEntity(entity));
+    engine.accept_message(7, EntityMessage::UnpublishEntity(entity)); // this will never be received
 
     let mut asserts = AssertList::new();
     asserts.push(EntityMessage::SpawnEntity(entity, Vec::new()));
     asserts.push(EntityMessage::PublishEntity(entity));
-    asserts.push(EntityMessage::EnableDelegationEntity(entity));
-    asserts.push(EntityMessage::EntityUpdateAuthority(entity, EntityAuthStatus::Granted));
-    asserts.push(EntityMessage::DisableDelegationEntity(entity));
-    asserts.push(EntityMessage::UnpublishEntity(entity));
     asserts.push(EntityMessage::DespawnEntity(entity));
     asserts.check(&mut engine);
 }

@@ -154,4 +154,4 @@ pub use messages::channels::senders::request_sender::{
 };
 pub use protocol::{Protocol, ProtocolPlugin};
 pub use types::{HostType, MessageIndex, PacketIndex, ShortMessageIndex, Tick};
-pub use wrapping_number::{sequence_greater_than, sequence_less_than, wrapping_diff};
+pub use wrapping_number::{sequence_greater_than, sequence_less_than, sequence_equal_or_greater_than, sequence_equal_or_less_than, wrapping_diff};

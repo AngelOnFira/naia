@@ -1,5 +1,4 @@
 //! Synchronization engine compile-time configuration.
-#![allow(dead_code)]
 
 pub struct EngineConfig {
     /// Maximum number of in-flight packets.
@@ -11,10 +10,10 @@ pub struct EngineConfig {
 impl Default for EngineConfig {
     fn default() -> Self {
 
-        /// Upper bound on un-ACKed packets (< 32_768).
+        // Upper bound on un-ACKed packets (< 32_768).
         let max_in_flight: u16 = 32_767;
 
-        /// Guard-band threshold where we flush backlog near wrap-around.
+        // Guard-band threshold where we flush backlog near wrap-around.
         let flush_threshold: u16 = (65_536u32 - max_in_flight as u32) as u16;
 
         Self {

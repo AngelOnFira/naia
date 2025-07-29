@@ -7,12 +7,6 @@ enum EntityAuthChannelState {
     Delegated,
 }
 
-impl EntityAuthChannelState {
-    pub(crate) fn is_spawned(&self) -> bool {
-        matches!(self, EntityAuthChannelState::Unpublished | EntityAuthChannelState::Published | EntityAuthChannelState::Delegated)
-    }
-}
-
 pub(crate) struct AuthChannel {
     state: EntityAuthChannelState,
     buffered_messages: OrderedIds<EntityMessage<()>>,
@@ -28,12 +22,22 @@ impl AuthChannel {
         }
     }
 
+    pub(crate) fn reset(&mut self) {
+        self.state = EntityAuthChannelState::Unpublished;
+        self.buffered_messages.clear();
+        self.outgoing_messages.clear();
+    }
+
     pub(crate) fn drain_messages_into(
         &mut self,
         outgoing_messages: &mut Vec<EntityMessage<()>>,
     ) {
         // Drain the auth channel and append the messages to the outgoing events
         outgoing_messages.append(&mut self.outgoing_messages);
+    }
+    
+    pub(crate) fn buffer_pop_front_until_and_excluding(&mut self, id: MessageIndex) {
+        self.buffered_messages.pop_front_until_and_excluding(id);
     }
 
     pub(crate) fn accept_message(&mut self, id: MessageIndex, msg: EntityMessage<()>) {
@@ -48,8 +52,6 @@ impl AuthChannel {
                 break;
             };
 
-            let mut pop = false;
-
             match msg {
                 EntityMessage::PublishEntity(_) => {
                     if self.state != EntityAuthChannelState::Unpublished {
@@ -58,7 +60,7 @@ impl AuthChannel {
 
                     self.state = EntityAuthChannelState::Published;
 
-                    pop = true;
+                    self.pop_front_into_outgoing();
                 }
                 EntityMessage::UnpublishEntity(_) => {
                     if self.state != EntityAuthChannelState::Published {
@@ -67,7 +69,7 @@ impl AuthChannel {
 
                     self.state = EntityAuthChannelState::Unpublished;
 
-                    pop = true;
+                    self.pop_front_into_outgoing();
                 }
                 EntityMessage::EnableDelegationEntity(_) => {
                     if self.state != EntityAuthChannelState::Published {
@@ -76,7 +78,7 @@ impl AuthChannel {
 
                     self.state = EntityAuthChannelState::Delegated;
 
-                    pop = true;
+                    self.pop_front_into_outgoing();
                 }
                 EntityMessage::DisableDelegationEntity(_) => {
                     if self.state != EntityAuthChannelState::Delegated {
@@ -85,14 +87,14 @@ impl AuthChannel {
 
                     self.state = EntityAuthChannelState::Published;
 
-                    pop = true;
+                    self.pop_front_into_outgoing();
                 }
                 EntityMessage::EntityUpdateAuthority(_, _) => {
                     if self.state != EntityAuthChannelState::Delegated {
                         break;
                     }
 
-                    pop = true;
+                    self.pop_front_into_outgoing();
                 }
                 EntityMessage::EntityRequestAuthority(_, _) | EntityMessage::EntityReleaseAuthority(_) |
                 EntityMessage::EnableDelegationEntityResponse(_) | EntityMessage::EntityMigrateResponse(_, _) => {
@@ -102,11 +104,11 @@ impl AuthChannel {
                     panic!("Unexpected message type in AuthChannel: {:?}", msg);
                 }
             }
-
-            if pop {
-                let (_, msg) = self.buffered_messages.pop_front().unwrap();
-                self.outgoing_messages.push(msg);
-            }
         }
+    }
+
+    fn pop_front_into_outgoing(&mut self) {
+        let (_, msg) = self.buffered_messages.pop_front().unwrap();
+        self.outgoing_messages.push(msg);
     }
 }

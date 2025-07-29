@@ -1,7 +1,16 @@
 use std::{hash::Hash, collections::HashMap};
 
-use crate::{world::{sync::component_channel::ComponentChannel, entity::ordered_ids::OrderedIds}, ComponentKind, EntityMessage, EntityMessageType, MessageIndex};
-use crate::world::sync::auth_channel::AuthChannel;
+use crate::{
+    sequence_equal_or_less_than,
+    world::{
+        sync::{
+            auth_channel::AuthChannel,
+            component_channel::ComponentChannel,
+        },
+        entity::ordered_ids::OrderedIds
+    },
+    ComponentKind, EntityMessage, EntityMessageType, MessageIndex
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum EntityChannelState {
@@ -15,6 +24,7 @@ pub(crate) struct EntityChannel {
     state: EntityChannelState,
     auth_channel: AuthChannel,
     buffered_messages: OrderedIds<EntityMessage<()>>,
+    last_spawn_id: Option<MessageIndex>,
 }
 
 impl EntityChannel {
@@ -25,6 +35,7 @@ impl EntityChannel {
             state: EntityChannelState::Despawned,
             auth_channel: AuthChannel::new(),
             buffered_messages: OrderedIds::new(),
+            last_spawn_id: None,
         }
     }
 
@@ -33,6 +44,13 @@ impl EntityChannel {
         id: MessageIndex,
         msg: EntityMessage<()>,
     ) {
+        if let Some(last_spawn_id) = self.last_spawn_id {
+            if sequence_equal_or_less_than(id, last_spawn_id) {
+                // This message is older than the last spawn message, ignore it
+                return;
+            }
+        }
+
         self.buffered_messages.push_back(id, msg);
 
         self.process_messages();
@@ -58,15 +76,22 @@ impl EntityChannel {
                         break;
                     }
 
+                    let id = *id;
+
                     self.state = EntityChannelState::Spawned;
+                    self.last_spawn_id = Some(id);
+                    // clear buffered messages less than or equal to the last spawn id
+                    self.buffered_messages.pop_front_until_and_excluding(id);
 
                     self.pop_front_into_outgoing();
 
                     // Drain the auth channel and append the messages to the outgoing events
+                    self.auth_channel.buffer_pop_front_until_and_excluding(id);
                     self.auth_channel.drain_messages_into(&mut self.outgoing_messages);
 
                     // Drain the component channel and append the messages to the outgoing events
                     for (component_kind, component_channel) in self.component_channels.iter_mut() {
+                        component_channel.buffer_pop_front_until_and_excluding(id);
                         component_channel.drain_messages_into(component_kind, &mut self.outgoing_messages);
                     }
                 },
@@ -76,8 +101,15 @@ impl EntityChannel {
                     }
 
                     self.state = EntityChannelState::Despawned;
-                    
+                    self.last_spawn_id = None;
+
+                    self.auth_channel.reset();
+                    self.component_channels.clear();
+
                     self.pop_front_into_outgoing();
+
+                    // clear the buffer
+                    self.buffered_messages.clear();
                 },
                 EntityMessageType::InsertComponent | EntityMessageType::RemoveComponent => {
 

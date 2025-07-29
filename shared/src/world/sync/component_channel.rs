@@ -1,9 +1,10 @@
-use crate::{world::entity::ordered_ids::OrderedIds, ComponentKind, EntityMessage, EntityMessageType, MessageIndex};
+use crate::{sequence_equal_or_less_than, world::entity::ordered_ids::OrderedIds, ComponentKind, EntityMessage, EntityMessageType, MessageIndex};
 
 pub(crate) struct ComponentChannel {
     outgoing_messages: Vec<EntityMessageType>,
     inserted: bool,
     buffered_messages: OrderedIds<bool>,
+    last_insert_id: Option<MessageIndex>,
 }
 
 impl ComponentChannel {
@@ -12,6 +13,7 @@ impl ComponentChannel {
             outgoing_messages: Vec::new(),
             inserted: false,
             buffered_messages: OrderedIds::new(),
+            last_insert_id: None,
         }
     }
 
@@ -28,7 +30,19 @@ impl ComponentChannel {
         outgoing_messages.append(&mut received_messages);
     }
 
+    pub(crate) fn buffer_pop_front_until_and_excluding(&mut self, id: MessageIndex) {
+        self.buffered_messages.pop_front_until_and_excluding(id);
+    }
+
     pub(crate) fn accept_message(&mut self, id: MessageIndex, msg: EntityMessage<()>) {
+
+        if let Some(last_insert_id) = self.last_insert_id {
+            if sequence_equal_or_less_than(id, last_insert_id) {
+                // This message is older than the last insert message, ignore it
+                return;
+            }
+        }
+
         let insert = match &msg {
             EntityMessage::InsertComponent(_, _) => true,
             EntityMessage::RemoveComponent(_, _) => false,
@@ -42,34 +56,35 @@ impl ComponentChannel {
     
     fn process_messages(&mut self) {
         loop {
-            let Some((_, insert)) = self.buffered_messages.peek_front() else {
+            let Some((id, insert)) = self.buffered_messages.peek_front() else {
                 break;
             };
-            let mut pop = false;
 
-            if *insert {
-                if self.inserted {
-                    break;
+            let id = *id;
+
+            match *insert {
+                true => {
+                    if self.inserted {
+                        break;
+                    }
+                    self.inserted = true;
+                    self.last_insert_id = Some(id);
                 }
-                self.inserted = true;
-                pop = true;
-            } else {
-                if !self.inserted {
-                    break;
+                false => {
+                    if !self.inserted {
+                        break;
+                    }
+                    self.inserted = false;
+                    self.last_insert_id = None;
                 }
-                self.inserted = false;
-                pop = true;
             }
 
-            if pop {
-                let (_, insert) = self.buffered_messages.pop_front().unwrap();
-                if insert {
-                    self.outgoing_messages.push(EntityMessageType::InsertComponent);
-                } else {
-                    self.outgoing_messages.push(EntityMessageType::RemoveComponent);
-                }
+
+            let (_, insert) = self.buffered_messages.pop_front().unwrap();
+            if insert {
+                self.outgoing_messages.push(EntityMessageType::InsertComponent);
             } else {
-                panic!("should pop if we reach here");
+                self.outgoing_messages.push(EntityMessageType::RemoveComponent);
             }
         }
     }
