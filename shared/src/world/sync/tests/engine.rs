@@ -1,7 +1,6 @@
 #![cfg(test)]
 
-use crate::EntityAuthStatus;
-use crate::world::{sync::Engine, component::component_kinds::ComponentKind, entity::{entity_message::EntityMessage, local_entity::RemoteEntity}};
+use crate::{EntityAuthStatus, world::{sync::Engine, component::component_kinds::ComponentKind, entity::{entity_message::EntityMessage, local_entity::RemoteEntity}}};
 
 struct AssertList {
     asserts: Vec<EntityMessage<RemoteEntity>>,
