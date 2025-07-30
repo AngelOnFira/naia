@@ -1,6 +1,7 @@
 #![cfg(test)]
 
 use crate::{EntityAuthStatus, world::{sync::Engine, component::component_kinds::ComponentKind, entity::{entity_message::EntityMessage, local_entity::RemoteEntity}}};
+use crate::world::sync::config::EngineConfig;
 
 struct AssertList {
     asserts: Vec<EntityMessage<RemoteEntity>>,
@@ -710,5 +711,47 @@ fn component_idempotent_duplicate_drops() {
     asserts.push(EntityMessage::SpawnEntity     (entity, Vec::new()));
     asserts.push(EntityMessage::InsertComponent (entity, comp));
     asserts.push(EntityMessage::RemoveComponent (entity, comp));
+    asserts.check(&mut engine);
+}
+
+#[test]
+fn large_burst_at_max_in_flight() {
+    
+    // ── Arrange ────────────────────────────────────────────────────────────────
+    // Create an engine with a *tiny* max_in_flight to keep the test fast.
+    let mut engine: Engine<RemoteEntity> = Engine::default();
+    engine.config = EngineConfig {
+        max_in_flight: 15,                       // 15 < 32768 ⇒ still safe
+        flush_threshold: 65521,
+    };
+
+    let entity = RemoteEntity::new(99);
+    let comp   = component_kind::<1>();
+
+    // Spawn first
+    engine.accept_message(1, EntityMessage::SpawnEntity(entity, Vec::new()));
+
+    // Emit *exactly* max_in_flight packets (IDs 2–16) in perfect order,
+    // alternating Insert / Remove to stress the component FSM.
+    for i in 0..engine.config.max_in_flight {
+        let id  = 2 + i;
+        let msg = if i % 2 == 0 {
+            EntityMessage::InsertComponent(entity, comp)
+        } else {
+            EntityMessage::RemoveComponent(entity, comp)
+        };
+        engine.accept_message(id, msg);
+    }
+
+    // ── Expect all messages to drain in one shot ──────────────────────────────
+    let mut asserts = AssertList::new();
+    asserts.push(EntityMessage::SpawnEntity(entity, Vec::new()));
+    for i in 0..engine.config.max_in_flight {
+        if i % 2 == 0 {
+            asserts.push(EntityMessage::InsertComponent(entity, comp));
+        } else {
+            asserts.push(EntityMessage::RemoveComponent(entity, comp));
+        }
+    }
     asserts.check(&mut engine);
 }
