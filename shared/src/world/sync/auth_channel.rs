@@ -47,7 +47,7 @@
 //! the canonical state graph above; thus consumers can apply events in
 //! arrival order without additional checks.
 
-use crate::{world::entity::ordered_ids::OrderedIds, EntityMessage, MessageIndex};
+use crate::{world::{entity::ordered_ids::OrderedIds, sync::entity_channel::EntityChannelState}, EntityMessage, MessageIndex};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum EntityAuthChannelState {
@@ -90,12 +90,23 @@ impl AuthChannel {
         self.buffered_messages.pop_front_until_and_excluding(id);
     }
 
-    pub(crate) fn accept_message(&mut self, id: MessageIndex, msg: EntityMessage<()>) {
+    pub(crate) fn accept_message(
+        &mut self,
+        entity_state: EntityChannelState,
+        id: MessageIndex,
+        msg: EntityMessage<()>,
+    ) {
         self.buffered_messages.push_back(id, msg);
-        self.process_messages();
+        self.process_messages(entity_state);
     }
     
-    fn process_messages(&mut self) {
+    pub(crate) fn process_messages(&mut self, entity_state: EntityChannelState) {
+        
+        if entity_state != EntityChannelState::Spawned {
+            // If the entity is not spawned, we do not process any messages
+            return;
+        }
+        
         loop {
 
             let Some((_, msg)) = self.buffered_messages.peek_front() else {

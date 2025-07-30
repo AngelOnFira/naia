@@ -32,7 +32,7 @@
 //! `RemoveComponent` is the matching inverse, guaranteeing the ECS sees a
 //! consistent on/off toggle without duplicates or reversals.
 
-use crate::{sequence_equal_or_less_than, world::entity::ordered_ids::OrderedIds, ComponentKind, EntityMessage, EntityMessageType, MessageIndex};
+use crate::{sequence_equal_or_less_than, world::{entity::ordered_ids::OrderedIds, sync::entity_channel::EntityChannelState}, ComponentKind, EntityMessage, EntityMessageType, MessageIndex};
 
 pub(crate) struct ComponentChannel {
     /// Current authoritative presence flag
@@ -71,7 +71,12 @@ impl ComponentChannel {
         self.buffered_messages.pop_front_until_and_excluding(id);
     }
 
-    pub(crate) fn accept_message(&mut self, id: MessageIndex, msg: EntityMessage<()>) {
+    pub(crate) fn accept_message(
+        &mut self,
+        entity_state: EntityChannelState,
+        id: MessageIndex,
+        msg: EntityMessage<()>
+    ) {
 
         if let Some(last_epoch_id) = self.last_epoch_id {
             if sequence_equal_or_less_than(id, last_epoch_id) {
@@ -88,10 +93,16 @@ impl ComponentChannel {
 
         self.buffered_messages.push_back(id, insert);
         
-        self.process_messages();
+        self.process_messages(entity_state);
     }
     
-    fn process_messages(&mut self) {
+    pub(crate) fn process_messages(&mut self, entity_state: EntityChannelState) {
+        
+        if entity_state != EntityChannelState::Spawned {
+            // If the entity is not spawned, we cannot process any messages
+            return;
+        }
+        
         loop {
             let Some((id, insert)) = self.buffered_messages.peek_front() else {
                 break;
