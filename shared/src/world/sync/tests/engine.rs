@@ -755,3 +755,29 @@ fn large_burst_at_max_in_flight() {
     }
     asserts.check(&mut engine);
 }
+
+#[test]
+fn deduplicate_inserts_from_spawn() {
+
+    let mut engine: Engine<RemoteEntity> = Engine::default();
+
+    let entity_a = RemoteEntity::new(1);
+    let entity_b = RemoteEntity::new(2);
+    let comp = component_kind::<1>();
+
+    let spawn_components = vec![comp];
+
+    // spawn before insert
+    engine.accept_message(1, EntityMessage::SpawnEntity(entity_a, spawn_components.clone()));
+    engine.accept_message(2, EntityMessage::InsertComponent(entity_a, comp));
+
+    // insert before spawn
+    engine.accept_message(4, EntityMessage::InsertComponent(entity_b, comp));
+    engine.accept_message(3, EntityMessage::SpawnEntity(entity_b, spawn_components.clone()));
+
+    let mut asserts = AssertList::new();
+    asserts.push(EntityMessage::SpawnEntity(entity_a, spawn_components.clone()));
+    asserts.push(EntityMessage::SpawnEntity(entity_b, spawn_components.clone()));
+
+    asserts.check(&mut engine);
+}

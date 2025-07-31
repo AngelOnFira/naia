@@ -1,14 +1,13 @@
-use std::hash::Hash;
+use std::{fmt::Debug, hash::Hash};
 
-use crate::{messages::channels::receivers::reliable_receiver::ReliableReceiver, world::component::component_kinds::ComponentKind, EntityMessage, MessageIndex};
-use crate::world::sync::Engine;
+use crate::{messages::channels::receivers::reliable_receiver::ReliableReceiver, world::{component::component_kinds::ComponentKind, sync::Engine}, EntityMessage, MessageIndex};
 
-pub struct EntityMessageReceiver<E: Copy + Hash + Eq> {
+pub struct EntityMessageReceiver<E: Copy + Hash + Eq + Debug> {
     receiver: ReliableReceiver<EntityMessage<E>>,
     engine: Engine<E>,
 }
 
-impl<E: Copy + Hash + Eq> EntityMessageReceiver<E> {
+impl<E: Copy + Hash + Eq + Debug> EntityMessageReceiver<E> {
     pub fn new() -> Self {
         Self {
             receiver: ReliableReceiver::new(),

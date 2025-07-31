@@ -2,7 +2,7 @@ use crate::{ComponentKind, EntityAuthStatus, GlobalEntity, HostEntity, RemoteEnt
 
 #[derive(Clone, PartialEq, Eq)]
 pub enum EntityCommand {
-    SpawnEntity(GlobalEntity, Vec<ComponentKind>),
+    SpawnEntity(GlobalEntity),
     DespawnEntity(GlobalEntity),
     InsertComponent(GlobalEntity, ComponentKind),
     RemoveComponent(GlobalEntity, ComponentKind),

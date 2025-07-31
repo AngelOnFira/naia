@@ -32,6 +32,8 @@
 //! `RemoveComponent` is the matching inverse, guaranteeing the ECS sees a
 //! consistent on/off toggle without duplicates or reversals.
 
+use std::collections::VecDeque;
+
 use crate::{sequence_equal_or_less_than, world::{entity::ordered_ids::OrderedIds, sync::entity_channel::EntityChannelState}, ComponentKind, EntityMessage, EntityMessageType, MessageIndex};
 
 pub(crate) struct ComponentChannel {
@@ -41,7 +43,7 @@ pub(crate) struct ComponentChannel {
     last_epoch_id: Option<MessageIndex>,
     /// Small ring of *pending* insert (`true`) / remove (`false`) flags keyed by their sequence IDs.
     buffered_messages: OrderedIds<bool>,
-    outgoing_messages: Vec<EntityMessageType>,
+    outgoing_messages: VecDeque<EntityMessageType>,
 }
 
 impl ComponentChannel {
@@ -50,7 +52,7 @@ impl ComponentChannel {
             inserted: false,
             last_epoch_id: None,
             buffered_messages: OrderedIds::new(),
-            outgoing_messages: Vec::new(),
+            outgoing_messages: VecDeque::new(),
         }
     }
 
@@ -65,6 +67,28 @@ impl ComponentChannel {
             received_messages.push(msg_type.with_component_kind(&component_kind));
         }
         outgoing_messages.append(&mut received_messages);
+    }
+
+    pub(crate) fn remove_front_inserts(
+        &mut self,
+    ) {
+        let mut popped = false;
+        loop {
+            let Some(msg) = self.outgoing_messages.front() else {
+                break;
+            };
+            
+            let EntityMessageType::InsertComponent = msg else {
+                break;
+            };
+            
+            if popped {
+                panic!("ComponentChannel::remove_front_spawned: expected only one InsertComponent message, but found more than one");
+            }
+            
+            self.outgoing_messages.pop_front();
+            popped = true;
+        }
     }
 
     pub(crate) fn buffer_pop_front_until_and_excluding(&mut self, id: MessageIndex) {
@@ -130,9 +154,9 @@ impl ComponentChannel {
 
             let (_, insert) = self.buffered_messages.pop_front().unwrap();
             if insert {
-                self.outgoing_messages.push(EntityMessageType::InsertComponent);
+                self.outgoing_messages.push_back(EntityMessageType::InsertComponent);
             } else {
-                self.outgoing_messages.push(EntityMessageType::RemoveComponent);
+                self.outgoing_messages.push_back(EntityMessageType::RemoveComponent);
             }
         }
     }

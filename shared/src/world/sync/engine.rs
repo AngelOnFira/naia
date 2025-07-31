@@ -32,16 +32,19 @@
 //! *If you change these constants, do so symmetrically on both ends.*
 
 use std::{hash::Hash, collections::HashMap};
+use std::fmt::Debug;
+
+use log::info;
 
 use crate::{world::{sync::{entity_channel::EntityChannel, config::EngineConfig}, entity::entity_message::EntityMessage}, MessageIndex};
 
-pub struct Engine<E: Copy + Hash + Eq> {
+pub struct Engine<E: Copy + Hash + Eq + Debug> {
     pub config: EngineConfig,
     outgoing_events: Vec<EntityMessage<E>>,
     entity_channels: HashMap<E, EntityChannel>,
 }
 
-impl<E: Copy + Hash + Eq> Default for Engine<E> {
+impl<E: Copy + Hash + Eq + Debug> Default for Engine<E> {
     fn default() -> Self {
         Self {
             config: EngineConfig::default(),
@@ -51,7 +54,7 @@ impl<E: Copy + Hash + Eq> Default for Engine<E> {
     }
 }
 
-impl<E: Copy + Hash + Eq> Engine<E> {
+impl<E: Copy + Hash + Eq + Debug> Engine<E> {
 
     /// * Idempotent*: the caller must already have deduplicated on
     /// `(MessageIndex, Entity)`; re‑injecting the same `(id, msg)` WILL panic!
@@ -71,7 +74,9 @@ impl<E: Copy + Hash + Eq> Engine<E> {
         let entity_channel = self.entity_channels
             .entry(entity)
             .or_insert_with(EntityChannel::new);
-        
+
+        info!("Engine::accept_message(id={}, entity={:?}, msgType={:?})", id, entity, msg.get_type());
+
         entity_channel.accept_message(id, msg.strip_entity());
 
         entity_channel.drain_messages_into(entity, &mut self.outgoing_events);

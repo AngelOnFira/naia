@@ -1,17 +1,14 @@
 use std::{
-    clone::Clone,
     collections::{HashMap, HashSet, VecDeque},
     hash::Hash,
     net::SocketAddr,
+    sync::RwLockReadGuard,
 };
-use std::sync::RwLockReadGuard;
 
 use crate::{world::{
+    host::{entity_command_sender::EntityCommandManager, checked_map::{CheckedMap, CheckedSet}, entity_update_manager::EntityUpdateManager},
     entity::entity_converters::GlobalWorldManagerType, local_world_manager::LocalWorldManager,
-}, ComponentKind, DiffMask, EntityAndGlobalEntityConverter, EntityMessage, GlobalEntity, HostEntity, Instant, MessageIndex, PacketIndex, WorldRefType};
-use crate::world::host::checked_map::{CheckedMap, CheckedSet};
-use crate::world::host::entity_update_manager::EntityUpdateManager;
-use super::{entity_command::EntityCommand, entity_command_sender::EntityCommandManager};
+}, ComponentKind, DiffMask, EntityAndGlobalEntityConverter, EntityCommand, EntityMessage, GlobalEntity, HostEntity, Instant, MessageIndex, PacketIndex, WorldRefType};
 
 pub type CommandId = MessageIndex;
 
@@ -73,27 +70,23 @@ impl HostWorldManager {
         component_kinds: Vec<ComponentKind>,
     ) {
         // add entity
-        self.host_spawn_entity(world_manager, global_entity, &component_kinds);
+        self.host_spawn_entity(world_manager, global_entity);
         // add components
         for component_kind in component_kinds {
             self.host_insert_component(global_entity, &component_kind);
         }
     }
 
-    pub fn host_spawn_entity(
+    fn host_spawn_entity(
         &mut self,
         local_world_manager: &mut LocalWorldManager,
         global_entity: &GlobalEntity,
-        component_kinds: &Vec<ComponentKind>,
     ) {
         self.host_world.insert(*global_entity, CheckedSet::new());
 
         on_entity_channel_opening(local_world_manager, global_entity);
         
-        self.entity_command_manager.send_outgoing_command(EntityCommand::SpawnEntity(
-            *global_entity,
-            component_kinds.clone(),
-        ));
+        self.entity_command_manager.send_outgoing_command(EntityCommand::SpawnEntity(*global_entity));
     }
 
     pub fn host_despawn_entity(&mut self, global_entity: &GlobalEntity) {

@@ -23,6 +23,7 @@ use crate::{
 
 pub struct RemoteWorldManager {
     pub entity_waitlist: EntityWaitlist,
+    incoming_components: HashMap<(RemoteEntity, ComponentKind), Box<dyn Replicate>>,
     insert_waitlist_store: WaitlistStore<(GlobalEntity, Box<dyn Replicate>)>,
     insert_waitlist_map: HashMap<(GlobalEntity, ComponentKind), WaitlistHandle>,
     update_waitlist_store: WaitlistStore<(Tick, GlobalEntity, ComponentKind, ComponentFieldUpdate)>,
@@ -34,6 +35,7 @@ impl RemoteWorldManager {
     pub fn new() -> Self {
         Self {
             entity_waitlist: EntityWaitlist::new(),
+            incoming_components: HashMap::new(),
             insert_waitlist_store: WaitlistStore::new(),
             insert_waitlist_map: HashMap::new(),
             update_waitlist_store: WaitlistStore::new(),
@@ -65,6 +67,19 @@ impl RemoteWorldManager {
         now: &Instant,
         world_events: RemoteWorldEvents,
     ) -> Vec<EntityEvent> {
+
+        let RemoteWorldEvents {
+            incoming_updates,
+            incoming_messages,
+            incoming_components,
+        } = world_events;
+
+        // Store incoming components for later processing
+        for ((remote_entity, component_kind), component) in incoming_components {
+            info!("Remote World Manager: storing incoming component {:?} for entity {:?}", component_kind, remote_entity);
+            self.incoming_components.insert((remote_entity, component_kind), component);
+        }
+
         self.process_updates(
             global_world_manager,
             local_world_manager.entity_converter(),
@@ -72,7 +87,7 @@ impl RemoteWorldManager {
             component_kinds,
             world,
             now,
-            world_events.incoming_updates,
+            incoming_updates,
         );
         self.process_incoming_messages(
             spawner,
@@ -80,8 +95,7 @@ impl RemoteWorldManager {
             local_world_manager,
             world,
             now,
-            world_events.incoming_messages,
-            world_events.incoming_components,
+            incoming_messages,
         );
 
         std::mem::take(&mut self.outgoing_events)
@@ -99,7 +113,6 @@ impl RemoteWorldManager {
         world: &mut W,
         now: &Instant,
         incoming_messages: Vec<EntityMessage<RemoteEntity>>,
-        incoming_components: HashMap<(RemoteEntity, ComponentKind), Box<dyn Replicate>>,
     ) {
         self.process_ready_messages(
             spawner,
@@ -107,7 +120,6 @@ impl RemoteWorldManager {
             local_world_manager,
             world,
             incoming_messages,
-            incoming_components,
         );
         let world_converter = spawner.to_converter();
         self.process_waitlist_messages(
@@ -127,7 +139,6 @@ impl RemoteWorldManager {
         local_world_manager: &mut LocalWorldManager,
         world: &mut W,
         incoming_messages: Vec<EntityMessage<RemoteEntity>>,
-        mut incoming_components: HashMap<(RemoteEntity, ComponentKind), Box<dyn Replicate>>,
     ) {
         // execute the action and emit an event
         for message in incoming_messages {
@@ -147,7 +158,8 @@ impl RemoteWorldManager {
 
                     // read component list
                     for component_kind in components {
-                        let component = incoming_components
+                        info!("SpawnEntity: entity {:?} removing component {:?}", remote_entity, component_kind);
+                        let component = self.incoming_components
                             .remove(&(remote_entity, component_kind))
                             .unwrap();
                         
@@ -185,7 +197,8 @@ impl RemoteWorldManager {
                         .push(EntityEvent::DespawnEntity(global_entity));
                 }
                 EntityMessage::InsertComponent(remote_entity, component_kind) => {
-                    let component = incoming_components
+                    info!("InsertComponent: entity {:?} removing component {:?}", remote_entity, component_kind);
+                    let component = self.incoming_components
                         .remove(&(remote_entity, component_kind))
                         .unwrap();
 

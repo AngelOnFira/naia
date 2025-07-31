@@ -4,20 +4,10 @@ use std::{
     hash::Hash,
 };
 
-use log::warn;
-
-use crate::{
-    messages::channels::senders::indexed_message_writer::IndexedMessageWriter,
-    world::{
-        entity::entity_converters::GlobalWorldManagerType, local_world_manager::LocalWorldManager,
-    },
-    BitWrite, BitWriter, ComponentKind, ComponentKinds, ConstBitLength, EntityMessage,
-    EntityMessageType, EntityAndGlobalEntityConverter, EntityConverterMut, GlobalEntity,
-    HostWorldEvents, HostWorldManager, Instant, MessageIndex, PacketIndex, Serde,
-    UnsignedVariableInteger, WorldRefType,
-};
-use crate::world::host::host_world_manager::CommandId;
-use super::entity_command::EntityCommand;
+use crate::{messages::channels::senders::indexed_message_writer::IndexedMessageWriter, world::{
+    host::host_world_manager::CommandId,
+    entity::entity_converters::GlobalWorldManagerType, local_world_manager::LocalWorldManager,
+}, BitWrite, BitWriter, ComponentKind, ComponentKinds, ConstBitLength, EntityMessage, EntityMessageType, EntityAndGlobalEntityConverter, EntityConverterMut, GlobalEntity, HostWorldEvents, HostWorldManager, Instant, MessageIndex, PacketIndex, Serde, UnsignedVariableInteger, WorldRefType, EntityCommand};
 
 pub struct HostWorldWriter;
 
@@ -182,7 +172,7 @@ impl HostWorldWriter {
         Self::write_command_id(writer, last_written_id, command_id);
 
         match command {
-            EntityCommand::SpawnEntity(global_entity, component_kind_list) => {
+            EntityCommand::SpawnEntity(global_entity) => {
                 EntityMessageType::SpawnEntity.ser(writer);
 
                 // write net entity
@@ -193,12 +183,14 @@ impl HostWorldWriter {
                     .ser(writer);
 
                 // get world entity
-                let (world_entity_opt, component_kind_list) = if let Ok(world_entity) = entity_converter
-                    .global_entity_to_entity(global_entity) {
-                    (Some(world_entity), component_kind_list.clone())
+                let Ok(world_entity) = entity_converter.global_entity_to_entity(global_entity) else {
+                    panic!("EntityCommand::SpawnEntity: {:?} not found in world!", global_entity);
+                };
+
+                let component_kind_list = if let Some(component_kinds) = global_world_manager.component_kinds(global_entity) {
+                    component_kinds
                 } else {
-                    warn!("EntityCommand::SpawnEntity: {:?} not found in world!", global_entity);
-                    (None, Vec::new())
+                    Vec::new()
                 };
 
                 // write number of components
@@ -206,17 +198,15 @@ impl HostWorldWriter {
                     UnsignedVariableInteger::<3>::new(component_kind_list.len() as i128);
                 components_num.ser(writer);
 
-                if let Some(world_entity) = world_entity_opt {
-                    for component_kind in &component_kind_list {
-                        let mut converter =
-                            EntityConverterMut::new(global_world_manager, local_world_manager);
+                for component_kind in &component_kind_list {
+                    let mut converter =
+                        EntityConverterMut::new(global_world_manager, local_world_manager);
 
-                        // write component payload
-                        world
-                            .component_of_kind(&world_entity, component_kind)
-                            .expect("Component does not exist in World")
-                            .write(component_kinds, writer, &mut converter);
-                    }
+                    // write component payload
+                    world
+                        .component_of_kind(&world_entity, component_kind)
+                        .expect("Component does not exist in World")
+                        .write(component_kinds, writer, &mut converter);
                 }
 
                 // if we are writing to this packet, add it to record
@@ -525,21 +515,9 @@ impl HostWorldWriter {
         let (_command_id, command) = next_send_commands.front().unwrap();
 
         match command {
-            EntityCommand::SpawnEntity(_entity, component_kind_list) => {
-                let mut component_names = "".to_owned();
-                let mut added = false;
-
-                for component_kind in component_kind_list {
-                    if added {
-                        component_names.push(',');
-                    } else {
-                        added = true;
-                    }
-                    let name = component_kinds.kind_to_name(component_kind);
-                    component_names.push_str(&name);
-                }
+            EntityCommand::SpawnEntity(_entity) => {
                 panic!(
-                    "Packet Write Error: Blocking overflow detected! Entity Spawn message with Components `{component_names}` requires {bits_needed} bits, but packet only has {bits_free} bits available! Recommend slimming down these Components."
+                    "Packet Write Error: Blocking overflow detected! Entity Spawn message requires {bits_needed} bits, but packet only has {bits_free} bits available! Recommend slimming down these Components."
                 )
             }
             EntityCommand::InsertComponent(_entity, component_kind) => {
