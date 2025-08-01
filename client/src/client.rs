@@ -1660,7 +1660,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         .global_entity_map
                         .global_entity_to_entity(&global_entity)
                         .unwrap();
-                    info!("Client process_response_events(): EnableDelegationEntity, for entity: {:?}", global_entity);
+
                     self.entity_enable_delegation(world, &global_entity, &world_entity, false);
 
                     // Send EnableDelegationEntityResponse action via EntityActionEvent system
