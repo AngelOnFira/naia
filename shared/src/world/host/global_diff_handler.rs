@@ -36,8 +36,7 @@ impl GlobalDiffHandler {
         }
 
         let (sender, builder) = MutChannel::new_channel(global_world_manager, diff_mask_length);
-
-        info!("GlobalDiffHandler: Registering Component {:?} for Entity {:?}", name, global_entity);
+        
         self.mut_receiver_builders
             .insert((*global_entity, *component_kind), builder);
 

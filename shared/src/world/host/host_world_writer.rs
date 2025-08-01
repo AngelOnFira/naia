@@ -337,8 +337,6 @@ impl HostWorldWriter {
             EntityCommand::EnableDelegationEntity(global_entity) => {
                 EntityMessageType::EnableDelegationEntity.ser(writer);
 
-                info!("Writing EnableDelegationEntity command for global entity: {:?}", global_entity);
-
                 // write net entity
                 local_world_manager
                     .entity_converter()

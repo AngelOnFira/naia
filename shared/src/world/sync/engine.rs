@@ -75,7 +75,7 @@ impl<E: Copy + Hash + Eq + Debug> Engine<E> {
             .entry(entity)
             .or_insert_with(|| { EntityChannel::new(self.host_type) });
 
-        info!("Engine::accept_message(id={}, entity={:?}, msgType={:?})", id, entity, msg.get_type());
+        // info!("Engine::accept_message(id={}, entity={:?}, msgType={:?})", id, entity, msg.get_type());
 
         entity_channel.accept_message(id, msg.strip_entity());
 

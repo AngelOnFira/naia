@@ -222,7 +222,7 @@ impl EntityChannel {
                 EntityMessageType::UpdateAuthority | EntityMessageType::EnableDelegationEntityResponse | EntityMessageType::EntityMigrateResponse => {
                     let (id, msg) = self.buffered_messages.pop_front().unwrap();
                     
-                    info!("EntityChannel::accept_message(id={}, msgType={:?})", id, msg.get_type());
+                    // info!("EntityChannel::accept_message(id={}, msgType={:?})", id, msg.get_type());
 
                     self.auth_channel.accept_message(self.state, id, msg);
                     self.auth_channel.drain_messages_into(&mut self.outgoing_messages);
