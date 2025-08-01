@@ -689,8 +689,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             .global_entity_map
             .entity_to_global_entity(world_entity).ok()?;
 
-        info!("Checking authority status for entity: {:?}", global_entity);
-
         self.global_world_manager
             .entity_authority_status(&global_entity)
     }

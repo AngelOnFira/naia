@@ -1,7 +1,5 @@
 use std::{fmt::Debug, hash::Hash};
 
-use log::info;
-
 use crate::{messages::channels::receivers::reliable_receiver::ReliableReceiver, world::{component::component_kinds::ComponentKind, sync::Engine}, EntityMessage, HostType, MessageIndex};
 
 pub struct EntityMessageReceiver<E: Copy + Hash + Eq + Debug> {

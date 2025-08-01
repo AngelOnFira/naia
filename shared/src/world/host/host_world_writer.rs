@@ -3,7 +3,7 @@ use std::{
     collections::{HashMap, HashSet, VecDeque},
     hash::Hash,
 };
-use log::info;
+
 use crate::{messages::channels::senders::indexed_message_writer::IndexedMessageWriter, world::{
     host::host_world_manager::CommandId,
     entity::entity_converters::GlobalWorldManagerType, local_world_manager::LocalWorldManager,

@@ -307,7 +307,8 @@ impl HostWorldManager {
                     // do nothing
                 }
                 _ => {
-                    todo!();
+                    // Only Auth-related messages are left here
+                    // Right now it doesn't seem like we need to track auth state here
                 }
             }
         }

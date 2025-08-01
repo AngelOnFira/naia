@@ -76,7 +76,6 @@ impl RemoteWorldManager {
 
         // Store incoming components for later processing
         for ((remote_entity, component_kind), component) in incoming_components {
-            info!("Remote World Manager: storing incoming component {:?} for entity {:?}", component_kind, remote_entity);
             self.incoming_components.insert((remote_entity, component_kind), component);
         }
 
@@ -178,7 +177,6 @@ impl RemoteWorldManager {
                         .push(EntityEvent::DespawnEntity(global_entity));
                 }
                 EntityMessage::InsertComponent(remote_entity, component_kind) => {
-                    info!("InsertComponent: entity {:?} removing component {:?}", remote_entity, component_kind);
                     let component = self.incoming_components
                         .remove(&(remote_entity, component_kind))
                         .unwrap();
@@ -213,8 +211,7 @@ impl RemoteWorldManager {
                     // do nothing
                 }
                 msg => {
-                    info!("Remote World Manager: received unsupported message: {:?}", msg);
-                    todo!()
+                    self.outgoing_events.push(msg.to_event(local_world_manager))
                 }
             }
         }

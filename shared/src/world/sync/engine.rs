@@ -22,19 +22,14 @@
 //!    never share the same queue, one delayed entity cannot stall others.
 //!
 //! ## API contracts
-
-
 //!
 //! ## Interaction with `EngineConfig`
 //! The `Engine` never mutates sequence numbers, but it does rely on the
 //! sender/receiver honouring `max_in_flight` and `flush_threshold` to
-//! avoid ambiguous wrapping (`u16` rolls over every 65 536).
+//! avoid ambiguous wrapping (`u16` rolls over every 65536).
 //! *If you change these constants, do so symmetrically on both ends.*
 
-use std::{hash::Hash, collections::HashMap};
-use std::fmt::Debug;
-
-use log::info;
+use std::{fmt::Debug, hash::Hash, collections::HashMap};
 
 use crate::{world::{sync::{entity_channel::EntityChannel, config::EngineConfig}, entity::entity_message::EntityMessage}, HostType, MessageIndex};
 

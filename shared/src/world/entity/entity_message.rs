@@ -1,4 +1,4 @@
-use crate::{EntityAuthStatus, HostEntity, RemoteEntity, world::component::component_kinds::ComponentKind, EntityMessageType};
+use crate::{EntityAuthStatus, HostEntity, RemoteEntity, world::component::component_kinds::ComponentKind, EntityMessageType, EntityEvent, LocalWorldManager};
 
 // Keep E here! TODO: remove
 #[derive(PartialEq, Eq, Debug, Clone)]
@@ -104,6 +104,27 @@ impl EntityMessage<()> {
             EntityMessage::EntityUpdateAuthority(_, status) => EntityMessage::EntityUpdateAuthority(entity, status),
             EntityMessage::EntityMigrateResponse(_, other_entity) => EntityMessage::EntityMigrateResponse(entity, other_entity),
             EntityMessage::Noop => panic!("Cannot add entity to a Noop message"),
+        }
+    }
+}
+
+impl EntityMessage<RemoteEntity> {
+    pub fn to_event(self, local_world_manager: &LocalWorldManager) -> EntityEvent {
+        let remote_entity = self.entity().unwrap();
+        let global_entity = local_world_manager.global_entity_from_remote(&remote_entity);
+        match self {
+            EntityMessage::PublishEntity(_) => EntityEvent::PublishEntity(global_entity),
+            EntityMessage::UnpublishEntity(_) => EntityEvent::UnpublishEntity(global_entity),
+            EntityMessage::EnableDelegationEntity(_) => EntityEvent::EnableDelegationEntity(global_entity),
+            EntityMessage::EnableDelegationEntityResponse(_) => EntityEvent::EnableDelegationEntityResponse(global_entity),
+            EntityMessage::DisableDelegationEntity(_) => EntityEvent::DisableDelegationEntity(global_entity),
+            EntityMessage::EntityRequestAuthority(_, other_entity) => EntityEvent::EntityRequestAuthority(global_entity, other_entity),
+            EntityMessage::EntityReleaseAuthority(_) => EntityEvent::EntityReleaseAuthority(global_entity),
+            EntityMessage::EntityUpdateAuthority(_, status) => EntityEvent::EntityUpdateAuthority(global_entity, status),
+            EntityMessage::EntityMigrateResponse(_, other_entity) => EntityEvent::EntityMigrateResponse(global_entity, other_entity),
+            EntityMessage::SpawnEntity(_) | EntityMessage::DespawnEntity(_) |
+            EntityMessage::InsertComponent(_, _) | EntityMessage::RemoveComponent(_, _) => panic!("Handled elsewhere"),
+            EntityMessage::Noop => panic!("Cannot convert Noop message to an event"),
         }
     }
 }

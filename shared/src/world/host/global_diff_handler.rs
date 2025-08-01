@@ -1,7 +1,5 @@
 use std::{collections::HashMap, net::SocketAddr};
 
-use log::info;
-
 use crate::{ComponentKind, ComponentKinds, GlobalEntity, GlobalWorldManagerType};
 
 use super::mut_channel::{MutChannel, MutReceiver, MutReceiverBuilder, MutSender};
