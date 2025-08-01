@@ -4,7 +4,7 @@ use std::time::Duration;
 use super::{
     entity_command::EntityCommand, host_world_manager::CommandId,
 };
-use crate::{ChannelSender, EntityMessage, EntityMessageReceiver, GlobalEntity, Instant, ReliableSender, PacketIndex};
+use crate::{ChannelSender, EntityMessage, EntityMessageReceiver, GlobalEntity, Instant, ReliableSender, PacketIndex, HostType};
 use crate::sequence_list::SequenceList;
 
 const COMMAND_RECORD_TTL: Duration = Duration::from_secs(60);
@@ -21,11 +21,11 @@ pub struct EntityCommandManager {
 }
 
 impl EntityCommandManager {
-    pub fn new() -> Self {
+    pub fn new(host_type: HostType) -> Self {
         Self {
             outgoing_commands: ReliableSender::new(RESEND_COMMAND_RTT_FACTOR),
             sent_command_packets: SequenceList::new(),
-            delivered_commands: EntityMessageReceiver::new(),
+            delivered_commands: EntityMessageReceiver::new(host_type.invert()),
         }
     }
 

@@ -73,9 +73,15 @@ impl AuthChannel {
 
     /// Is invoked by `EntityChannel` when the entity despawns; this wipes all buffered state so a future *re‑spawn* starts clean.
     pub(crate) fn reset(&mut self) {
+        *self = Self::new();
+    }
+
+    pub(crate) fn set_unpublished(&mut self) {
         self.state = EntityAuthChannelState::Unpublished;
-        self.buffered_messages.clear();
-        self.outgoing_messages.clear();
+    }
+
+    pub(crate) fn set_published(&mut self) {
+        self.state = EntityAuthChannelState::Published;
     }
 
     pub(crate) fn drain_messages_into(
@@ -86,6 +92,10 @@ impl AuthChannel {
         outgoing_messages.append(&mut self.outgoing_messages);
     }
     
+    pub(crate) fn buffer_pop_front_until_and_including(&mut self, id: MessageIndex) {
+        self.buffered_messages.pop_front_until_and_including(id);
+    }
+
     pub(crate) fn buffer_pop_front_until_and_excluding(&mut self, id: MessageIndex) {
         self.buffered_messages.pop_front_until_and_excluding(id);
     }

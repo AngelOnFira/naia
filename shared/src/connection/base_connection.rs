@@ -35,9 +35,9 @@ impl BaseConnection {
     ) -> Self {
         Self {
             message_manager: MessageManager::new(host_type, channel_kinds),
-            host_world_manager: HostWorldManager::new(address, global_world_manager),
+            host_world_manager: HostWorldManager::new(host_type, address, global_world_manager),
             remote_world_manager: RemoteWorldManager::new(),
-            remote_world_reader: RemoteWorldReader::new(),
+            remote_world_reader: RemoteWorldReader::new(host_type),
             local_world_manager: LocalWorldManager::new(user_key),
             ack_manager: AckManager::new(),
             heartbeat_timer: Timer::new(connection_config.heartbeat_interval),

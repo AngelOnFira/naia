@@ -36,25 +36,25 @@ use std::fmt::Debug;
 
 use log::info;
 
-use crate::{world::{sync::{entity_channel::EntityChannel, config::EngineConfig}, entity::entity_message::EntityMessage}, MessageIndex};
+use crate::{world::{sync::{entity_channel::EntityChannel, config::EngineConfig}, entity::entity_message::EntityMessage}, HostType, MessageIndex};
 
 pub struct Engine<E: Copy + Hash + Eq + Debug> {
+    host_type: HostType,
     pub config: EngineConfig,
     outgoing_events: Vec<EntityMessage<E>>,
     entity_channels: HashMap<E, EntityChannel>,
 }
 
-impl<E: Copy + Hash + Eq + Debug> Default for Engine<E> {
-    fn default() -> Self {
+impl<E: Copy + Hash + Eq + Debug> Engine<E> {
+
+    pub(crate) fn new(host_type: HostType) -> Self {
         Self {
+            host_type,
             config: EngineConfig::default(),
             outgoing_events: Vec::new(),
             entity_channels: HashMap::new(),
         }
     }
-}
-
-impl<E: Copy + Hash + Eq + Debug> Engine<E> {
 
     /// * Idempotent*: the caller must already have deduplicated on
     /// `(MessageIndex, Entity)`; re‑injecting the same `(id, msg)` WILL panic!
@@ -73,7 +73,7 @@ impl<E: Copy + Hash + Eq + Debug> Engine<E> {
         // If the entity channel does not exist, create it
         let entity_channel = self.entity_channels
             .entry(entity)
-            .or_insert_with(EntityChannel::new);
+            .or_insert_with(|| { EntityChannel::new(self.host_type) });
 
         info!("Engine::accept_message(id={}, entity={:?}, msgType={:?})", id, entity, msg.get_type());
 

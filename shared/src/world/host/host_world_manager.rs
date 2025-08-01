@@ -8,14 +8,13 @@ use std::{
 use crate::{world::{
     host::{entity_command_sender::EntityCommandManager, checked_map::{CheckedMap, CheckedSet}, entity_update_manager::EntityUpdateManager},
     entity::entity_converters::GlobalWorldManagerType, local_world_manager::LocalWorldManager,
-}, ComponentKind, DiffMask, EntityAndGlobalEntityConverter, EntityCommand, EntityMessage, GlobalEntity, HostEntity, Instant, MessageIndex, PacketIndex, WorldRefType};
+}, ComponentKind, DiffMask, EntityAndGlobalEntityConverter, EntityCommand, EntityMessage, GlobalEntity, HostEntity, HostType, Instant, MessageIndex, PacketIndex, WorldRefType};
 
 pub type CommandId = MessageIndex;
 
 /// Manages Entities for a given Client connection and keeps them in
 /// sync on the Client
 pub struct HostWorldManager {
-
     host_world: CheckedMap<GlobalEntity, CheckedSet<ComponentKind>>,
     remote_world: CheckedMap<GlobalEntity, CheckedSet<ComponentKind>>,
     
@@ -37,13 +36,14 @@ impl HostWorldEvents {
 impl HostWorldManager {
     /// Create a new HostWorldManager, given the client's address
     pub fn new(
+        host_type: HostType,
         address: &Option<SocketAddr>,
         global_world_manager: &dyn GlobalWorldManagerType,
     ) -> Self {
         Self {
             host_world: CheckedMap::new(),
             remote_world: CheckedMap::new(),
-            entity_command_manager: EntityCommandManager::new(),
+            entity_command_manager: EntityCommandManager::new(host_type),
             entity_update_manager: EntityUpdateManager::new(address, global_world_manager),
         }
     }

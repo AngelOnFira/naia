@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
-use log::{info, warn};
+use log::warn;
 
-use crate::{messages::channels::receivers::indexed_message_reader::IndexedMessageReader, world::entity::local_entity::RemoteEntity, world::local_world_manager::LocalWorldManager, BitReader, ComponentKind, ComponentKinds, ComponentUpdate, EntityMessage, EntityMessageReceiver, EntityMessageType, EntityAuthStatus, GlobalEntity, HostEntity, LocalEntityAndGlobalEntityConverter, MessageIndex, Replicate, Serde, SerdeErr, Tick};
+use crate::{messages::channels::receivers::indexed_message_reader::IndexedMessageReader, world::entity::local_entity::RemoteEntity, world::local_world_manager::LocalWorldManager, BitReader, ComponentKind, ComponentKinds, ComponentUpdate, EntityMessage, EntityMessageReceiver, EntityMessageType, EntityAuthStatus, GlobalEntity, HostEntity, LocalEntityAndGlobalEntityConverter, MessageIndex, Replicate, Serde, SerdeErr, Tick, HostType};
 
 pub struct RemoteWorldReader {
     receiver: EntityMessageReceiver<RemoteEntity>,
@@ -17,9 +17,9 @@ pub struct RemoteWorldEvents {
 }
 
 impl RemoteWorldReader {
-    pub fn new() -> Self {
+    pub fn new(host_type: HostType) -> Self {
         Self {
-            receiver: EntityMessageReceiver::new(),
+            receiver: EntityMessageReceiver::new(host_type),
             received_components: HashMap::default(),
             received_updates: Vec::new(),
         }

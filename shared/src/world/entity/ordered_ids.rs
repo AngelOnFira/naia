@@ -60,13 +60,21 @@ impl<P> OrderedIds<P> {
         self.inner.pop_front()
     }
 
+    pub fn pop_front_until_and_including(&mut self, index: MessageIndex) {
+        self.pop_front_until(index, true);
+    }
+    
     pub fn pop_front_until_and_excluding(&mut self, index: MessageIndex) {
+        self.pop_front_until(index, false);
+    }
+    
+    fn pop_front_until(&mut self, index: MessageIndex, including: bool) {
         loop {
             let Some((old_index, _)) = self.inner.front() else {
                 return;
             };
             let old_index = *old_index;
-            if sequence_less_than(old_index, index) {
+            if sequence_less_than(old_index, index) || (including && old_index == index) {
                 self.inner.pop_front();
             } else {
                 return;

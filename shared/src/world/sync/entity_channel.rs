@@ -84,7 +84,7 @@ use crate::{sequence_less_than, world::{
         component_channel::ComponentChannel,
     },
     entity::ordered_ids::OrderedIds
-}, ComponentKind, EntityMessage, EntityMessageType, MessageIndex};
+}, ComponentKind, EntityMessage, EntityMessageType, HostType, MessageIndex};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum EntityChannelState {
@@ -93,6 +93,7 @@ pub(crate) enum EntityChannelState {
 }
 
 pub(crate) struct EntityChannel {
+    host_type: HostType,
     component_channels: HashMap<ComponentKind, ComponentChannel>,
     outgoing_messages: Vec<EntityMessage<()>>,
     state: EntityChannelState,
@@ -102,8 +103,9 @@ pub(crate) struct EntityChannel {
 }
 
 impl EntityChannel {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(host_type: HostType) -> Self {
         Self {
+            host_type,
             component_channels: HashMap::new(),
             outgoing_messages: Vec::new(),
             state: EntityChannelState::Despawned,
@@ -165,7 +167,15 @@ impl EntityChannel {
                     self.pop_front_into_outgoing();
 
                     // Drain the auth channel and append the messages to the outgoing events
-                    self.auth_channel.buffer_pop_front_until_and_excluding(id);
+                    self.auth_channel.buffer_pop_front_until_and_including(id);
+                    
+                    // If HostType == Client, spawned entities are published by default
+                    if self.host_type == HostType::Client {
+                        self.auth_channel.set_published();
+                    } else {
+                        self.auth_channel.set_unpublished();
+                    }
+                    
                     self.auth_channel.process_messages(self.state);
                     self.auth_channel.drain_messages_into(&mut self.outgoing_messages);
 
