@@ -689,6 +689,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             .global_entity_map
             .entity_to_global_entity(world_entity).ok()?;
 
+        info!("Checking authority status for entity: {:?}", global_entity);
+
         self.global_world_manager
             .entity_authority_status(&global_entity)
     }
@@ -1660,6 +1662,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         .global_entity_map
                         .global_entity_to_entity(&global_entity)
                         .unwrap();
+                    info!("Client process_response_events(): EnableDelegationEntity, for entity: {:?}", global_entity);
                     self.entity_enable_delegation(world, &global_entity, &world_entity, false);
 
                     // Send EnableDelegationEntityResponse action via EntityActionEvent system

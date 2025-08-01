@@ -69,28 +69,6 @@ impl ComponentChannel {
         outgoing_messages.append(&mut received_messages);
     }
 
-    pub(crate) fn remove_front_inserts(
-        &mut self,
-    ) {
-        let mut popped = false;
-        loop {
-            let Some(msg) = self.outgoing_messages.front() else {
-                break;
-            };
-            
-            let EntityMessageType::InsertComponent = msg else {
-                break;
-            };
-            
-            if popped {
-                panic!("ComponentChannel::remove_front_spawned: expected only one InsertComponent message, but found more than one");
-            }
-            
-            self.outgoing_messages.pop_front();
-            popped = true;
-        }
-    }
-
     pub(crate) fn buffer_pop_front_until_and_excluding(&mut self, id: MessageIndex) {
         self.buffered_messages.pop_front_until_and_excluding(id);
     }
@@ -139,18 +117,15 @@ impl ComponentChannel {
                     if self.inserted {
                         break;
                     }
-                    self.inserted = true;
-                    self.last_epoch_id = Some(id);
+                    self.set_inserted(true, id);
                 }
                 false => {
                     if !self.inserted {
                         break;
                     }
-                    self.inserted = false;
-                    self.last_epoch_id = Some(id);
+                    self.set_inserted(false, id);
                 }
             }
-
 
             let (_, insert) = self.buffered_messages.pop_front().unwrap();
             if insert {
@@ -159,5 +134,10 @@ impl ComponentChannel {
                 self.outgoing_messages.push_back(EntityMessageType::RemoveComponent);
             }
         }
+    }
+
+    pub(crate) fn set_inserted(&mut self, inserted: bool, last_epoch_id: MessageIndex) {
+        self.inserted = inserted;
+        self.last_epoch_id = Some(last_epoch_id);
     }
 }

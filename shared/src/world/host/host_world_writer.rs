@@ -3,11 +3,11 @@ use std::{
     collections::{HashMap, HashSet, VecDeque},
     hash::Hash,
 };
-
+use log::info;
 use crate::{messages::channels::senders::indexed_message_writer::IndexedMessageWriter, world::{
     host::host_world_manager::CommandId,
     entity::entity_converters::GlobalWorldManagerType, local_world_manager::LocalWorldManager,
-}, BitWrite, BitWriter, ComponentKind, ComponentKinds, ConstBitLength, EntityMessage, EntityMessageType, EntityAndGlobalEntityConverter, EntityConverterMut, GlobalEntity, HostWorldEvents, HostWorldManager, Instant, MessageIndex, PacketIndex, Serde, UnsignedVariableInteger, WorldRefType, EntityCommand};
+}, BitWrite, BitWriter, ComponentKind, ComponentKinds, ConstBitLength, EntityMessage, EntityMessageType, EntityAndGlobalEntityConverter, EntityConverterMut, GlobalEntity, HostWorldEvents, HostWorldManager, Instant, MessageIndex, PacketIndex, Serde, WorldRefType, EntityCommand};
 
 pub struct HostWorldWriter;
 
@@ -182,39 +182,12 @@ impl HostWorldWriter {
                     .unwrap()
                     .ser(writer);
 
-                // get world entity
-                let Ok(world_entity) = entity_converter.global_entity_to_entity(global_entity) else {
-                    panic!("EntityCommand::SpawnEntity: {:?} not found in world!", global_entity);
-                };
-
-                let component_kind_list = if let Some(component_kinds) = global_world_manager.component_kinds(global_entity) {
-                    component_kinds
-                } else {
-                    Vec::new()
-                };
-
-                // write number of components
-                let components_num =
-                    UnsignedVariableInteger::<3>::new(component_kind_list.len() as i128);
-                components_num.ser(writer);
-
-                for component_kind in &component_kind_list {
-                    let mut converter =
-                        EntityConverterMut::new(global_world_manager, local_world_manager);
-
-                    // write component payload
-                    world
-                        .component_of_kind(&world_entity, component_kind)
-                        .expect("Component does not exist in World")
-                        .write(component_kinds, writer, &mut converter);
-                }
-
                 // if we are writing to this packet, add it to record
                 if is_writing {
                     host_manager.record_command_written(
                         packet_index,
                         command_id,
-                        EntityMessage::SpawnEntity(*global_entity, component_kind_list),
+                        EntityMessage::SpawnEntity(*global_entity),
                     );
                 }
             }
@@ -363,6 +336,8 @@ impl HostWorldWriter {
             }
             EntityCommand::EnableDelegationEntity(global_entity) => {
                 EntityMessageType::EnableDelegationEntity.ser(writer);
+
+                info!("Writing EnableDelegationEntity command for global entity: {:?}", global_entity);
 
                 // write net entity
                 local_world_manager

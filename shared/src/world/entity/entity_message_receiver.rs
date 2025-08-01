@@ -1,5 +1,5 @@
 use std::{fmt::Debug, hash::Hash};
-
+use log::info;
 use crate::{messages::channels::receivers::reliable_receiver::ReliableReceiver, world::{component::component_kinds::ComponentKind, sync::Engine}, EntityMessage, MessageIndex};
 
 pub struct EntityMessageReceiver<E: Copy + Hash + Eq + Debug> {
@@ -29,6 +29,11 @@ impl<E: Copy + Hash + Eq + Debug> EntityMessageReceiver<E> {
 
     /// Buffer a read [`EntityMessage`] so that it can be processed later
     pub fn buffer_message(&mut self, message_index: MessageIndex, message: EntityMessage<E>) {
+
+        info!(
+            "RemoteWorldReceiver::buffer_message(): {:?}", message,
+        );
+        
         self.receiver.buffer_message(message_index, message);
     }
 
@@ -41,6 +46,10 @@ impl<E: Copy + Hash + Eq + Debug> EntityMessageReceiver<E> {
         for (message_index, message) in incoming_messages {
             self.engine.accept_message(message_index, message);
         }
-        self.engine.receive_messages()
+        let received_messages = self.engine.receive_messages();
+        for msg in &received_messages {
+            info!("EntityMessageReceiver::receive_messages(entity={:?}, msgType={:?})", msg.entity(), msg.get_type());
+        }
+        received_messages
     }
 }

@@ -76,6 +76,8 @@
 
 use std::{hash::Hash, collections::HashMap};
 
+use log::info;
+
 use crate::{sequence_less_than, world::{
     sync::{
         auth_channel::AuthChannel,
@@ -155,11 +157,6 @@ impl EntityChannel {
                         break;
                     }
 
-                    let EntityMessage::SpawnEntity(_, spawned_components) = msg else {
-                        panic!("Expected a SpawnEntity message, got: {:?}", msg);
-                    };
-                    let spawned_components = spawned_components.clone();
-
                     self.state = EntityChannelState::Spawned;
                     self.last_epoch_id = Some(id);
                     // clear buffered messages less than or equal to the last spawn id
@@ -174,21 +171,10 @@ impl EntityChannel {
 
                     // Pop buffered messages from the component channels until and excluding the spawn id
                     // Then process the messages in the component channels
-                    for (_, component_channel) in self.component_channels.iter_mut() {
+                    // Then drain the messages into the outgoing messages
+                    for (component_kind, component_channel) in self.component_channels.iter_mut() {
                         component_channel.buffer_pop_front_until_and_excluding(id);
                         component_channel.process_messages(self.state);
-                    }
-
-                    // Remove any front inserts from the component channels which were already spawned
-                    for component_kind in spawned_components {
-                        let Some(component_channel) = self.component_channels.get_mut(&component_kind) else {
-                            continue;
-                        };
-                        component_channel.remove_front_inserts();
-                    }
-
-                    // Drain the component channels and append the messages to the outgoing events
-                    for (component_kind, component_channel) in self.component_channels.iter_mut() {
                         component_channel.drain_messages_into(component_kind, &mut self.outgoing_messages);
                     }
                 },
@@ -225,6 +211,8 @@ impl EntityChannel {
                 EntityMessageType::RequestAuthority | EntityMessageType::ReleaseAuthority |
                 EntityMessageType::UpdateAuthority | EntityMessageType::EnableDelegationEntityResponse | EntityMessageType::EntityMigrateResponse => {
                     let (id, msg) = self.buffered_messages.pop_front().unwrap();
+                    
+                    info!("EntityChannel::accept_message(id={}, msgType={:?})", id, msg.get_type());
 
                     self.auth_channel.accept_message(self.state, id, msg);
                     self.auth_channel.drain_messages_into(&mut self.outgoing_messages);

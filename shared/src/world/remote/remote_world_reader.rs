@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
-use log::warn;
+use log::{info, warn};
 
-use crate::{messages::channels::receivers::indexed_message_reader::IndexedMessageReader, world::entity::local_entity::RemoteEntity, world::local_world_manager::LocalWorldManager, BitReader, ComponentKind, ComponentKinds, ComponentUpdate, EntityMessage, EntityMessageReceiver, EntityMessageType, EntityAuthStatus, GlobalEntity, HostEntity, LocalEntityAndGlobalEntityConverter, MessageIndex, Replicate, Serde, SerdeErr, Tick, UnsignedVariableInteger};
+use crate::{messages::channels::receivers::indexed_message_reader::IndexedMessageReader, world::entity::local_entity::RemoteEntity, world::local_world_manager::LocalWorldManager, BitReader, ComponentKind, ComponentKinds, ComponentUpdate, EntityMessage, EntityMessageReceiver, EntityMessageType, EntityAuthStatus, GlobalEntity, HostEntity, LocalEntityAndGlobalEntityConverter, MessageIndex, Replicate, Serde, SerdeErr, Tick};
 
 pub struct RemoteWorldReader {
     receiver: EntityMessageReceiver<RemoteEntity>,
@@ -125,20 +125,9 @@ impl RemoteWorldReader {
                 // read entity
                 let remote_entity = RemoteEntity::de(reader)?;
 
-                // read components
-                let components_num = UnsignedVariableInteger::<3>::de(reader)?.get();
-                let mut component_kind_list = Vec::new();
-                for _ in 0..components_num {
-                    let new_component = component_kinds.read(reader, converter)?;
-                    let new_component_kind = new_component.kind();
-                    self.received_components
-                        .insert((remote_entity, new_component_kind), new_component);
-                    component_kind_list.push(new_component_kind);
-                }
-
                 self.receiver.buffer_message(
                     message_id,
-                    EntityMessage::SpawnEntity(remote_entity, component_kind_list),
+                    EntityMessage::SpawnEntity(remote_entity),
                 );
             }
             // Entity Deletion

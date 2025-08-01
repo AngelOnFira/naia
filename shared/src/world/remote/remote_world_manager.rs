@@ -143,7 +143,7 @@ impl RemoteWorldManager {
         // execute the action and emit an event
         for message in incoming_messages {
             match message {
-                EntityMessage::SpawnEntity(remote_entity, components) => {
+                EntityMessage::SpawnEntity(remote_entity) => {
                     // set up entity
                     let world_entity = world.spawn_entity();
                     let global_entity = spawner.spawn(world_entity, Some(remote_entity));
@@ -155,25 +155,6 @@ impl RemoteWorldManager {
 
                     self.outgoing_events
                         .push(EntityEvent::SpawnEntity(global_entity));
-
-                    // read component list
-                    for component_kind in components {
-                        info!("SpawnEntity: entity {:?} removing component {:?}", remote_entity, component_kind);
-                        let component = self.incoming_components
-                            .remove(&(remote_entity, component_kind))
-                            .unwrap();
-                        
-                        let mut reserver = local_world_manager.global_entity_reserver(global_world_manager, spawner);
-
-                        self.process_insert(
-                            world,
-                            &mut reserver,
-                            global_entity,
-                            world_entity,
-                            component,
-                            &component_kind,
-                        );
-                    }
                 }
                 EntityMessage::DespawnEntity(remote_entity) => {
                     let global_entity = local_world_manager.remove_by_remote_entity(&remote_entity);
@@ -231,7 +212,8 @@ impl RemoteWorldManager {
                 EntityMessage::Noop => {
                     // do nothing
                 }
-                _ => {
+                msg => {
+                    info!("Remote World Manager: received unsupported message: {:?}", msg);
                     todo!()
                 }
             }

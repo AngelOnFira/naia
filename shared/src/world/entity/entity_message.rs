@@ -3,7 +3,7 @@ use crate::{EntityAuthStatus, HostEntity, RemoteEntity, world::component::compon
 // Keep E here! TODO: remove
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub enum EntityMessage<E: Copy + Eq + PartialEq> {
-    SpawnEntity(E, Vec<ComponentKind>),
+    SpawnEntity(E),
     DespawnEntity(E),
     InsertComponent(E, ComponentKind),
     RemoveComponent(E, ComponentKind),
@@ -23,7 +23,7 @@ pub enum EntityMessage<E: Copy + Eq + PartialEq> {
 impl<E: Copy + Eq + PartialEq> EntityMessage<E> {
     pub fn entity(&self) -> Option<E> {
         match self {
-            Self::SpawnEntity(entity, _) => Some(*entity),
+            Self::SpawnEntity(entity) => Some(*entity),
             Self::DespawnEntity(entity) => Some(*entity),
             Self::InsertComponent(entity, _) => Some(*entity),
             Self::RemoveComponent(entity, _) => Some(*entity),
@@ -50,7 +50,7 @@ impl<E: Copy + Eq + PartialEq> EntityMessage<E> {
     
     pub fn strip_entity(self) -> EntityMessage<()> {
         match self {
-            Self::SpawnEntity(_, component_kinds) => EntityMessage::SpawnEntity((), component_kinds),
+            Self::SpawnEntity(_) => EntityMessage::SpawnEntity(()),
             Self::DespawnEntity(_) => EntityMessage::DespawnEntity(()),
             Self::InsertComponent(_, component_kind) => EntityMessage::InsertComponent((), component_kind),
             Self::RemoveComponent(_, component_kind) => EntityMessage::RemoveComponent((), component_kind),
@@ -69,7 +69,7 @@ impl<E: Copy + Eq + PartialEq> EntityMessage<E> {
     
     pub fn get_type(&self) -> EntityMessageType {
         match self {
-            Self::SpawnEntity(_, _) => EntityMessageType::SpawnEntity,
+            Self::SpawnEntity(_) => EntityMessageType::SpawnEntity,
             Self::DespawnEntity(_) => EntityMessageType::DespawnEntity,
             Self::InsertComponent(_, _) => EntityMessageType::InsertComponent,
             Self::RemoveComponent(_, _) => EntityMessageType::RemoveComponent,
@@ -90,7 +90,7 @@ impl<E: Copy + Eq + PartialEq> EntityMessage<E> {
 impl EntityMessage<()> {
     pub fn with_entity<E: Copy + Eq + PartialEq>(self, entity: E) -> EntityMessage<E> {
         match self {
-            EntityMessage::SpawnEntity(_, component_kinds) => EntityMessage::SpawnEntity(entity, component_kinds),
+            EntityMessage::SpawnEntity(_) => EntityMessage::SpawnEntity(entity),
             EntityMessage::DespawnEntity(_) => EntityMessage::DespawnEntity(entity),
             EntityMessage::InsertComponent(_, component_kind) => EntityMessage::InsertComponent(entity, component_kind),
             EntityMessage::RemoveComponent(_, component_kind) => EntityMessage::RemoveComponent(entity, component_kind),

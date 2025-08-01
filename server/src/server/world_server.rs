@@ -1468,6 +1468,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         world_entity: &E,
         client_origin: Option<UserKey>,
     ) {
+        info!(
+            "Enabling delegation for entity: {:?}",
+            global_entity
+        );
         // TODO: check that entity is eligible for delegation?
 
         {
@@ -1484,6 +1488,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         .host_has_entity(global_entity)
                     {
                         // Send EnableDelegationEntity action through EntityActionEvent system
+                        info!(
+                            "Sending EnableDelegation command for entity: {:?} for user: {:?}",
+                            global_entity, user.address()
+                        );
                         connection
                             .base
                             .host_world_manager
@@ -2418,6 +2426,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         if !self.global_world_manager.entity_is_delegated(global_entity) {
                             continue;
                         }
+                        info!("Enabling delegation for entity `{:?}` on connection {:?}", global_entity, user.address());
                         connection
                             .base
                             .host_world_manager

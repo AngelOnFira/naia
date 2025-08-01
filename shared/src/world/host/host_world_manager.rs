@@ -131,13 +131,8 @@ impl HostWorldManager {
     fn on_remote_spawn_entity(
         &mut self,
         global_entity: &GlobalEntity,
-        component_kinds: Vec<ComponentKind>,
     ) {
-        let mut component_set = CheckedSet::<ComponentKind>::new();
-        for component_kind in &component_kinds {
-            component_set.insert(*component_kind);
-        }
-        self.remote_world.insert(*global_entity, component_set);
+        self.remote_world.insert(*global_entity, CheckedSet::<ComponentKind>::new());
     }
     
     fn on_remote_despawn_entity(
@@ -296,8 +291,8 @@ impl HostWorldManager {
         let delivered_commands = self.entity_command_manager.take_delivered_commands();
         for command in delivered_commands {
             match command {
-                EntityMessage::SpawnEntity(entity, components) => {
-                    self.on_remote_spawn_entity(&entity, components);
+                EntityMessage::SpawnEntity(entity) => {
+                    self.on_remote_spawn_entity(&entity);
                 }
                 EntityMessage::DespawnEntity(entity) => {
                     self.on_remote_despawn_entity(local_world_manager, &entity);
