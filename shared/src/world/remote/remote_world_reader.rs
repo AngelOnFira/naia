@@ -188,10 +188,10 @@ impl RemoteWorldReader {
             }
             EntityMessageType::EnableDelegationEntityResponse => {
                 // read entity
-                let remote_entity = RemoteEntity::de(reader)?;
+                let host_entity = HostEntity::de(reader)?;
 
                 self.receiver
-                    .buffer_message(message_id, EntityMessage::EnableDelegationEntityResponse(remote_entity));
+                    .buffer_message(message_id, EntityMessage::EnableDelegationEntityResponse(host_entity.to_remote()));
             }
             EntityMessageType::DisableDelegationEntity => {
                 // read entity

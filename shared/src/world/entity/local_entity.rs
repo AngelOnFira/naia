@@ -90,6 +90,11 @@ impl HostEntity {
         UnsignedVariableInteger::<7>::new(self.value()).ser(writer);
     }
 
+    pub fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
+        let value = UnsignedVariableInteger::<7>::de(reader)?.get();
+        Ok(Self(value as u16))
+    }
+
     pub fn bit_length(&self) -> u32 {
         UnsignedVariableInteger::<7>::new(self.value()).bit_length()
     }
@@ -116,6 +121,10 @@ impl RemoteEntity {
         HostEntity::new(self.0)
     }
 
+    pub fn ser(&self, writer: &mut dyn BitWrite) {
+        UnsignedVariableInteger::<7>::new(self.value()).ser(writer);
+    }
+    
     pub fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
         let value = UnsignedVariableInteger::<7>::de(reader)?.get();
         Ok(Self(value as u16))

@@ -359,7 +359,7 @@ impl HostWorldWriter {
                 // write net entity
                 local_world_manager
                     .entity_converter()
-                    .global_entity_to_host_entity(global_entity)
+                    .global_entity_to_remote_entity(global_entity)
                     .unwrap()
                     .ser(writer);
 
