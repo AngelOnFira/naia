@@ -391,25 +391,25 @@ impl HostWorldWriter {
                     );
                 }
             }
-            EntityCommand::RequestAuthority(global_entity, remote_entity) => {
+            EntityCommand::RequestAuthority(global_entity, host_entity) => {
                 EntityMessageType::RequestAuthority.ser(writer);
 
                 // write net entity
                 local_world_manager
                     .entity_converter()
-                    .global_entity_to_host_entity(global_entity)
+                    .global_entity_to_remote_entity(global_entity)
                     .unwrap()
                     .ser(writer);
 
-                // write remote entity value
-                remote_entity.value().ser(writer);
+                // write host entity value
+                host_entity.value().ser(writer);
 
                 // if we are writing to this packet, add it to record
                 if is_writing {
                     host_manager.record_command_written(
                         packet_index,
                         command_id,
-                        EntityMessage::EntityRequestAuthority(*global_entity, *remote_entity),
+                        EntityMessage::EntityRequestAuthority(*global_entity, *host_entity),
                     );
                 }
             }
@@ -419,7 +419,7 @@ impl HostWorldWriter {
                 // write net entity
                 local_world_manager
                     .entity_converter()
-                    .global_entity_to_host_entity(global_entity)
+                    .global_entity_to_remote_entity(global_entity)
                     .unwrap()
                     .ser(writer);
 

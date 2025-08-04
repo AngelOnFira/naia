@@ -1,6 +1,6 @@
 use crate::{ComponentKind, EntityAuthStatus, GlobalEntity, HostEntity, RemoteEntity};
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum EntityCommand {
     SpawnEntity(GlobalEntity),
     DespawnEntity(GlobalEntity),

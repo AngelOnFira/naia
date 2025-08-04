@@ -4,7 +4,7 @@ use std::time::Duration;
 use super::{
     entity_command::EntityCommand, host_world_manager::CommandId,
 };
-use crate::{ChannelSender, EntityMessage, EntityMessageReceiver, GlobalEntity, Instant, ReliableSender, PacketIndex, HostType};
+use crate::{ChannelSender, EntityMessage, EntityMessageReceiver, GlobalEntity, Instant, ReliableSender, PacketIndex, HostType, ComponentKind};
 use crate::sequence_list::SequenceList;
 
 const COMMAND_RECORD_TTL: Duration = Duration::from_secs(60);
@@ -106,6 +106,21 @@ impl EntityCommandManager {
     pub fn take_delivered_commands(
         &mut self,
     ) -> Vec<EntityMessage<GlobalEntity>> {
-        self.delivered_commands.receive_messages()
+        self.delivered_commands.receive_messages(false)
+    }
+
+    pub fn track_remote_entity(
+        &mut self,
+        entity: &GlobalEntity,
+        component_kinds: &Vec<ComponentKind>,
+    ) {
+        self.delivered_commands.track_hosts_redundant_remote_entity(entity, component_kinds);
+    }
+    
+    pub fn untrack_remote_entity(
+        &mut self,
+        entity: &GlobalEntity,
+    ) {
+        self.delivered_commands.untrack_hosts_redundant_remote_entity(entity);
     }
 }

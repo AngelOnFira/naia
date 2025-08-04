@@ -5,6 +5,8 @@ use std::{
     sync::RwLockReadGuard,
 };
 
+use log::info;
+
 use crate::{world::{
     host::{entity_command_sender::EntityCommandManager, checked_map::{CheckedMap, CheckedSet}, entity_update_manager::EntityUpdateManager},
     entity::entity_converters::GlobalWorldManagerType, local_world_manager::LocalWorldManager,
@@ -186,6 +188,8 @@ impl HostWorldManager {
 
         // info!("--- tracking remote entity ---");
 
+        self.entity_command_manager.track_remote_entity(global_entity, &component_kinds);
+
         // add components
         for component_kind in component_kinds {
             self.track_remote_component(global_entity, &component_kind);
@@ -201,10 +205,16 @@ impl HostWorldManager {
         local_world_manager: &mut LocalWorldManager,
         global_entity: &GlobalEntity,
     ) {
-        self.host_world.remove(global_entity);
+        let components = self.host_world.remove(global_entity).unwrap();
         self.remote_world.remove(global_entity);
 
         local_world_manager.set_primary_to_remote(global_entity);
+
+        self.entity_command_manager.untrack_remote_entity(global_entity);
+
+        for component in components.iter() {
+            self.untrack_remote_component(global_entity, component);
+        }
     }
 
     pub fn track_remote_component(
@@ -225,6 +235,16 @@ impl HostWorldManager {
             };
             components.insert(*component_kind);
         }
+
+        self.entity_update_manager.register_component(global_entity, component_kind);
+    }
+
+    pub fn untrack_remote_component(
+        &mut self,
+        global_entity: &GlobalEntity,
+        component_kind: &ComponentKind,
+    ) {
+        self.entity_update_manager.deregister_component(global_entity, component_kind);
     }
 
     // Messages
@@ -251,6 +271,12 @@ impl HostWorldManager {
         &mut self,
         command: EntityCommand,
     ) {
+        match &command {
+            EntityCommand::SpawnEntity(_) | EntityCommand::DespawnEntity(_) | EntityCommand::InsertComponent(_, _) | EntityCommand::RemoveComponent(_, _) => {}
+            command => {
+                info!("HostWorldManager: sending entity command: {:?}", command);
+            }
+        }
         self.entity_command_manager.send_outgoing_command(command);
     }
 

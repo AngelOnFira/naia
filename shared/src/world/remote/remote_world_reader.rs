@@ -27,7 +27,7 @@ impl RemoteWorldReader {
 
     pub fn take_incoming_events(&mut self) -> RemoteWorldEvents {
         RemoteWorldEvents {
-            incoming_messages: self.receiver.receive_messages(),
+            incoming_messages: self.receiver.receive_messages(true),
             incoming_components: std::mem::take(&mut self.received_components),
             incoming_updates: std::mem::take(&mut self.received_updates),
         }
@@ -43,8 +43,9 @@ impl RemoteWorldReader {
     }
 
     pub fn untrack_hosts_redundant_remote_entity(&mut self, remote_entity: &RemoteEntity) {
-        self.receiver
-            .untrack_hosts_redundant_remote_entity(remote_entity);
+        if self.receiver.host_has_redundant_remote_entity(remote_entity) {
+            self.receiver.untrack_hosts_redundant_remote_entity(remote_entity);
+        }
     }
 
     // Reading

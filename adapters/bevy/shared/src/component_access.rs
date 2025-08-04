@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 
 use bevy_app::{App, Update};
 use bevy_ecs::{component::{Component, Mutable}, entity::Entity, schedule::IntoScheduleConfigs, world::World};
-use log::info;
+
 use naia_shared::{ComponentKinds, EntityAndGlobalEntityConverter, GlobalWorldManagerType, ReplicaDynMutWrapper, ReplicaDynRefWrapper, Replicate};
 
 use super::{

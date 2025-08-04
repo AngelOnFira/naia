@@ -123,6 +123,10 @@ impl LocalEntityMap {
         self.remote_to_global.get(remote_entity)
     }
 
+    pub fn global_entity_from_host(&self, host_entity: &HostEntity) -> Option<&GlobalEntity> {
+        self.host_to_global.get(host_entity)
+    }
+
     pub fn remove_by_global_entity(&mut self, global_entity: &GlobalEntity) -> Option<LocalEntityRecord> {
         // info!("Removing global entity: {:?}", global_entity);
         let record_opt = self.global_to_local.remove(global_entity);

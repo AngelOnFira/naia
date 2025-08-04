@@ -150,8 +150,19 @@ impl LocalWorldManager {
             return *global_entity;
         } else {
             panic!(
-                "Attempting to get global entity for local entity which does not exist!: `{:?}`",
+                "Attempting to get global entity for remote entity which does not exist!: `{:?}`",
                 remote_entity
+            );
+        }
+    }
+    
+    pub(crate) fn global_entity_from_host(&self, host_entity: &HostEntity) -> GlobalEntity {
+        if let Some(global_entity) = self.entity_map.global_entity_from_host(host_entity) {
+            return *global_entity;
+        } else {
+            panic!(
+                "Attempting to get global entity for host entity which does not exist!: `{:?}`",
+                host_entity
             );
         }
     }

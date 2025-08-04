@@ -6,20 +6,15 @@ use std::{
 use log::{info, warn};
 use naia_socket_shared::Instant;
 
-use crate::{
-    world::{
-        entity::{local_entity::RemoteEntity, in_scope_entities::{InScopeEntities, InScopeEntitiesMut}},
-        local_world_manager::LocalWorldManager,
-        remote::{
-            entity_event::EntityEvent,
-            entity_waitlist::{EntityWaitlist, WaitlistHandle, WaitlistStore},
-            remote_world_reader::RemoteWorldEvents,
-        },
+use crate::{world::{
+    entity::{local_entity::RemoteEntity, in_scope_entities::{InScopeEntities, InScopeEntitiesMut}},
+    local_world_manager::LocalWorldManager,
+    remote::{
+        entity_event::EntityEvent,
+        entity_waitlist::{EntityWaitlist, WaitlistHandle, WaitlistStore},
+        remote_world_reader::RemoteWorldEvents,
     },
-    ComponentFieldUpdate, ComponentKind, ComponentKinds, ComponentUpdate, EntityMessage,
-    EntityAndGlobalEntityConverter, GlobalEntity, GlobalEntitySpawner, GlobalWorldManagerType,
-    LocalEntityAndGlobalEntityConverter, Replicate, Tick, WorldMutType,
-};
+}, ComponentFieldUpdate, ComponentKind, ComponentKinds, ComponentUpdate, EntityMessage, EntityAndGlobalEntityConverter, GlobalEntity, GlobalEntitySpawner, GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter, Replicate, Tick, WorldMutType, EntityMessageType};
 
 pub struct RemoteWorldManager {
     pub entity_waitlist: EntityWaitlist,
@@ -51,10 +46,6 @@ impl RemoteWorldManager {
         global_entity: &GlobalEntity
     ) {
         self.entity_waitlist.add_entity(in_scope_entities, global_entity);
-    }
-
-    pub fn on_entity_channel_closing(&mut self, _remote_entity: &RemoteEntity) {
-        // placeholder for any cleanup needed when an entity channel is closing
     }
 
     pub fn process_world_events<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
@@ -141,6 +132,7 @@ impl RemoteWorldManager {
     ) {
         // execute the action and emit an event
         for message in incoming_messages {
+            // info!("Processing EntityMessage: {:?}", message);
             match message {
                 EntityMessage::SpawnEntity(remote_entity) => {
                     // set up entity
@@ -170,9 +162,7 @@ impl RemoteWorldManager {
                     }
 
                     world.despawn_entity(&world_entity);
-
-                    self.on_entity_channel_closing(&remote_entity);
-
+                    
                     self.outgoing_events
                         .push(EntityEvent::DespawnEntity(global_entity));
                 }
@@ -211,7 +201,15 @@ impl RemoteWorldManager {
                     // do nothing
                 }
                 msg => {
-                    self.outgoing_events.push(msg.to_event(local_world_manager))
+                    let msg_type = msg.get_type();
+                    let event = match msg_type {
+                        EntityMessageType::EnableDelegationEntityResponse | EntityMessageType::RequestAuthority | EntityMessageType::ReleaseAuthority => {
+                            let msg = msg.to_host_message();
+                            msg.to_event(local_world_manager)
+                        }
+                        _ => msg.to_event(local_world_manager)
+                    };
+                    self.outgoing_events.push(event);
                 }
             }
         }

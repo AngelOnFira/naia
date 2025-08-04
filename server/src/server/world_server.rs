@@ -909,11 +909,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             .base
             .remote_world_reader
             .untrack_hosts_redundant_remote_entity(&remote_entity);
-        // does nothing right now
-        connection
-            .base
-            .remote_world_manager
-            .on_entity_channel_closing(&remote_entity);
     }
 
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
@@ -2118,7 +2113,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         for response_event in deferred_events {
             match response_event {
                 EntityEvent::PublishEntity(global_entity) => {
-                    info!("received publish message for entity `{:?}`!", global_entity);
                     let world_entity = self
                         .global_entity_map
                         .global_entity_to_entity(&global_entity)
@@ -2137,7 +2131,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         .push_unpublish(user_key, &world_entity);
                 }
                 EntityEvent::EnableDelegationEntity(global_entity) => {
-                    info!("received enable delegation message for entity `{:?}`!", global_entity);
                     let world_entity = self
                         .global_entity_map
                         .global_entity_to_entity(&global_entity)

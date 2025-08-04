@@ -31,7 +31,9 @@
 
 use std::{fmt::Debug, hash::Hash, collections::HashMap};
 
-use crate::{world::{sync::{entity_channel::EntityChannel, config::EngineConfig}, entity::entity_message::EntityMessage}, HostType, MessageIndex};
+use log::{info, warn};
+
+use crate::{world::{sync::{entity_channel::EntityChannel, config::EngineConfig}, entity::entity_message::EntityMessage}, ComponentKind, EntityMessageType, HostType, MessageIndex};
 
 pub struct Engine<E: Copy + Hash + Eq + Debug> {
     host_type: HostType,
@@ -59,18 +61,31 @@ impl<E: Copy + Hash + Eq + Debug> Engine<E> {
     pub fn accept_message(
         &mut self,
         id: MessageIndex,
-        msg: EntityMessage<E>
+        msg: EntityMessage<E>,
+        log: bool,
     ) {
         let Some(entity) = msg.entity() else {
             // was a no-op message
             return;
         };
+
+        // If the message are responses, immediately return
+        match msg.get_type() {
+            EntityMessageType::EnableDelegationEntityResponse | EntityMessageType::RequestAuthority | EntityMessageType::ReleaseAuthority => {
+                self.outgoing_events.push(msg);
+                return;
+            }
+            _ => {}
+        }
+
         // If the entity channel does not exist, create it
         let entity_channel = self.entity_channels
             .entry(entity)
             .or_insert_with(|| { EntityChannel::new(self.host_type) });
 
-        // info!("Engine::accept_message(id={}, entity={:?}, msgType={:?})", id, entity, msg.get_type());
+        if log {
+            info!("Engine::accept_message(id={}, entity={:?}, msgType={:?})", id, entity, msg.get_type());
+        }
 
         entity_channel.accept_message(id, msg.strip_entity());
 
@@ -82,5 +97,32 @@ impl<E: Copy + Hash + Eq + Debug> Engine<E> {
     /// in sequence and discard.
     pub fn receive_messages(&mut self) -> Vec<EntityMessage<E>> {
         std::mem::take(&mut self.outgoing_events)
+    }
+
+    pub fn host_has_remote_entity(&self, entity: &E) -> bool {
+        self.entity_channels.contains_key(entity)
+    }
+    
+    pub fn track_hosts_redundant_remote_entity(
+        &mut self,
+        entity: &E,
+        component_kinds: &Vec<ComponentKind>,
+    ) {
+        if self.entity_channels.contains_key(entity) {
+            panic!("Attempted to track hosts for redundant remote entity which already exists: {:?}", entity);
+        }
+
+        self.entity_channels.insert(*entity, EntityChannel::new_delegated(self.host_type));
+
+        let entity_channel = self.entity_channels.get_mut(entity).unwrap();
+        entity_channel.setup_delegated_components(component_kinds);
+    }
+
+    pub fn untrack_hosts_redundant_remote_entity(&mut self, entity: &E) {
+        if !self.entity_channels.contains_key(entity) {
+            panic!("Attempted to untrack hosts for redundant remote entity which does not exist: {:?}", entity);
+        }
+
+        self.entity_channels.remove(entity);
     }
 }

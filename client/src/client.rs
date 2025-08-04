@@ -1229,21 +1229,21 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             (EntityAuthStatus::Available, EntityAuthStatus::Available) => {
                 // auth was released before it was granted, continue as normal
                 warn!(
-                    "-- Entity updated authority, not handled -- {:?} -> {:?}",
-                    old_auth_status, new_auth_status
+                    "-- Entity {:?} updated authority, not handled -- {:?} -> {:?}",
+                    global_entity, old_auth_status, new_auth_status
                 );
             }
             (EntityAuthStatus::Denied, EntityAuthStatus::Denied) => {
                 // sometimes this happens when a new connection is established
                 warn!(
-                    "-- Entity updated authority, not handled -- {:?} -> {:?}",
-                    old_auth_status, new_auth_status
+                    "-- Entity {:?} updated authority, not handled -- {:?} -> {:?}",
+                    global_entity, old_auth_status, new_auth_status
                 );
             }
             (_, _) => {
                 panic!(
-                    "-- Entity updated authority, not handled -- {:?} -> {:?}",
-                    old_auth_status, new_auth_status
+                    "-- Entity {:?} updated authority, not handled -- {:?} -> {:?}",
+                    global_entity, old_auth_status, new_auth_status
                 );
             }
         }
@@ -1713,7 +1713,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         .global_entity_map
                         .global_entity_to_entity(&global_entity)
                         .unwrap();
-                    info!("Client process_response_events(): EntityMigrateResponse, for entity: {:?}", global_entity);
                     self.entity_complete_delegation(world, &global_entity, &world_entity);
                     self.add_redundant_remote_entity_to_host(&world_entity, host_entity.to_remote());
 
