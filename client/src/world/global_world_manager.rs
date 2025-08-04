@@ -48,7 +48,7 @@ impl GlobalWorldManager {
 
     pub fn entity_owner(&self, global_entity: &GlobalEntity) -> Option<EntityOwner> {
         if let Some(record) = self.entity_records.get(global_entity) {
-            return Some(record.owner);
+            return Some(record.owner());
         }
         return None;
     }
@@ -86,11 +86,11 @@ impl GlobalWorldManager {
             return None;
         }
 
-        let component_kind_set = &self
+        let component_kind_set = self
             .entity_records
             .get(global_entity)
             .unwrap()
-            .component_kinds;
+            .component_kinds();
         return Some(component_kind_set.iter().copied().collect());
     }
 
@@ -107,12 +107,10 @@ impl GlobalWorldManager {
         if !self.entity_records.contains_key(global_entity) {
             panic!("entity does not exist!");
         }
-        let component_kind_set = &mut self
-            .entity_records
+        self.entity_records
             .get_mut(global_entity)
             .unwrap()
-            .component_kinds;
-        component_kind_set.insert(component_kind);
+            .insert_component(component_kind);
 
         let prop_mutator =
             self.register_component(component_kinds, global_entity, &component_kind, diff_mask_length);
@@ -129,14 +127,10 @@ impl GlobalWorldManager {
         if !self.entity_records.contains_key(global_entity) {
             panic!("entity does not exist!");
         }
-        let component_kind_set = &mut self
-            .entity_records
+        self.entity_records
             .get_mut(global_entity)
             .unwrap()
-            .component_kinds;
-        if !component_kind_set.remove(component_kind) {
-            panic!("component does not exist!");
-        }
+            .remove_component(component_kind);
 
         self.diff_handler
             .as_ref()
@@ -160,7 +154,7 @@ impl GlobalWorldManager {
             .expect("Cannot despawn non-existant entity!");
     }
 
-    pub fn insert_component_record(
+    pub fn remote_insert_component(
         &mut self,
         global_entity: &GlobalEntity,
         component_kind: &ComponentKind,
@@ -168,12 +162,10 @@ impl GlobalWorldManager {
         if !self.entity_records.contains_key(global_entity) {
             panic!("entity does not exist!");
         }
-        let component_kind_set = &mut self
-            .entity_records
+        self.entity_records
             .get_mut(global_entity)
             .unwrap()
-            .component_kinds;
-        component_kind_set.insert(*component_kind);
+            .insert_component(*component_kind);
     }
 
     pub fn remove_component_record(
@@ -184,14 +176,11 @@ impl GlobalWorldManager {
         if !self.entity_records.contains_key(global_entity) {
             panic!("entity does not exist!");
         }
-        let component_kind_set = &mut self
+        self
             .entity_records
             .get_mut(global_entity)
             .unwrap()
-            .component_kinds;
-        if !component_kind_set.remove(component_kind) {
-            panic!("component does not exist!");
-        }
+            .remove_component(component_kind);
     }
 
     pub(crate) fn entity_replication_config(
@@ -199,7 +188,7 @@ impl GlobalWorldManager {
         global_entity: &GlobalEntity,
     ) -> Option<ReplicationConfig> {
         if let Some(record) = self.entity_records.get(global_entity) {
-            return Some(record.replication_config);
+            return Some(record.replication_config());
         }
         return None;
     }
@@ -208,19 +197,30 @@ impl GlobalWorldManager {
         let Some(record) = self.entity_records.get_mut(global_entity) else {
             panic!("entity record does not exist!");
         };
-        record.replication_config = ReplicationConfig::Public;
+        record.set_replication_config(ReplicationConfig::Public);
     }
 
     pub(crate) fn entity_unpublish(&mut self, global_entity: &GlobalEntity) {
         let Some(record) = self.entity_records.get_mut(global_entity) else {
             panic!("entity record does not exist!");
         };
-        record.replication_config = ReplicationConfig::Public;
+        record.set_replication_config(ReplicationConfig::Public);
+    }
+    
+    pub(crate) fn entity_has_component(
+        &self,
+        global_entity: &GlobalEntity,
+        component_kind: &ComponentKind,
+    ) -> bool {
+        if let Some(record) = self.entity_records.get(global_entity) {
+            return record.has_component(component_kind);
+        }
+        return false;
     }
 
     pub(crate) fn entity_is_delegated(&self, global_entity: &GlobalEntity) -> bool {
         if let Some(record) = self.entity_records.get(global_entity) {
-            return record.replication_config == ReplicationConfig::Delegated;
+            return record.replication_config() == ReplicationConfig::Delegated;
         }
         return false;
     }
@@ -229,10 +229,10 @@ impl GlobalWorldManager {
         let Some(record) = self.entity_records.get_mut(global_entity) else {
             panic!("entity record does not exist!");
         };
-        if record.replication_config != ReplicationConfig::Public {
+        if record.replication_config() != ReplicationConfig::Public {
             panic!(
                 "Can only enable delegation on an Entity that is Public! Config: {:?}",
-                record.replication_config
+                record.replication_config()
             );
         }
         self.auth_handler
@@ -243,14 +243,14 @@ impl GlobalWorldManager {
         let Some(record) = self.entity_records.get_mut(global_entity) else {
             panic!("entity record does not exist!");
         };
-        if record.replication_config != ReplicationConfig::Public {
+        if record.replication_config() != ReplicationConfig::Public {
             panic!("Can only enable delegation on an Entity that is Public!");
         }
 
-        record.replication_config = ReplicationConfig::Delegated;
+        record.set_replication_config(ReplicationConfig::Delegated);
 
-        if record.owner.is_client() {
-            record.owner = EntityOwner::Server;
+        if record.owner().is_client() {
+            record.set_owner(EntityOwner::Server);
         }
     }
 
@@ -258,11 +258,11 @@ impl GlobalWorldManager {
         let Some(record) = self.entity_records.get_mut(global_entity) else {
             panic!("entity record does not exist!");
         };
-        if record.replication_config != ReplicationConfig::Delegated {
+        if record.replication_config() != ReplicationConfig::Delegated {
             panic!("Can only disable delegation on an Entity that is Delegated!");
         }
 
-        record.replication_config = ReplicationConfig::Public;
+        record.set_replication_config(ReplicationConfig::Public);
         self.auth_handler.deregister_entity(global_entity);
     }
 
@@ -317,7 +317,7 @@ impl GlobalWorldManagerType for GlobalWorldManager {
 
     fn entity_can_relate_to_user(&self, global_entity: &GlobalEntity, _user_key: &u64) -> bool {
         if let Some(record) = self.entity_records.get(global_entity) {
-            return match record.owner {
+            return match record.owner() {
                 EntityOwner::Server | EntityOwner::Client => true,
                 EntityOwner::Local => false,
             };
@@ -357,8 +357,8 @@ impl GlobalWorldManagerType for GlobalWorldManager {
 
     fn entity_needs_mutator_for_delegation(&self, global_entity: &GlobalEntity) -> bool {
         if let Some(record) = self.entity_records.get(global_entity) {
-            let server_owned = record.owner == EntityOwner::Server;
-            let is_public = record.replication_config == ReplicationConfig::Public;
+            let server_owned = record.owner() == EntityOwner::Server;
+            let is_public = record.replication_config() == ReplicationConfig::Public;
 
             return server_owned && is_public;
         }
@@ -370,7 +370,7 @@ impl GlobalWorldManagerType for GlobalWorldManager {
         let Some(record) = self.entity_records.get(global_entity) else {
             panic!("entity does not have record");
         };
-        return record.is_replicating;
+        return record.is_replicating();
     }
 }
 

@@ -211,11 +211,11 @@ impl<R: Replicate + Component<Mutability = Mutable>> ComponentAccess for Compone
             if global_manager.entity_needs_mutator_for_delegation(&global_entity) {
                 let component_kind = component_mut.kind();
                 let diff_mask_size = component_mut.diff_mask_size();
-                let component_name = component_kinds.kind_to_name(&component_kind);
-                info!(
-                    "ComponentAccessor: Enable Delegation for Component {:?} for Entity {:?}",
-                    component_name, global_entity,
-                );
+                // let component_name = component_kinds.kind_to_name(&component_kind);
+                // info!(
+                //     "ComponentAccessor: Enable Delegation for Component {:?} for Entity {:?}",
+                //     component_name, global_entity,
+                // );
                 let mutator = global_manager.register_component(
                     component_kinds,
                     &global_entity,

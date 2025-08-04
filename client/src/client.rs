@@ -1099,6 +1099,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 .send_outgoing_command(EntityCommand::EnableDelegationEntity(*global_entity));
         } else {
             self.entity_complete_delegation(world, global_entity, world_entity);
+            for component_kind in world.component_kinds(world_entity) {
+                if !self.global_world_manager.entity_has_component(global_entity, &component_kind) {
+                    self.global_world_manager.remote_insert_component(global_entity, &component_kind);
+                }
+            }
             self.global_world_manager
                 .entity_update_authority(global_entity, EntityAuthStatus::Available);
         }
@@ -1110,7 +1115,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         global_entity: &GlobalEntity,
         world_entity: &E,
     ) {
-        info!("client.entity_enable_delegation(), for entity: {:?}", global_entity);
         world.entity_enable_delegation(
             &self.protocol.component_kinds,
             &self.global_entity_map,
@@ -1544,6 +1548,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         entity_events: Vec<EntityEvent>,
     ) {
         for response_event in entity_events {
+            // info!(
+            //     "Client.process_entity_events(), handling response_event: {:?}",
+            //     response_event.log()
+            // );
             match response_event {
                 EntityEvent::SpawnEntity(global_entity) => {
                     let world_entity = self
@@ -1598,31 +1606,34 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         .global_entity_to_entity(&global_entity)
                         .unwrap();
                     self.incoming_world_events.push_insert(world_entity, component_kind);
-                    self.global_world_manager.insert_component_record(&global_entity, &component_kind);
 
-                    if self.global_world_manager.entity_is_delegated(&global_entity) {
-                        let component_name = self
-                            .protocol
-                            .component_kinds
-                            .kind_to_name(&component_kind);
-                        info!(
-                            "Client.process_response_events(), handling InsertComponent for Component: {:?} into delegated Entity: {:?}",
-                            component_name, global_entity
-                        );
-                        world.component_publish(
-                            &self.protocol.component_kinds,
-                            &self.global_entity_map,
-                            &self.global_world_manager,
-                            &world_entity,
-                            &component_kind,
-                        );
-                        world.component_enable_delegation(
-                            &self.protocol.component_kinds,
-                            &self.global_entity_map,
-                            &self.global_world_manager,
-                            &world_entity,
-                            &component_kind,
-                        );
+                    if !self.global_world_manager.entity_has_component(&global_entity, &component_kind) {
+                        if self.global_world_manager.entity_is_delegated(&global_entity) {
+                            // let component_name = self
+                            //     .protocol
+                            //     .component_kinds
+                            //     .kind_to_name(&component_kind);
+                            // info!(
+                            //     "Client.process_response_events(), handling InsertComponent for Component: {:?} into delegated Entity: {:?}",
+                            //     component_name, global_entity
+                            // );
+                            world.component_publish(
+                                &self.protocol.component_kinds,
+                                &self.global_entity_map,
+                                &self.global_world_manager,
+                                &world_entity,
+                                &component_kind,
+                            );
+                            world.component_enable_delegation(
+                                &self.protocol.component_kinds,
+                                &self.global_entity_map,
+                                &self.global_world_manager,
+                                &world_entity,
+                                &component_kind,
+                            );
+                        }
+
+                        self.global_world_manager.remote_insert_component(&global_entity, &component_kind);
                     }
                 }
                 EntityEvent::RemoveComponent(global_entity, component_box) => {
