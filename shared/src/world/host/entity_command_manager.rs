@@ -1,12 +1,13 @@
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::time::Duration;
 
 use super::{
     entity_command::EntityCommand, host_world_manager::CommandId,
 };
-use crate::{ChannelSender, EntityMessage, EntityMessageReceiver, GlobalEntity, Instant, ReliableSender, PacketIndex, HostType, ComponentKind};
+use crate::{ChannelSender, EntityMessage, EntityMessageReceiver, GlobalEntity, Instant, ReliableSender, PacketIndex, HostType, ComponentKind, LocalWorldManager, HostEntity};
 use crate::sequence_list::SequenceList;
-use crate::world::sync::EntityChannelReceiver;
+use crate::world::entity::entity_message_sender::EntityMessageSender;
+use crate::world::sync::{EntityChannelReceiver, EntityChannelSender};
 
 const COMMAND_RECORD_TTL: Duration = Duration::from_secs(60);
 const RESEND_COMMAND_RTT_FACTOR: f32 = 1.5;
@@ -16,7 +17,7 @@ const RESEND_COMMAND_RTT_FACTOR: f32 = 1.5;
 /// Will use a reliable sender.
 /// Will wait for acks from the client to know the state of the client's ECS world ("remote")
 pub struct EntityCommandManager {
-    outgoing_commands: ReliableSender<EntityCommand>,
+    outgoing_commands: EntityMessageSender,
     sent_command_packets: SequenceList<(Instant, Vec<(CommandId, EntityMessage<GlobalEntity>)>)>,
     delivered_commands: EntityMessageReceiver<GlobalEntity>,
 }
@@ -24,7 +25,7 @@ pub struct EntityCommandManager {
 impl EntityCommandManager {
     pub fn new(host_type: HostType) -> Self {
         Self {
-            outgoing_commands: ReliableSender::new(RESEND_COMMAND_RTT_FACTOR),
+            outgoing_commands: EntityMessageSender::new(host_type, RESEND_COMMAND_RTT_FACTOR),
             sent_command_packets: SequenceList::new(),
             delivered_commands: EntityMessageReceiver::new(host_type.invert()),
         }
@@ -37,15 +38,46 @@ impl EntityCommandManager {
         now: &Instant,
         rtt_millis: &f32,
     ) -> VecDeque<(CommandId, EntityCommand)> {
-        self.outgoing_commands.collect_messages(now, rtt_millis);
-        self.outgoing_commands.take_next_messages()
+        self.outgoing_commands.take_outgoing_commands(now, rtt_millis)
     }
     
     pub fn send_outgoing_command(
         &mut self,
         command: EntityCommand,
     ) {
-        self.outgoing_commands.send_message(command);
+        self.outgoing_commands.send_outgoing_command(command);
+    }
+
+    pub fn host_spawn_entity(
+        &mut self,
+        local_world_manager: &mut LocalWorldManager,
+        global_entity: &GlobalEntity,
+    ) {
+        self.outgoing_commands.host_spawn_entity(local_world_manager, global_entity);
+    }
+
+    pub fn host_despawn_entity(&mut self, global_entity: &GlobalEntity) {
+        self.outgoing_commands.host_despawn_entity(global_entity);
+    }
+
+    pub fn host_insert_component(
+        &mut self,
+        global_entity: &GlobalEntity,
+        component_kind: &ComponentKind,
+    ) {
+        self.outgoing_commands.host_insert_component(global_entity, component_kind);
+    }
+
+    pub fn host_remove_component(
+        &mut self,
+        global_entity: &GlobalEntity,
+        component_kind: &ComponentKind,
+    ) {
+        self.outgoing_commands.host_remove_component(global_entity, component_kind);
+    }
+
+    pub(crate) fn remote_despawn_entity(&mut self, global_entity: &GlobalEntity) {
+        self.outgoing_commands.remote_despawn_entity(global_entity);
     }
 
     pub(crate) fn insert_sent_command_packet(&mut self, packet_index: &PacketIndex, now: Instant) {
@@ -112,17 +144,33 @@ impl EntityCommandManager {
 
     pub fn track_remote_entity(
         &mut self,
+        local_world_manager: &mut LocalWorldManager,
         entity: &GlobalEntity,
         component_kinds: &Vec<ComponentKind>,
-    ) {
+    ) -> HostEntity {
         self.delivered_commands.track_hosts_redundant_remote_entity(entity, component_kinds);
+        self.outgoing_commands.track_remote_entity(local_world_manager, entity)
     }
     
     pub fn untrack_remote_entity(
         &mut self,
+        local_world_manager: &mut LocalWorldManager,
         entity: &GlobalEntity,
-    ) {
+    ) -> &HashSet<ComponentKind> {
         self.delivered_commands.untrack_hosts_redundant_remote_entity(entity);
+        self.outgoing_commands.untrack_remote_entity(local_world_manager, entity)
+    }
+
+    pub(crate) fn track_remote_component(&mut self, global_entity: &GlobalEntity, component_kind: &ComponentKind) {
+        self.outgoing_commands.track_remote_component(global_entity, component_kind);
+    }
+
+    pub(crate) fn untrack_remote_component(&mut self, global_entity: &GlobalEntity, component_kind: &ComponentKind) {
+        self.outgoing_commands.untrack_remote_component(global_entity, component_kind);
+    }
+
+    pub(crate) fn get_host_world(&self) -> &HashMap<GlobalEntity, EntityChannelSender> {
+        self.outgoing_commands.get_host_world()
     }
 
     pub(crate) fn get_remote_world(&self) -> &HashMap<GlobalEntity, EntityChannelReceiver> {

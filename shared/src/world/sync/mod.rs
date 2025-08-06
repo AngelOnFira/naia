@@ -16,7 +16,7 @@
 //!    its sliding window without caring about intra‑packet order.
 //! 3. **Ingestion path (this crate)**  
 //!    *Receiver* deduplicates on `MessageIndex` and feeds messages into
-//!    [`ReceiverEngine::accept_message`].  
+//!    [`ReceiverEngine::accept_message`].
 //!    The `Engine` owns one **`EntityChannel`** per live entity; each
 //!    `EntityChannel` owns:
 //!    - an **`AuthChannel`** (publish / delegation / authority negotiation)  
@@ -61,8 +61,14 @@ mod entity_channel_receiver;
 mod component_channel_receiver;
 mod auth_channel_receiver;
 
+mod sender_engine;
+mod entity_channel_sender;
+mod auth_channel_sender;
+
 pub use receiver_engine::ReceiverEngine;
 pub use entity_channel_receiver::EntityChannelReceiver;
+pub use sender_engine::SenderEngine;
+pub use entity_channel_sender::EntityChannelSender;
 
 #[cfg(test)]
 pub mod tests;

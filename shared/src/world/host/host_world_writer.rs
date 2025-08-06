@@ -662,8 +662,7 @@ impl HostWorldWriter {
                 .write_update(&diff_mask, writer, &mut converter);
 
             written_component_kinds.push(*component_kind);
-
-
+            
             host_manager.record_update(
                 now,
                 packet_index,

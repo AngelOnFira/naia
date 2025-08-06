@@ -8,8 +8,7 @@ use std::time::Duration;
 
 use super::user_diff_handler::UserDiffHandler;
 use crate::{ComponentKind, EntityAndGlobalEntityConverter, GlobalEntity, GlobalWorldManagerType, Instant, WorldRefType, DiffMask, PacketIndex};
-use crate::world::host::checked_map::{CheckedMap, CheckedSet};
-use crate::world::sync::EntityChannelReceiver;
+use crate::world::sync::{EntityChannelReceiver, EntityChannelSender};
 
 const DROP_UPDATE_RTT_FACTOR: f32 = 1.5;
 
@@ -74,14 +73,14 @@ impl EntityUpdateManager {
         world: &W,
         converter: &dyn EntityAndGlobalEntityConverter<E>,
         global_world_manager: &dyn GlobalWorldManagerType,
-        host_world: &CheckedMap<GlobalEntity, CheckedSet<ComponentKind>>,
+        host_world: &HashMap<GlobalEntity, EntityChannelSender>,
         remote_world: &HashMap<GlobalEntity, EntityChannelReceiver>,
     ) -> HashMap<GlobalEntity, HashSet<ComponentKind>> {
         let mut output = HashMap::new();
 
-        for (global_entity, host_components) in host_world.iter() {
+        for (global_entity, host_entity_channel) in host_world.iter() {
             
-            let Some(entity_channel) = remote_world.get(global_entity) else {
+            let Some(remote_entity_channel) = remote_world.get(global_entity) else {
                 continue;
             };
 
@@ -91,8 +90,8 @@ impl EntityUpdateManager {
             if !world.has_entity(&world_entity) {
                 continue;
             }
-            for component_kind in host_components.iter() {
-                if !entity_channel.has_component_kind(component_kind) {
+            for component_kind in host_entity_channel.component_kinds().iter() {
+                if !remote_entity_channel.has_component_kind(component_kind) {
                     continue;
                 }
                 if self
