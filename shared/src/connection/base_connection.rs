@@ -8,7 +8,8 @@ use crate::{messages::{channels::channel_kinds::ChannelKinds, message_manager::M
     host::{host_world_manager::HostWorldEvents, host_world_writer::HostWorldWriter},
     local_world_manager::LocalWorldManager,
     remote::remote_world_reader::RemoteWorldReader,
-}, AckManager, ComponentKinds, ConnectionConfig, EntityAndGlobalEntityConverter, EntityConverterMut, GlobalEntity, GlobalEntitySpawner, HostWorldManager, MessageKinds, PacketType, RemoteWorldManager, StandardHeader, Tick, Timer, WorldRefType};
+}, AckManager, ComponentKind, ComponentKinds, ConnectionConfig, EntityAndGlobalEntityConverter, EntityConverterMut, EntityMessage, GlobalEntity, GlobalEntitySpawner, HostWorldManager, MessageKinds, PacketType, RemoteWorldManager, StandardHeader, Tick, Timer, UpdateEvents, WorldRefType};
+use crate::world::host::entity_update_manager::EntityUpdateManager;
 use super::packet_notifiable::PacketNotifiable;
 
 /// Represents a connection to a remote host, and provides functionality to
@@ -18,6 +19,7 @@ pub struct BaseConnection {
     pub host_world_manager: HostWorldManager,
     pub remote_world_manager: RemoteWorldManager,
     pub remote_world_reader: RemoteWorldReader,
+    pub entity_update_manager: EntityUpdateManager,
     pub local_world_manager: LocalWorldManager,
     ack_manager: AckManager,
     heartbeat_timer: Timer,
@@ -35,9 +37,10 @@ impl BaseConnection {
     ) -> Self {
         Self {
             message_manager: MessageManager::new(host_type, channel_kinds),
-            host_world_manager: HostWorldManager::new(host_type, address, global_world_manager),
+            host_world_manager: HostWorldManager::new(host_type),
             remote_world_manager: RemoteWorldManager::new(),
             remote_world_reader: RemoteWorldReader::new(host_type),
+            entity_update_manager: EntityUpdateManager::new(address, global_world_manager),
             local_world_manager: LocalWorldManager::new(user_key),
             ack_manager: AckManager::new(),
             heartbeat_timer: Timer::new(connection_config.heartbeat_interval),
@@ -76,11 +79,10 @@ impl BaseConnection {
         header: &StandardHeader,
         packet_notifiables: &mut [&mut dyn PacketNotifiable],
     ) {
+        let mut base_packet_notifiables: [&mut dyn PacketNotifiable; 2] = [&mut self.message_manager, &mut self.host_world_manager];
         self.ack_manager.process_incoming_header(
             header,
-            &mut self.message_manager,
-            &mut self.host_world_manager,
-            &mut self.local_world_manager,
+            &mut base_packet_notifiables,
             packet_notifiables,
         );
     }
@@ -102,7 +104,9 @@ impl BaseConnection {
 
     pub fn collect_messages(&mut self, now: &Instant, rtt_millis: &f32) {
         self.host_world_manager
-            .handle_dropped_packets(now, rtt_millis);
+            .handle_dropped_packets(now);
+        self.entity_update_manager
+            .handle_dropped_update_packets(now, rtt_millis);
         self.message_manager
             .collect_outgoing_messages(now, rtt_millis);
     }
@@ -142,6 +146,7 @@ impl BaseConnection {
         has_written: &mut bool,
         write_world_events: bool,
         host_world_events: &mut HostWorldEvents,
+        update_events: &mut UpdateEvents,
     ) {
         // write messages
         self.write_messages(
@@ -166,7 +171,9 @@ impl BaseConnection {
                 &mut self.local_world_manager,
                 has_written,
                 &mut self.host_world_manager,
+                &mut self.entity_update_manager,
                 host_world_events,
+                update_events,
             );
         }
     }
@@ -209,13 +216,72 @@ impl BaseConnection {
     pub fn remote_entities(&self) -> Vec<GlobalEntity> {
         self.local_world_manager.remote_entities()
     }
-}
 
-impl PacketNotifiable for BaseConnection {
-    fn notify_packet_delivered(&mut self, sent_packet_index: PacketIndex) {
-        self.message_manager
-            .notify_packet_delivered(sent_packet_index);
-        self.host_world_manager
-            .notify_packet_delivered(sent_packet_index, &mut self.local_world_manager);
+    pub fn process_received_commands(&mut self) {
+        let received_commands = self.host_world_manager.take_delivered_commands();
+
+        for command in received_commands {
+            match command {
+                EntityMessage::Spawn(entity) => {
+                    self.on_remote_spawn_entity(&entity);
+                }
+                EntityMessage::Despawn(entity) => {
+                    self.on_remote_despawn_entity(&entity);
+                }
+                EntityMessage::InsertComponent(entity, component_kind) => {
+                    self.on_remote_insert_component(&entity, &component_kind);
+                }
+                EntityMessage::RemoveComponent(entity, component) => {
+                    self.on_remote_remove_component(&entity, &component);
+                }
+                EntityMessage::Noop => {
+                    // do nothing
+                }
+                _ => {
+                    // Only Auth-related messages are left here
+                    // Right now it doesn't seem like we need to track auth state here
+                }
+            }
+        }
+    }
+
+    pub fn on_remote_spawn_entity(
+        &mut self,
+        global_entity: &GlobalEntity,
+    ) {
+        // stubbed
+    }
+    
+    pub fn on_remote_despawn_entity(
+            &mut self,
+            global_entity: &GlobalEntity,
+        ) {
+        self.local_world_manager.remove_by_global_entity(global_entity);
+    }
+
+    fn on_remote_insert_component(
+        &mut self,
+        global_entity: &GlobalEntity,
+        component_kind: &ComponentKind,
+    ) {
+        self.entity_update_manager.register_component(global_entity, component_kind);
+    }
+
+    fn on_remote_remove_component(
+        &mut self,
+        global_entity: &GlobalEntity,
+        component_kind: &ComponentKind,
+    ) {
+        self.entity_update_manager.deregister_component(global_entity, component_kind);
     }
 }
+
+// impl PacketNotifiable for BaseConnection {
+//     fn notify_packet_delivered(&mut self, sent_packet_index: PacketIndex) {
+//         self.message_manager
+//             .notify_packet_delivered(sent_packet_index);
+//         self.entity_update_manager.notify_packet_delivered(sent_packet_index);
+//         self.host_world_manager
+//             .notify_packet_delivered(sent_packet_index);
+//     }
+// }

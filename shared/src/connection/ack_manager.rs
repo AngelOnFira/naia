@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use crate::{
-    messages::message_manager::MessageManager, types::PacketIndex,
-    wrapping_number::sequence_greater_than, HostWorldManager, LocalWorldManager,
+    types::PacketIndex,
+    wrapping_number::sequence_greater_than,
 };
 
 use super::{
@@ -63,9 +63,7 @@ impl AckManager {
     pub fn process_incoming_header(
         &mut self,
         header: &StandardHeader,
-        message_manager: &mut MessageManager,
-        host_world_manager: &mut HostWorldManager,
-        local_world_manager: &mut LocalWorldManager,
+        base_packet_notifiables: &mut [&mut dyn PacketNotifiable],
         packet_notifiables: &mut [&mut dyn PacketNotifiable],
     ) {
         let sender_packet_index = header.sender_packet_index;
@@ -86,9 +84,7 @@ impl AckManager {
             if sent_packet.packet_type == PacketType::Data {
                 self.notify_packet_delivered(
                     sender_ack_index,
-                    message_manager,
-                    host_world_manager,
-                    local_world_manager,
+                    base_packet_notifiables,
                     packet_notifiables,
                 );
             }
@@ -106,9 +102,7 @@ impl AckManager {
                     if sent_packet.packet_type == PacketType::Data {
                         self.notify_packet_delivered(
                             sent_packet_index,
-                            message_manager,
-                            host_world_manager,
-                            local_world_manager,
+                            base_packet_notifiables,
                             packet_notifiables,
                         );
                     }
@@ -153,13 +147,12 @@ impl AckManager {
     fn notify_packet_delivered(
         &self,
         sent_packet_index: PacketIndex,
-        message_manager: &mut MessageManager,
-        host_world_manager: &mut HostWorldManager,
-        local_world_manager: &mut LocalWorldManager,
+        base_packet_notifiables: &mut [&mut dyn PacketNotifiable],
         packet_notifiables: &mut [&mut dyn PacketNotifiable],
     ) {
-        message_manager.notify_packet_delivered(sent_packet_index);
-        host_world_manager.notify_packet_delivered(sent_packet_index, local_world_manager);
+        for notifiable in base_packet_notifiables {
+            notifiable.notify_packet_delivered(sent_packet_index);
+        }
         for notifiable in packet_notifiables {
             notifiable.notify_packet_delivered(sent_packet_index);
         }

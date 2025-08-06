@@ -1,4 +1,3 @@
-use std::hash::Hash;
 use std::collections::HashSet;
 
 use crate::{ComponentKind, HostType};

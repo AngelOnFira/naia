@@ -177,6 +177,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         self.handle_heartbeats();
         self.handle_empty_acks();
 
+        let mut received_addresses = HashSet::new();
+
         // receive socket events
         loop {
             match self.io.recv_reader() {
@@ -190,6 +192,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         // TODO: increase suspicion against packet sender
                         continue;
                     };
+
+                    received_addresses.insert(address);
 
                     match header.packet_type {
                         PacketType::Data => {
@@ -277,6 +281,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                     self.incoming_world_events
                         .push_error(NaiaServerError::Wrapped(Box::new(error)));
                 }
+            }
+        }
+
+        for address in received_addresses {
+            if let Some(connection) = self.user_connections.get_mut(&address) {
+                connection.process_received_commands();
             }
         }
     }
@@ -1576,11 +1586,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             .unwrap();
 
         // Add remote entity to Host World
-        let new_host_entity = connection.base.host_world_manager.track_remote_entity(
-            &mut connection.base.local_world_manager,
-            global_entity,
-            component_kinds,
-        );
+        let new_host_entity = todo!(); // connection.base.host_world_manager.track_remote_entity(
+        //     &mut connection.base.local_world_manager,
+        //     global_entity,
+        //     component_kinds,
+        // );
 
         // Send EntityMigrateResponse action through EntityActionEvent system
         connection
@@ -2068,10 +2078,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                             let user = self.users.get(user_key).unwrap();
                             let addr = user.address();
                             let connection = self.user_connections.get_mut(&addr).unwrap();
-                            connection
-                                .base
-                                .host_world_manager
-                                .track_remote_component(&global_entity, &component_kind);
+                            todo!(); // connection
+                            //     .base
+                            //     .host_world_manager
+                            //     .track_remote_component(&global_entity, &component_kind);
                         }
 
                         self.insert_new_component_into_entity_scopes(
@@ -2199,7 +2209,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         connection
                             .base
                             .host_world_manager
-                            .remote_despawn_entity(&mut connection.base.local_world_manager, &global_entity);
+                            .remote_despawn_entity(&global_entity);
+                        connection.base.on_remote_despawn_entity(&global_entity);
 
                         self.despawn_entity_worldless(&world_entity);
                     } else {

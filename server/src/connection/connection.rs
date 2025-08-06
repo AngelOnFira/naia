@@ -2,7 +2,7 @@ use std::{hash::Hash, net::SocketAddr};
 
 use log::warn;
 
-use naia_shared::{BaseConnection, BigMapKey, BitReader, BitWriter, ChannelKinds, ComponentKinds, ConnectionConfig, EntityAndGlobalEntityConverter, EntityEvent, GlobalEntitySpawner, GlobalWorldManagerType, HostType, HostWorldEvents, Instant, MessageKinds, PacketType, Serde, SerdeErr, StandardHeader, Tick, WorldMutType, WorldRefType};
+use naia_shared::{BaseConnection, BigMapKey, BitReader, BitWriter, ChannelKinds, ComponentKinds, ConnectionConfig, EntityAndGlobalEntityConverter, EntityEvent, GlobalEntitySpawner, GlobalWorldManagerType, HostType, HostWorldEvents, Instant, MessageKinds, PacketType, Serde, SerdeErr, StandardHeader, Tick, UpdateEvents, WorldMutType, WorldRefType};
 
 use crate::{
     connection::{
@@ -188,11 +188,17 @@ impl Connection {
         let rtt_millis = self.ping_manager.rtt_average;
         self.base.collect_messages(now, &rtt_millis);
         let mut host_world_events = self.base.host_world_manager.take_outgoing_events(
+            now,
+            &rtt_millis,
+        );
+        let host_world = self.base.host_world_manager.get_host_world();
+        let remote_world = self.base.host_world_manager.get_remote_world();
+        let mut update_events = self.base.entity_update_manager.take_outgoing_events(
             world,
             converter,
             global_world_manager,
-            now,
-            &rtt_millis,
+            host_world,
+            remote_world,
         );
 
         let mut any_sent = false;
@@ -208,6 +214,7 @@ impl Connection {
                 global_world_manager,
                 time_manager,
                 &mut host_world_events,
+                &mut update_events,
             ) {
                 any_sent = true;
             } else {
@@ -233,8 +240,9 @@ impl Connection {
         global_world_manager: &GlobalWorldManager,
         time_manager: &TimeManager,
         host_world_events: &mut HostWorldEvents,
+        update_events: &mut UpdateEvents,
     ) -> bool {
-        if host_world_events.has_events() || self.base.message_manager.has_outgoing_messages() {
+        if host_world_events.has_events() || update_events.has_events() || self.base.message_manager.has_outgoing_messages() {
             let writer = self.write_packet(
                 channel_kinds,
                 message_kinds,
@@ -245,6 +253,7 @@ impl Connection {
                 global_world_manager,
                 time_manager,
                 host_world_events,
+                update_events,
             );
 
             // send packet
@@ -270,6 +279,7 @@ impl Connection {
         global_world_manager: &GlobalWorldManager,
         time_manager: &TimeManager,
         host_world_events: &mut HostWorldEvents,
+        update_events: &mut UpdateEvents,
     ) -> BitWriter {
         let next_packet_index = self.base.next_packet_index();
 
@@ -306,8 +316,13 @@ impl Connection {
             &mut has_written,
             true,
             host_world_events,
+            update_events,
         );
 
         writer
+    }
+
+    pub fn process_received_commands(&mut self) {
+        self.base.process_received_commands();
     }
 }

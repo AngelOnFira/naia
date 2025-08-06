@@ -31,8 +31,6 @@
 
 use std::{fmt::Debug, hash::Hash, collections::HashMap};
 
-use log::info;
-
 use crate::{world::{sync::{entity_channel_receiver::EntityChannelReceiver, config::EngineConfig}, entity::entity_message::EntityMessage}, ComponentKind, EntityMessageType, HostType, MessageIndex};
 
 pub struct ReceiverEngine<E: Copy + Hash + Eq + Debug> {

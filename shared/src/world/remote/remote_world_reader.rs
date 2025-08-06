@@ -27,7 +27,7 @@ impl RemoteWorldReader {
 
     pub fn take_incoming_events(&mut self) -> RemoteWorldEvents {
         RemoteWorldEvents {
-            incoming_messages: self.receiver.receive_messages(true),
+            incoming_messages: self.receiver.receive_messages(),
             incoming_components: std::mem::take(&mut self.received_components),
             incoming_updates: std::mem::take(&mut self.received_updates),
         }

@@ -1,5 +1,5 @@
 use std::{any::Any, collections::VecDeque, hash::Hash, net::SocketAddr, time::Duration};
-
+use std::collections::HashSet;
 use log::{info, warn};
 
 use naia_shared::{
@@ -1179,11 +1179,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     .global_world_manager
                     .component_kinds(global_entity)
                     .unwrap();
-                connection.base.host_world_manager.track_remote_entity(
-                    &mut connection.base.local_world_manager,
-                    global_entity,
-                    component_kinds,
-                );
+                todo!(); // connection.base.host_world_manager.track_remote_entity(
+                //     &mut connection.base.local_world_manager,
+                //     global_entity,
+                //     component_kinds,
+                // );
 
                 // push outgoing event
                 self.incoming_world_events.push_auth_grant(*world_entity);
@@ -1196,10 +1196,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 let Some(connection) = &mut self.server_connection else {
                     return;
                 };
-                connection
-                    .base
-                    .host_world_manager
-                    .untrack_remote_entity(&mut connection.base.local_world_manager, global_entity);
+                todo!(); // connection
+                    // .base
+                    // .host_world_manager
+                    // .untrack_remote_entity(&mut connection.base.local_world_manager, global_entity);
 
                 // push outgoing event
                 self.incoming_world_events.push_auth_reset(*world_entity);
@@ -1364,6 +1364,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         Self::handle_pings(connection, &mut self.io);
         Self::handle_empty_acks(connection, &mut self.io);
 
+        let mut received_any = false;
+
         // receive from socket
         loop {
             match self.io.recv_reader() {
@@ -1389,6 +1391,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     }
 
                     // Read incoming header
+                    received_any = true;
                     connection.process_incoming_header(&header);
 
                     // read server tick
@@ -1449,6 +1452,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         .push_error(NaiaClientError::Wrapped(Box::new(error)));
                 }
             }
+        }
+
+        if received_any {
+            connection.process_received_commands();
         }
     }
 

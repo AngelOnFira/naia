@@ -5,6 +5,6 @@ pub mod mut_channel;
 pub mod user_diff_handler;
 pub mod entity_command_manager;
 pub mod entity_command;
+pub mod entity_update_manager;
 
 mod checked_map;
-mod entity_update_manager;

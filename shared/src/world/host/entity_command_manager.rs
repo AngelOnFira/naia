@@ -1,10 +1,10 @@
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, VecDeque};
 use std::time::Duration;
 
 use super::{
     entity_command::EntityCommand, host_world_manager::CommandId,
 };
-use crate::{ChannelSender, EntityMessage, EntityMessageReceiver, GlobalEntity, Instant, ReliableSender, PacketIndex, HostType, ComponentKind, LocalWorldManager, HostEntity};
+use crate::{EntityMessage, EntityMessageReceiver, GlobalEntity, Instant, PacketIndex, HostType, ComponentKind, LocalWorldManager};
 use crate::sequence_list::SequenceList;
 use crate::world::entity::entity_message_sender::EntityMessageSender;
 use crate::world::sync::{EntityChannelReceiver, EntityChannelSender};
@@ -139,34 +139,7 @@ impl EntityCommandManager {
     pub fn take_delivered_commands(
         &mut self,
     ) -> Vec<EntityMessage<GlobalEntity>> {
-        self.delivered_commands.receive_messages(false)
-    }
-
-    pub fn track_remote_entity(
-        &mut self,
-        local_world_manager: &mut LocalWorldManager,
-        entity: &GlobalEntity,
-        component_kinds: &Vec<ComponentKind>,
-    ) -> HostEntity {
-        self.delivered_commands.track_hosts_redundant_remote_entity(entity, component_kinds);
-        self.outgoing_commands.track_remote_entity(local_world_manager, entity)
-    }
-    
-    pub fn untrack_remote_entity(
-        &mut self,
-        local_world_manager: &mut LocalWorldManager,
-        entity: &GlobalEntity,
-    ) -> &HashSet<ComponentKind> {
-        self.delivered_commands.untrack_hosts_redundant_remote_entity(entity);
-        self.outgoing_commands.untrack_remote_entity(local_world_manager, entity)
-    }
-
-    pub(crate) fn track_remote_component(&mut self, global_entity: &GlobalEntity, component_kind: &ComponentKind) {
-        self.outgoing_commands.track_remote_component(global_entity, component_kind);
-    }
-
-    pub(crate) fn untrack_remote_component(&mut self, global_entity: &GlobalEntity, component_kind: &ComponentKind) {
-        self.outgoing_commands.untrack_remote_component(global_entity, component_kind);
+        self.delivered_commands.receive_messages()
     }
 
     pub(crate) fn get_host_world(&self) -> &HashMap<GlobalEntity, EntityChannelSender> {

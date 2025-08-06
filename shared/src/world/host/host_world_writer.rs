@@ -9,7 +9,8 @@ use log::info;
 use crate::{messages::channels::senders::indexed_message_writer::IndexedMessageWriter, world::{
     host::host_world_manager::CommandId,
     entity::entity_converters::GlobalWorldManagerType, local_world_manager::LocalWorldManager,
-}, BitWrite, BitWriter, ComponentKind, ComponentKinds, ConstBitLength, EntityMessage, EntityMessageType, EntityAndGlobalEntityConverter, EntityConverterMut, GlobalEntity, HostWorldEvents, HostWorldManager, Instant, MessageIndex, PacketIndex, Serde, WorldRefType, EntityCommand};
+}, BitWrite, BitWriter, ComponentKind, ComponentKinds, ConstBitLength, EntityMessage, EntityMessageType, EntityAndGlobalEntityConverter, EntityConverterMut, GlobalEntity, HostWorldEvents, HostWorldManager, Instant, MessageIndex, PacketIndex, Serde, WorldRefType, EntityCommand, UpdateEvents};
+use crate::world::host::entity_update_manager::EntityUpdateManager;
 
 pub struct HostWorldWriter;
 
@@ -34,7 +35,9 @@ impl HostWorldWriter {
         local_world_manager: &mut LocalWorldManager,
         has_written: &mut bool,
         host_manager: &mut HostWorldManager,
+        update_manager: &mut EntityUpdateManager,
         world_events: &mut HostWorldEvents,
+        update_events: &mut UpdateEvents,
     ) {
         // write entity updates
         Self::write_updates(
@@ -47,8 +50,8 @@ impl HostWorldWriter {
             global_world_manager,
             local_world_manager,
             has_written,
-            host_manager,
-            &mut world_events.next_send_updates,
+            update_manager,
+            &mut update_events.next_send_updates,
         );
 
         // write entity commands
@@ -538,7 +541,7 @@ impl HostWorldWriter {
         global_world_manager: &dyn GlobalWorldManagerType,
         local_world_manager: &mut LocalWorldManager,
         has_written: &mut bool,
-        host_manager: &mut HostWorldManager,
+        update_manager: &mut EntityUpdateManager,
         next_send_updates: &mut HashMap<GlobalEntity, HashSet<ComponentKind>>,
     ) {
         let all_update_entities: Vec<GlobalEntity> = next_send_updates.keys().copied().collect();
@@ -583,7 +586,7 @@ impl HostWorldWriter {
                 &global_entity,
                 &world_entity,
                 has_written,
-                host_manager,
+                update_manager,
                 next_send_updates,
             );
 
@@ -610,14 +613,14 @@ impl HostWorldWriter {
         global_entity: &GlobalEntity,
         world_entity: &E,
         has_written: &mut bool,
-        host_manager: &mut HostWorldManager,
+        update_manager: &mut EntityUpdateManager,
         next_send_updates: &mut HashMap<GlobalEntity, HashSet<ComponentKind>>,
     ) {
         let mut written_component_kinds = Vec::new();
         let component_kind_set = next_send_updates.get(global_entity).unwrap();
         for component_kind in component_kind_set {
             // get diff mask
-            let diff_mask = host_manager
+            let diff_mask = update_manager
                 .get_diff_mask(global_entity, component_kind)
                 .clone();
 
@@ -663,7 +666,7 @@ impl HostWorldWriter {
 
             written_component_kinds.push(*component_kind);
             
-            host_manager.record_update(
+            update_manager.record_update(
                 now,
                 packet_index,
                 global_entity,

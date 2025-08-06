@@ -45,7 +45,7 @@ impl<E: Copy + Hash + Eq + Debug> EntityMessageReceiver<E> {
     ///
     /// Outputs the list of [`EntityMessage`] that can be executed now, buffer the rest
     /// into each entity's [`EntityChannelReceiver`]
-    pub fn receive_messages(&mut self, log: bool) -> Vec<EntityMessage<E>> {
+    pub fn receive_messages(&mut self) -> Vec<EntityMessage<E>> {
         let incoming_messages = self.receiver.receive_messages();
         for (message_index, message) in incoming_messages {
             self.engine.accept_message(message_index, message);

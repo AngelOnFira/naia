@@ -32,6 +32,25 @@ impl EntityUpdateManager {
         }
     }
 
+    pub fn take_outgoing_events<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
+        &mut self,
+        world: &W,
+        converter: &dyn EntityAndGlobalEntityConverter<E>,
+        global_world_manager: &dyn GlobalWorldManagerType,
+        host_world: &HashMap<GlobalEntity, EntityChannelSender>,
+        remote_world: &HashMap<GlobalEntity, EntityChannelReceiver>,
+    ) -> UpdateEvents {
+        UpdateEvents {
+            next_send_updates: self.collect_next_updates(
+                world,
+                converter,
+                global_world_manager,
+                host_world,
+                remote_world,
+            ),
+        }
+    }
+
     // Main
 
     pub fn diff_handler_has_component(&self, entity: &GlobalEntity, component_kind: &ComponentKind) -> bool {
@@ -192,5 +211,15 @@ impl EntityUpdateManager {
 
         // having copied the diff mask for this update, clear the component
         self.clear_diff_mask(global_entity, component_kind);
+    }
+}
+
+pub struct UpdateEvents {
+    pub next_send_updates: HashMap<GlobalEntity, HashSet<ComponentKind>>,
+}
+
+impl UpdateEvents {
+    pub fn has_events(&self) -> bool {
+        !self.next_send_updates.is_empty()
     }
 }
