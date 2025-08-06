@@ -16,7 +16,7 @@
 //!    its sliding window without caring about intra‑packet order.
 //! 3. **Ingestion path (this crate)**  
 //!    *Receiver* deduplicates on `MessageIndex` and feeds messages into
-//!    [`Engine::accept_message`].  
+//!    [`ReceiverEngine::accept_message`].  
 //!    The `Engine` owns one **`EntityChannel`** per live entity; each
 //!    `EntityChannel` owns:
 //!    - an **`AuthChannel`** (publish / delegation / authority negotiation)  
@@ -27,7 +27,7 @@
 //!    global out‑of‑order arrival.  
 //!    Once a channel determines that a message is *now safe* to apply, it
 //!    is pushed into `outgoing_events`; the caller drains these via
-//!    [`Engine::receive_messages`] and mutates its local ECS accordingly.
+//!    [`ReceiverEngine::receive_messages`] and mutates its local ECS accordingly.
 //!
 //! ## Why unordered beats ordered
 //! * Ordered transports serialize unrelated entity updates, so a single
@@ -56,13 +56,13 @@
 //! Together they form a lock‑free, allocation‑conscious pipeline for syncing ECS worlds in distributed systems.
 
 mod config;
-mod engine;
-mod entity_channel;
-mod component_channel;
-mod auth_channel;
+mod receiver_engine;
+mod entity_channel_receiver;
+mod component_channel_receiver;
+mod auth_channel_receiver;
 
-pub use engine::Engine;
-pub use entity_channel::EntityChannel;
+pub use receiver_engine::ReceiverEngine;
+pub use entity_channel_receiver::EntityChannelReceiver;
 
 #[cfg(test)]
 pub mod tests;

@@ -78,8 +78,8 @@ use std::{hash::Hash, collections::HashMap};
 
 use crate::{sequence_less_than, world::{
     sync::{
-        auth_channel::AuthChannel,
-        component_channel::ComponentChannel,
+        auth_channel_receiver::AuthChannelReceiver,
+        component_channel_receiver::ComponentChannelReceiver,
     },
     entity::ordered_ids::OrderedIds
 }, ComponentKind, EntityMessage, EntityMessageType, HostType, MessageIndex};
@@ -90,24 +90,24 @@ pub(crate) enum EntityChannelState {
     Spawned,
 }
 
-pub struct EntityChannel {
+pub struct EntityChannelReceiver {
     host_type: HostType,
-    component_channels: HashMap<ComponentKind, ComponentChannel>,
+    component_channels: HashMap<ComponentKind, ComponentChannelReceiver>,
     outgoing_messages: Vec<EntityMessage<()>>,
     state: EntityChannelState,
-    auth_channel: AuthChannel,
+    auth_channel: AuthChannelReceiver,
     buffered_messages: OrderedIds<EntityMessage<()>>,
     last_epoch_id: Option<MessageIndex>,
 }
 
-impl EntityChannel {
+impl EntityChannelReceiver {
     pub(crate) fn new(host_type: HostType) -> Self {
         Self {
             host_type,
             component_channels: HashMap::new(),
             outgoing_messages: Vec::new(),
             state: EntityChannelState::Despawned,
-            auth_channel: AuthChannel::new(),
+            auth_channel: AuthChannelReceiver::new(),
             buffered_messages: OrderedIds::new(),
             last_epoch_id: None,
         }
@@ -119,7 +119,7 @@ impl EntityChannel {
             component_channels: HashMap::new(),
             outgoing_messages: Vec::new(),
             state: EntityChannelState::Spawned,
-            auth_channel: AuthChannel::new_delegated(),
+            auth_channel: AuthChannelReceiver::new_delegated(),
             buffered_messages: OrderedIds::new(),
             last_epoch_id: None,
         }
@@ -163,7 +163,7 @@ impl EntityChannel {
                 panic!("EntityChannel already has a component channel for {:?}", component_kind);
             }
 
-            self.component_channels.insert(*component_kind, ComponentChannel::new_delegated());
+            self.component_channels.insert(*component_kind, ComponentChannelReceiver::new_delegated());
         }
     }
 
@@ -236,7 +236,7 @@ impl EntityChannel {
                     let component_kind = msg.component_kind().unwrap();
                     let component_channel = self.component_channels
                         .entry(component_kind)
-                        .or_insert_with(ComponentChannel::new);
+                        .or_insert_with(ComponentChannelReceiver::new);
 
                     component_channel.accept_message(self.state, id, msg);
                     component_channel.drain_messages_into(&component_kind, &mut self.outgoing_messages);

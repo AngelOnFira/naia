@@ -34,9 +34,9 @@
 
 use std::collections::VecDeque;
 
-use crate::{sequence_equal_or_less_than, world::{entity::ordered_ids::OrderedIds, sync::entity_channel::EntityChannelState}, ComponentKind, EntityMessage, EntityMessageType, MessageIndex};
+use crate::{sequence_equal_or_less_than, world::{entity::ordered_ids::OrderedIds, sync::entity_channel_receiver::EntityChannelState}, ComponentKind, EntityMessage, EntityMessageType, MessageIndex};
 
-pub(crate) struct ComponentChannel {
+pub(crate) struct ComponentChannelReceiver {
     /// Current authoritative presence flag
     inserted: bool,
     /// The *newest* message that was valid; guards against replay / re‑order.
@@ -46,7 +46,7 @@ pub(crate) struct ComponentChannel {
     outgoing_messages: VecDeque<EntityMessageType>,
 }
 
-impl ComponentChannel {
+impl ComponentChannelReceiver {
     pub(crate) fn new() -> Self {
         Self {
             inserted: false,

@@ -3,7 +3,7 @@
 //! The **`Engine<E>`** is the *single entry/exit point* between the raw,
 //! unordered stream of `EntityMessage<E>` packets on the wire and the
 //! **ordered, per‑entity event queue** your game logic consumes.
-//! It owns *one* [`EntityChannel`] per live entity and two lightweight
+//! It owns *one* [`EntityChannelReceiver`] per live entity and two lightweight
 //! collections for runtime bookkeeping:
 //!
 //! | Field | Purpose |
@@ -33,16 +33,16 @@ use std::{fmt::Debug, hash::Hash, collections::HashMap};
 
 use log::info;
 
-use crate::{world::{sync::{entity_channel::EntityChannel, config::EngineConfig}, entity::entity_message::EntityMessage}, ComponentKind, EntityMessageType, HostType, MessageIndex};
+use crate::{world::{sync::{entity_channel_receiver::EntityChannelReceiver, config::EngineConfig}, entity::entity_message::EntityMessage}, ComponentKind, EntityMessageType, HostType, MessageIndex};
 
-pub struct Engine<E: Copy + Hash + Eq + Debug> {
+pub struct ReceiverEngine<E: Copy + Hash + Eq + Debug> {
     host_type: HostType,
     pub config: EngineConfig,
     outgoing_events: Vec<EntityMessage<E>>,
-    entity_channels: HashMap<E, EntityChannel>,
+    entity_channels: HashMap<E, EntityChannelReceiver>,
 }
 
-impl<E: Copy + Hash + Eq + Debug> Engine<E> {
+impl<E: Copy + Hash + Eq + Debug> ReceiverEngine<E> {
 
     pub(crate) fn new(host_type: HostType) -> Self {
         Self {
@@ -84,7 +84,7 @@ impl<E: Copy + Hash + Eq + Debug> Engine<E> {
         // If the entity channel does not exist, create it
         let entity_channel = self.entity_channels
             .entry(entity)
-            .or_insert_with(|| { EntityChannel::new(self.host_type) });
+            .or_insert_with(|| { EntityChannelReceiver::new(self.host_type) });
 
         // if log {
         //     info!("Engine::accept_message(id={}, entity={:?}, msgType={:?})", id, entity, msg.get_type());
@@ -115,7 +115,7 @@ impl<E: Copy + Hash + Eq + Debug> Engine<E> {
             panic!("Attempted to track hosts for redundant remote entity which already exists: {:?}", entity);
         }
 
-        self.entity_channels.insert(*entity, EntityChannel::new_delegated(self.host_type));
+        self.entity_channels.insert(*entity, EntityChannelReceiver::new_delegated(self.host_type));
 
         let entity_channel = self.entity_channels.get_mut(entity).unwrap();
         entity_channel.setup_delegated_components(component_kinds);
@@ -129,7 +129,7 @@ impl<E: Copy + Hash + Eq + Debug> Engine<E> {
         self.entity_channels.remove(entity);
     }
 
-    pub(crate) fn get_remote_world(&self) -> &HashMap<E, EntityChannel> {
+    pub(crate) fn get_remote_world(&self) -> &HashMap<E, EntityChannelReceiver> {
         &self.entity_channels
     }
 }

@@ -1,19 +1,19 @@
 use std::{fmt::Debug, hash::Hash};
 use std::collections::HashMap;
 
-use crate::{messages::channels::receivers::reliable_receiver::ReliableReceiver, world::{component::component_kinds::ComponentKind, sync::Engine}, EntityMessage, HostType, MessageIndex};
-use crate::world::sync::EntityChannel;
+use crate::{messages::channels::receivers::reliable_receiver::ReliableReceiver, world::{component::component_kinds::ComponentKind, sync::ReceiverEngine}, EntityMessage, HostType, MessageIndex};
+use crate::world::sync::EntityChannelReceiver;
 
 pub struct EntityMessageReceiver<E: Copy + Hash + Eq + Debug> {
     receiver: ReliableReceiver<EntityMessage<E>>,
-    engine: Engine<E>,
+    engine: ReceiverEngine<E>,
 }
 
 impl<E: Copy + Hash + Eq + Debug> EntityMessageReceiver<E> {
     pub fn new(host_type: HostType) -> Self {
         Self {
             receiver: ReliableReceiver::new(),
-            engine: Engine::new(host_type),
+            engine: ReceiverEngine::new(host_type),
         }
     }
 
@@ -44,7 +44,7 @@ impl<E: Copy + Hash + Eq + Debug> EntityMessageReceiver<E> {
     /// Read all buffered [`EntityMessage`] inside the `receiver` and process them.
     ///
     /// Outputs the list of [`EntityMessage`] that can be executed now, buffer the rest
-    /// into each entity's [`EntityChannel`]
+    /// into each entity's [`EntityChannelReceiver`]
     pub fn receive_messages(&mut self, log: bool) -> Vec<EntityMessage<E>> {
         let incoming_messages = self.receiver.receive_messages();
         for (message_index, message) in incoming_messages {
@@ -53,7 +53,7 @@ impl<E: Copy + Hash + Eq + Debug> EntityMessageReceiver<E> {
         self.engine.receive_messages()
     }
 
-    pub(crate) fn get_remote_world(&self) -> &HashMap<E, EntityChannel> {
+    pub(crate) fn get_remote_world(&self) -> &HashMap<E, EntityChannelReceiver> {
         self.engine.get_remote_world()
     }
 }

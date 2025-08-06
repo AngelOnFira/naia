@@ -18,7 +18,7 @@ pub type CommandId = MessageIndex;
 /// sync on the Client
 pub struct HostWorldManager {
     host_world: CheckedMap<GlobalEntity, CheckedSet<ComponentKind>>,
-    remote_world: CheckedMap<GlobalEntity, CheckedSet<ComponentKind>>,
+    // remote_world: CheckedMap<GlobalEntity, CheckedSet<ComponentKind>>,
     
     entity_command_manager: EntityCommandManager,
     entity_update_manager: EntityUpdateManager,
@@ -44,7 +44,7 @@ impl HostWorldManager {
     ) -> Self {
         Self {
             host_world: CheckedMap::new(),
-            remote_world: CheckedMap::new(),
+            // remote_world: CheckedMap::new(),
             entity_command_manager: EntityCommandManager::new(host_type),
             entity_update_manager: EntityUpdateManager::new(address, global_world_manager),
         }
@@ -171,7 +171,7 @@ impl HostWorldManager {
         component_kinds: Vec<ComponentKind>,
     ) -> HostEntity {
         self.host_world.insert(*global_entity, CheckedSet::new());
-        self.remote_world.insert(*global_entity, CheckedSet::new());
+        // self.remote_world.insert(*global_entity, CheckedSet::new());
 
         let new_host_entity = on_entity_channel_opening(local_world_manager, global_entity);
 
@@ -195,7 +195,7 @@ impl HostWorldManager {
         global_entity: &GlobalEntity,
     ) {
         let components = self.host_world.remove(global_entity).unwrap();
-        self.remote_world.remove(global_entity);
+        // self.remote_world.remove(global_entity);
 
         local_world_manager.set_primary_to_remote(global_entity);
 
@@ -218,12 +218,12 @@ impl HostWorldManager {
             components.insert(*component_kind);
         }
         
-        {
-            let Some(components) = self.remote_world.get_mut(global_entity) else {
-                panic!("World Channel: cannot insert component into remote entity that doesn't exist");
-            };
-            components.insert(*component_kind);
-        }
+        // {
+        //     let Some(components) = self.remote_world.get_mut(global_entity) else {
+        //         panic!("World Channel: cannot insert component into remote entity that doesn't exist");
+        //     };
+        //     components.insert(*component_kind);
+        // }
 
         self.entity_update_manager.register_component(global_entity, component_kind);
     }

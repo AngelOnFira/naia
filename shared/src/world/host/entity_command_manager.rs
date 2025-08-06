@@ -6,7 +6,7 @@ use super::{
 };
 use crate::{ChannelSender, EntityMessage, EntityMessageReceiver, GlobalEntity, Instant, ReliableSender, PacketIndex, HostType, ComponentKind};
 use crate::sequence_list::SequenceList;
-use crate::world::sync::EntityChannel;
+use crate::world::sync::EntityChannelReceiver;
 
 const COMMAND_RECORD_TTL: Duration = Duration::from_secs(60);
 const RESEND_COMMAND_RTT_FACTOR: f32 = 1.5;
@@ -125,7 +125,7 @@ impl EntityCommandManager {
         self.delivered_commands.untrack_hosts_redundant_remote_entity(entity);
     }
 
-    pub(crate) fn get_remote_world(&self) -> &HashMap<GlobalEntity, EntityChannel> {
+    pub(crate) fn get_remote_world(&self) -> &HashMap<GlobalEntity, EntityChannelReceiver> {
         self.delivered_commands.get_remote_world()
     }
 }

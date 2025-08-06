@@ -47,7 +47,7 @@
 //! the canonical state graph above; thus consumers can apply events in
 //! arrival order without additional checks.
 
-use crate::{world::{entity::ordered_ids::OrderedIds, sync::entity_channel::EntityChannelState}, EntityMessage, MessageIndex};
+use crate::{world::{entity::ordered_ids::OrderedIds, sync::entity_channel_receiver::EntityChannelState}, EntityMessage, MessageIndex};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum EntityAuthChannelState {
@@ -56,13 +56,13 @@ enum EntityAuthChannelState {
     Delegated,
 }
 
-pub(crate) struct AuthChannel {
+pub(crate) struct AuthChannelReceiver {
     state: EntityAuthChannelState,
     buffered_messages: OrderedIds<EntityMessage<()>>,
     outgoing_messages: Vec<EntityMessage<()>>,
 }
 
-impl AuthChannel {
+impl AuthChannelReceiver {
     pub(crate) fn new() -> Self {
         Self {
             state: EntityAuthChannelState::Unpublished,
