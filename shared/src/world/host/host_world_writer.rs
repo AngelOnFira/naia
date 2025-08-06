@@ -176,8 +176,8 @@ impl HostWorldWriter {
         Self::write_command_id(writer, last_written_id, command_id);
 
         match command {
-            EntityCommand::SpawnEntity(global_entity) => {
-                EntityMessageType::SpawnEntity.ser(writer);
+            EntityCommand::Spawn(global_entity) => {
+                EntityMessageType::Spawn.ser(writer);
 
                 // write net entity
                 local_world_manager
@@ -191,12 +191,12 @@ impl HostWorldWriter {
                     host_manager.record_command_written(
                         packet_index,
                         command_id,
-                        EntityMessage::SpawnEntity(*global_entity),
+                        EntityMessage::Spawn(*global_entity),
                     );
                 }
             }
-            EntityCommand::DespawnEntity(global_entity) => {
-                EntityMessageType::DespawnEntity.ser(writer);
+            EntityCommand::Despawn(global_entity) => {
+                EntityMessageType::Despawn.ser(writer);
 
                 // write net entity
                 local_world_manager
@@ -210,7 +210,7 @@ impl HostWorldWriter {
                     host_manager.record_command_written(
                         packet_index,
                         command_id,
-                        EntityMessage::DespawnEntity(*global_entity),
+                        EntityMessage::Despawn(*global_entity),
                     );
                 }
             }
@@ -300,8 +300,8 @@ impl HostWorldWriter {
                 }
             }
             // Former SystemChannel messages - now serialized as EntityCommandEvents
-            EntityCommand::PublishEntity(global_entity) => {
-                EntityMessageType::PublishEntity.ser(writer);
+            EntityCommand::Publish(global_entity) => {
+                EntityMessageType::Publish.ser(writer);
 
                 // write net entity
                 local_world_manager
@@ -315,12 +315,12 @@ impl HostWorldWriter {
                     host_manager.record_command_written(
                         packet_index,
                         command_id,
-                        EntityMessage::PublishEntity(*global_entity),
+                        EntityMessage::Publish(*global_entity),
                     );
                 }
             }
-            EntityCommand::UnpublishEntity(global_entity) => {
-                EntityMessageType::UnpublishEntity.ser(writer);
+            EntityCommand::Unpublish(global_entity) => {
+                EntityMessageType::Unpublish.ser(writer);
 
                 // write net entity
                 local_world_manager
@@ -334,12 +334,12 @@ impl HostWorldWriter {
                     host_manager.record_command_written(
                         packet_index,
                         command_id,
-                        EntityMessage::UnpublishEntity(*global_entity),
+                        EntityMessage::Unpublish(*global_entity),
                     );
                 }
             }
-            EntityCommand::EnableDelegationEntity(global_entity) => {
-                EntityMessageType::EnableDelegationEntity.ser(writer);
+            EntityCommand::EnableDelegation(global_entity) => {
+                EntityMessageType::EnableDelegation.ser(writer);
 
                 // write net entity
                 local_world_manager
@@ -353,12 +353,12 @@ impl HostWorldWriter {
                     host_manager.record_command_written(
                         packet_index,
                         command_id,
-                        EntityMessage::EnableDelegationEntity(*global_entity),
+                        EntityMessage::EnableDelegation(*global_entity),
                     );
                 }
             }
-            EntityCommand::DisableDelegationEntity(global_entity) => {
-                EntityMessageType::DisableDelegationEntity.ser(writer);
+            EntityCommand::DisableDelegation(global_entity) => {
+                EntityMessageType::DisableDelegation.ser(writer);
 
                 // write net entity
                 local_world_manager
@@ -372,12 +372,12 @@ impl HostWorldWriter {
                     host_manager.record_command_written(
                         packet_index,
                         command_id,
-                        EntityMessage::DisableDelegationEntity(*global_entity),
+                        EntityMessage::DisableDelegation(*global_entity),
                     );
                 }
             }
-            EntityCommand::UpdateAuthority(global_entity, auth_status) => {
-                EntityMessageType::UpdateAuthority.ser(writer);
+            EntityCommand::SetAuthority(global_entity, auth_status) => {
+                EntityMessageType::SetAuthority.ser(writer);
 
                 // write net entity
                 local_world_manager
@@ -394,14 +394,14 @@ impl HostWorldWriter {
                     host_manager.record_command_written(
                         packet_index,
                         command_id,
-                        EntityMessage::EntityUpdateAuthority(*global_entity, *auth_status),
+                        EntityMessage::SetAuthority(*global_entity, *auth_status),
                     );
                 }
             }
             
             // below are response-type commands
-            EntityCommand::EnableDelegationEntityResponse(global_entity) => {
-                EntityMessageType::EnableDelegationEntityResponse.ser(writer);
+            EntityCommand::EnableDelegationResponse(global_entity) => {
+                EntityMessageType::EnableDelegationResponse.ser(writer);
 
                 // write net entity
                 local_world_manager
@@ -415,12 +415,12 @@ impl HostWorldWriter {
                     host_manager.record_command_written(
                         packet_index,
                         command_id,
-                        EntityMessage::EnableDelegationEntityResponse(*global_entity),
+                        EntityMessage::EnableDelegationResponse(*global_entity),
                     );
                 }
             }
-            EntityCommand::EntityMigrateResponse(global_entity, new_host_entity_value) => {
-                EntityMessageType::EntityMigrateResponse.ser(writer);
+            EntityCommand::MigrateResponse(global_entity, new_host_entity_value) => {
+                EntityMessageType::MigrateResponse.ser(writer);
 
                 // write net entity
                 local_world_manager
@@ -437,7 +437,7 @@ impl HostWorldWriter {
                     host_manager.record_command_written(
                         packet_index,
                         command_id,
-                        EntityMessage::EntityMigrateResponse(*global_entity, *new_host_entity_value),
+                        EntityMessage::MigrateResponse(*global_entity, *new_host_entity_value),
                     );
                 }
             }
@@ -459,7 +459,7 @@ impl HostWorldWriter {
                     host_manager.record_command_written(
                         packet_index,
                         command_id,
-                        EntityMessage::EntityRequestAuthority(*global_entity, *host_entity),
+                        EntityMessage::RequestAuthority(*global_entity, *host_entity),
                     );
                 }
             }
@@ -480,7 +480,7 @@ impl HostWorldWriter {
                     host_manager.record_command_written(
                         packet_index,
                         command_id,
-                        EntityMessage::EntityReleaseAuthority(owned_entity),
+                        EntityMessage::ReleaseAuthority(owned_entity),
                     );
                 }
             }
@@ -496,7 +496,7 @@ impl HostWorldWriter {
         let (_command_id, command) = next_send_commands.front().unwrap();
 
         match command {
-            EntityCommand::SpawnEntity(_entity) => {
+            EntityCommand::Spawn(_entity) => {
                 panic!(
                     "Packet Write Error: Blocking overflow detected! Entity Spawn message requires {bits_needed} bits, but packet only has {bits_free} bits available! Recommend slimming down these Components."
                 )
@@ -507,15 +507,15 @@ impl HostWorldWriter {
                     "Packet Write Error: Blocking overflow detected! Component Insertion message of type `{component_name}` requires {bits_needed} bits, but packet only has {bits_free} bits available! This condition should never be reached, as large Messages should be Fragmented in the Reliable channel"
                 )
             }
-            EntityCommand::PublishEntity(_)
-            | EntityCommand::UnpublishEntity(_)
-            | EntityCommand::EnableDelegationEntity(_)
-            | EntityCommand::EnableDelegationEntityResponse(_)
-            | EntityCommand::DisableDelegationEntity(_)
+            EntityCommand::Publish(_)
+            | EntityCommand::Unpublish(_)
+            | EntityCommand::EnableDelegation(_)
+            | EntityCommand::EnableDelegationResponse(_)
+            | EntityCommand::DisableDelegation(_)
             | EntityCommand::RequestAuthority(_, _)
             | EntityCommand::ReleaseAuthority(_)
-            | EntityCommand::UpdateAuthority(_, _)
-            | EntityCommand::EntityMigrateResponse(_, _) => {
+            | EntityCommand::SetAuthority(_, _)
+            | EntityCommand::MigrateResponse(_, _) => {
                 panic!(
                     "Packet Write Error: Blocking overflow detected! Authority/delegation command requires {bits_needed} bits, but packet only has {bits_free} bits available! These messages should be small and not cause overflow."
                 )

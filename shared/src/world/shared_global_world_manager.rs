@@ -34,7 +34,7 @@ impl SharedGlobalWorldManager {
             }
 
             // Generate despawn event
-            output.push(EntityEvent::DespawnEntity(global_entity));
+            output.push(EntityEvent::Despawn(global_entity));
 
             // Despawn entity
             world.despawn_entity(&world_entity);

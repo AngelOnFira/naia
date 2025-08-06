@@ -643,7 +643,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                     connection
                         .base
                         .host_world_manager
-                        .send_outgoing_command(EntityCommand::UpdateAuthority(
+                        .send_outgoing_command(EntityCommand::SetAuthority(
                             *global_entity,
                             EntityAuthStatus::Available,
                         ));
@@ -811,7 +811,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         connection
                             .base
                             .host_world_manager
-                            .send_outgoing_command(EntityCommand::UpdateAuthority(
+                            .send_outgoing_command(EntityCommand::SetAuthority(
                                 global_entity,
                                 new_status,
                             ));
@@ -845,7 +845,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         connection
                             .base
                             .host_world_manager
-                            .send_outgoing_command(EntityCommand::UpdateAuthority(
+                            .send_outgoing_command(EntityCommand::SetAuthority(
                                 *global_entity,
                                 auth_status,
                             ));
@@ -1410,7 +1410,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                     connection
                         .base
                         .host_world_manager
-                        .send_outgoing_command(EntityCommand::PublishEntity(*global_entity));
+                        .send_outgoing_command(EntityCommand::Publish(*global_entity));
                 }
             }
         }
@@ -1446,7 +1446,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                     connection
                         .base
                         .host_world_manager
-                        .send_outgoing_command(EntityCommand::UnpublishEntity(*global_entity));
+                        .send_outgoing_command(EntityCommand::Unpublish(*global_entity));
                 }
             }
         }
@@ -1486,7 +1486,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         connection
                             .base
                             .host_world_manager
-                            .send_outgoing_command(EntityCommand::EnableDelegationEntity(*global_entity));
+                            .send_outgoing_command(EntityCommand::EnableDelegation(*global_entity));
                     }
                 }
             }
@@ -1586,7 +1586,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         connection
             .base
             .host_world_manager
-            .send_outgoing_command(EntityCommand::EntityMigrateResponse(
+            .send_outgoing_command(EntityCommand::MigrateResponse(
                 *global_entity,
                 new_host_entity,
             ));
@@ -1633,7 +1633,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         connection
                             .base
                             .host_world_manager
-                            .send_outgoing_command(EntityCommand::DisableDelegationEntity(*global_entity));
+                            .send_outgoing_command(EntityCommand::DisableDelegation(*global_entity));
                     }
                 }
             }
@@ -2008,7 +2008,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         let mut deferred_events = Vec::new();
         for response_event in response_events {
             match response_event {
-                EntityEvent::SpawnEntity(global_entity) => {
+                EntityEvent::Spawn(global_entity) => {
                     let world_entity = self.global_entity_map.global_entity_to_entity(&global_entity).unwrap();
                     self.incoming_world_events.push_spawn(user_key, &world_entity);
                     self.global_world_manager
@@ -2024,10 +2024,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                             &global_entity
                         );
                 }
-                EntityEvent::DespawnEntity(global_entity) => {
+                EntityEvent::Despawn(global_entity) => {
                     let world_entity = self.global_entity_map.global_entity_to_entity(&global_entity).unwrap();
                     self.incoming_world_events.push_despawn(user_key, &world_entity);
-                    deferred_events.push(EntityEvent::DespawnEntity(global_entity));
+                    deferred_events.push(EntityEvent::Despawn(global_entity));
                 }
                 EntityEvent::InsertComponent(global_entity, component_kind) => {
                     let world_entity = self.global_entity_map.global_entity_to_entity(&global_entity).unwrap();
@@ -2112,7 +2112,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         // The reason for deferring these events is that they depend on the operations to the world above
         for response_event in deferred_events {
             match response_event {
-                EntityEvent::PublishEntity(global_entity) => {
+                EntityEvent::Publish(global_entity) => {
                     let world_entity = self
                         .global_entity_map
                         .global_entity_to_entity(&global_entity)
@@ -2121,7 +2121,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                     self.incoming_world_events
                         .push_publish(user_key, &world_entity);
                 }
-                EntityEvent::UnpublishEntity(global_entity) => {
+                EntityEvent::Unpublish(global_entity) => {
                     let world_entity = self
                         .global_entity_map
                         .global_entity_to_entity(&global_entity)
@@ -2130,7 +2130,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                     self.incoming_world_events
                         .push_unpublish(user_key, &world_entity);
                 }
-                EntityEvent::EnableDelegationEntity(global_entity) => {
+                EntityEvent::EnableDelegation(global_entity) => {
                     let world_entity = self
                         .global_entity_map
                         .global_entity_to_entity(&global_entity)
@@ -2144,20 +2144,20 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                     self.incoming_world_events
                         .push_delegate(user_key, &world_entity);
                 }
-                EntityEvent::EnableDelegationEntityResponse(global_entity) => {
+                EntityEvent::EnableDelegationResponse(global_entity) => {
                     self.entity_enable_delegation_response(user_key, &global_entity);
                 }
-                EntityEvent::DisableDelegationEntity(_) => {
+                EntityEvent::DisableDelegation(_) => {
                     panic!("Clients should not be able to disable entity delegation.");
                 }
-                EntityEvent::EntityRequestAuthority(global_entity, remote_entity) => {
+                EntityEvent::RequestAuthority(global_entity, remote_entity) => {
                     let world_entity = self
                         .global_entity_map
                         .global_entity_to_entity(&global_entity)
                         .unwrap();
                     self.client_request_authority(user_key, &world_entity, &remote_entity);
                 }
-                EntityEvent::EntityReleaseAuthority(global_entity) => {
+                EntityEvent::ReleaseAuthority(global_entity) => {
                     // info!("received release auth entity message!");
                     let world_entity = self
                         .global_entity_map
@@ -2166,10 +2166,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                     self.entity_release_authority(Some(user_key), &world_entity);
                     self.incoming_world_events.push_auth_reset(&world_entity);
                 }
-                EntityEvent::EntityUpdateAuthority(_, _) => {
+                EntityEvent::SetAuthority(_, _) => {
                     panic!("Clients should not be able to update entity authority.");
                 }
-                EntityEvent::EntityMigrateResponse(_, _) => {
+                EntityEvent::MigrateResponse(_, _) => {
                     panic!("Clients should not be able to send this message");
                 }
                 _ => {
@@ -2180,7 +2180,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
         for response_event in extra_deferred_events {
             match response_event {
-                EntityEvent::DespawnEntity(global_entity) => {
+                EntityEvent::Despawn(global_entity) => {
                     let world_entity = self
                         .global_entity_map
                         .global_entity_to_entity(&global_entity)
@@ -2419,7 +2419,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         connection
                             .base
                             .host_world_manager
-                            .send_outgoing_command(EntityCommand::EnableDelegationEntity(*global_entity));
+                            .send_outgoing_command(EntityCommand::EnableDelegation(*global_entity));
                     } else if currently_in_scope {
                         // remove entity from the connections local scope
                         connection

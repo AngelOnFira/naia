@@ -132,7 +132,7 @@ impl AuthChannel {
             };
 
             match msg {
-                EntityMessage::PublishEntity(_) => {
+                EntityMessage::Publish(_) => {
                     if self.state != EntityAuthChannelState::Unpublished {
                         break;
                     }
@@ -141,7 +141,7 @@ impl AuthChannel {
 
                     self.pop_front_into_outgoing();
                 }
-                EntityMessage::UnpublishEntity(_) => {
+                EntityMessage::Unpublish(_) => {
                     if self.state != EntityAuthChannelState::Published {
                         break;
                     }
@@ -150,7 +150,7 @@ impl AuthChannel {
 
                     self.pop_front_into_outgoing();
                 }
-                EntityMessage::EnableDelegationEntity(_) => {
+                EntityMessage::EnableDelegation(_) => {
                     if self.state != EntityAuthChannelState::Published {
                         break;
                     }
@@ -159,7 +159,7 @@ impl AuthChannel {
 
                     self.pop_front_into_outgoing();
                 }
-                EntityMessage::DisableDelegationEntity(_) => {
+                EntityMessage::DisableDelegation(_) => {
                     if self.state != EntityAuthChannelState::Delegated {
                         break;
                     }
@@ -168,7 +168,7 @@ impl AuthChannel {
 
                     self.pop_front_into_outgoing();
                 }
-                EntityMessage::EntityUpdateAuthority(_, _) => {
+                EntityMessage::SetAuthority(_, _) => {
                     if self.state != EntityAuthChannelState::Delegated {
                         break;
                     }

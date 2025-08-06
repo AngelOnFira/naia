@@ -1,6 +1,6 @@
 #![cfg(test)]
 
-use crate::{EntityAuthStatus, world::{sync::Engine, component::component_kinds::ComponentKind, entity::{entity_message::EntityMessage, local_entity::RemoteEntity}}};
+use crate::{EntityAuthStatus, world::{sync::Engine, component::component_kinds::ComponentKind, entity::{entity_message::EntityMessage, local_entity::RemoteEntity}}, HostType};
 use crate::world::sync::config::EngineConfig;
 
 struct AssertList {
@@ -37,21 +37,21 @@ fn component_kind<const T: u8>() -> ComponentKind {
 #[test]
 fn engine_basic() {
 
-    let mut engine: Engine<RemoteEntity> = Engine::default();
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
     
     let entity = RemoteEntity::new(1);
     let comp = component_kind::<1>();
 
-    engine.accept_message(1, EntityMessage::SpawnEntity(entity));
+    engine.accept_message(1, EntityMessage::Spawn(entity));
     engine.accept_message(2, EntityMessage::InsertComponent(entity, comp));
     engine.accept_message(3, EntityMessage::RemoveComponent(entity, comp));
-    engine.accept_message(4, EntityMessage::DespawnEntity(entity));
+    engine.accept_message(4, EntityMessage::Despawn(entity));
 
     let mut asserts = AssertList::new();
-    asserts.push(EntityMessage::SpawnEntity(entity));
+    asserts.push(EntityMessage::Spawn(entity));
     asserts.push(EntityMessage::InsertComponent(entity, comp));
     asserts.push(EntityMessage::RemoveComponent(entity, comp));
-    asserts.push(EntityMessage::DespawnEntity(entity));
+    asserts.push(EntityMessage::Despawn(entity));
 
     asserts.check(&mut engine);
 }
@@ -59,20 +59,20 @@ fn engine_basic() {
 #[test]
 fn engine_entity_channels_do_not_block() {
 
-    let mut engine: Engine<RemoteEntity> = Engine::default();
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
 
     let entity_a = RemoteEntity::new(1);
     let entity_b = RemoteEntity::new(2);
     let entity_c = RemoteEntity::new(3);
 
-    engine.accept_message(3, EntityMessage::SpawnEntity(entity_a));
-    engine.accept_message(2, EntityMessage::SpawnEntity(entity_b));
-    engine.accept_message(1, EntityMessage::SpawnEntity(entity_c));
+    engine.accept_message(3, EntityMessage::Spawn(entity_a));
+    engine.accept_message(2, EntityMessage::Spawn(entity_b));
+    engine.accept_message(1, EntityMessage::Spawn(entity_c));
 
     let mut asserts = AssertList::new();
-    asserts.push(EntityMessage::SpawnEntity(entity_a));
-    asserts.push(EntityMessage::SpawnEntity(entity_b));
-    asserts.push(EntityMessage::SpawnEntity(entity_c));
+    asserts.push(EntityMessage::Spawn(entity_a));
+    asserts.push(EntityMessage::Spawn(entity_b));
+    asserts.push(EntityMessage::Spawn(entity_c));
 
     asserts.check(&mut engine);
 }
@@ -80,21 +80,21 @@ fn engine_entity_channels_do_not_block() {
 #[test]
 fn engine_component_channels_do_not_block() {
 
-    let mut engine: Engine<RemoteEntity> = Engine::default();
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
 
     let entity = RemoteEntity::new(1);
     let comp_a = component_kind::<1>();
     let comp_b = component_kind::<2>();
     let comp_c = component_kind::<3>();
 
-    engine.accept_message(1, EntityMessage::SpawnEntity(entity));
+    engine.accept_message(1, EntityMessage::Spawn(entity));
     engine.accept_message(4, EntityMessage::InsertComponent(entity, comp_a));
     engine.accept_message(3, EntityMessage::InsertComponent(entity, comp_b));
     engine.accept_message(2, EntityMessage::InsertComponent(entity, comp_c));
 
     // Check order
     let mut asserts = AssertList::new();
-    asserts.push(EntityMessage::SpawnEntity(entity));
+    asserts.push(EntityMessage::Spawn(entity));
     asserts.push(EntityMessage::InsertComponent(entity, comp_a));
     asserts.push(EntityMessage::InsertComponent(entity, comp_b));
     asserts.push(EntityMessage::InsertComponent(entity, comp_c));
@@ -104,18 +104,18 @@ fn engine_component_channels_do_not_block() {
 
 #[test]
 fn wrap_ordering_simple() {
-    let mut engine: Engine<RemoteEntity> = Engine::default();
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
 
     let entity = RemoteEntity::new(1);
     let comp = component_kind::<1>();
 
     // Pre-wrap packet (high seq)
-    engine.accept_message(65_534, EntityMessage::SpawnEntity(entity));
+    engine.accept_message(65_534, EntityMessage::Spawn(entity));
     // Post-wrap packet (low seq)
     engine.accept_message(0, EntityMessage::InsertComponent(entity, comp));
 
     let mut asserts = AssertList::new();
-    asserts.push(EntityMessage::SpawnEntity(entity));
+    asserts.push(EntityMessage::Spawn(entity));
     asserts.push(EntityMessage::InsertComponent(entity, comp));
 
     asserts.check(&mut engine);
@@ -124,24 +124,24 @@ fn wrap_ordering_simple() {
 #[test]
 fn guard_band_flush() {
 
-    let mut engine: Engine<RemoteEntity> = Engine::default();
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
     let entity = RemoteEntity::new(1);
 
     let near_flush_seq = engine.config.flush_threshold - 2;
     let wrap_beyond_seq = engine.config.flush_threshold + 1;
 
-    engine.accept_message(near_flush_seq, EntityMessage::SpawnEntity(entity));
-    engine.accept_message(wrap_beyond_seq, EntityMessage::SpawnEntity(entity));
+    engine.accept_message(near_flush_seq, EntityMessage::Spawn(entity));
+    engine.accept_message(wrap_beyond_seq, EntityMessage::Spawn(entity));
 
     // We expect only the later packet to be delivered
     let mut asserts = AssertList::new();
-    asserts.push(EntityMessage::SpawnEntity(entity));
+    asserts.push(EntityMessage::Spawn(entity));
     asserts.check(&mut engine);
 }
 
 #[test]
 fn noop_safe() {
-    let mut engine: Engine<RemoteEntity> = Engine::default();
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
 
     engine.accept_message(10, EntityMessage::Noop);
 
@@ -151,17 +151,17 @@ fn noop_safe() {
 
 #[test]
 fn backlog_drains_on_prereq_arrival() {
-    let mut engine: Engine<RemoteEntity> = Engine::default();
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
     let entity = RemoteEntity::new(1);
     let comp = component_kind::<1>();
 
     // Insert arrives first, should backlog
     engine.accept_message(6, EntityMessage::InsertComponent(entity, comp));
     // Spawn arrives second
-    engine.accept_message(5, EntityMessage::SpawnEntity(entity));
+    engine.accept_message(5, EntityMessage::Spawn(entity));
 
     let mut asserts = AssertList::new();
-    asserts.push(EntityMessage::SpawnEntity(entity));
+    asserts.push(EntityMessage::Spawn(entity));
     asserts.push(EntityMessage::InsertComponent(entity, comp));
 
     asserts.check(&mut engine);
@@ -169,36 +169,36 @@ fn backlog_drains_on_prereq_arrival() {
 
 #[test]
 fn entity_despawn_before_spawn() {
-    let mut engine: Engine<RemoteEntity> = Engine::default();
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
 
     let entity = RemoteEntity::new(1);
     let comp = component_kind::<1>();
 
     // Despawn before spawn
-    engine.accept_message(3, EntityMessage::DespawnEntity(entity));
+    engine.accept_message(3, EntityMessage::Despawn(entity));
     engine.accept_message(2, EntityMessage::InsertComponent(entity, comp));
-    engine.accept_message(1, EntityMessage::SpawnEntity(entity));
+    engine.accept_message(1, EntityMessage::Spawn(entity));
 
     let mut asserts = AssertList::new();
-    asserts.push(EntityMessage::SpawnEntity(entity));
+    asserts.push(EntityMessage::Spawn(entity));
     asserts.push(EntityMessage::InsertComponent(entity, comp));
-    asserts.push(EntityMessage::DespawnEntity(entity));
+    asserts.push(EntityMessage::Despawn(entity));
     asserts.check(&mut engine);
 }
 
 #[test]
 fn component_remove_before_insert() {
-    let mut engine: Engine<RemoteEntity> = Engine::default();
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
 
     let entity = RemoteEntity::new(1);
     let comp = component_kind::<1>();
 
-    engine.accept_message(1, EntityMessage::SpawnEntity(entity));
+    engine.accept_message(1, EntityMessage::Spawn(entity));
     engine.accept_message(3, EntityMessage::RemoveComponent(entity, comp));
     engine.accept_message(2, EntityMessage::InsertComponent(entity, comp));
 
     let mut asserts = AssertList::new();
-    asserts.push(EntityMessage::SpawnEntity(entity));
+    asserts.push(EntityMessage::Spawn(entity));
     asserts.push(EntityMessage::InsertComponent(entity, comp));
     asserts.push(EntityMessage::RemoveComponent(entity, comp));
     asserts.check(&mut engine);
@@ -206,7 +206,7 @@ fn component_remove_before_insert() {
 
 #[test]
 fn empty_drain_safe() {
-    let mut engine: Engine<RemoteEntity> = Engine::default();
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
 
     // Drain when empty
     let out1 = engine.receive_messages();
@@ -219,90 +219,90 @@ fn empty_drain_safe() {
 
 #[test]
 fn entity_auth_basic() {
-    let mut engine: Engine<RemoteEntity> = Engine::default();
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
 
     let entity = RemoteEntity::new(1);
 
-    engine.accept_message(1, EntityMessage::SpawnEntity(entity));
-    engine.accept_message(2, EntityMessage::PublishEntity(entity));
-    engine.accept_message(3, EntityMessage::EnableDelegationEntity(entity));
-    engine.accept_message(4, EntityMessage::EntityUpdateAuthority(entity, EntityAuthStatus::Granted));
-    engine.accept_message(5, EntityMessage::EntityUpdateAuthority(entity, EntityAuthStatus::Available));
-    engine.accept_message(6, EntityMessage::DisableDelegationEntity(entity));
-    engine.accept_message(7, EntityMessage::UnpublishEntity(entity));
-    engine.accept_message(8, EntityMessage::DespawnEntity(entity));
+    engine.accept_message(1, EntityMessage::Spawn(entity));
+    engine.accept_message(2, EntityMessage::Publish(entity));
+    engine.accept_message(3, EntityMessage::EnableDelegation(entity));
+    engine.accept_message(4, EntityMessage::SetAuthority(entity, EntityAuthStatus::Granted));
+    engine.accept_message(5, EntityMessage::SetAuthority(entity, EntityAuthStatus::Available));
+    engine.accept_message(6, EntityMessage::DisableDelegation(entity));
+    engine.accept_message(7, EntityMessage::Unpublish(entity));
+    engine.accept_message(8, EntityMessage::Despawn(entity));
 
     let mut asserts = AssertList::new();
-    asserts.push(EntityMessage::SpawnEntity(entity));
-    asserts.push(EntityMessage::PublishEntity(entity));
-    asserts.push(EntityMessage::EnableDelegationEntity(entity));
-    asserts.push(EntityMessage::EntityUpdateAuthority(entity, EntityAuthStatus::Granted));
-    asserts.push(EntityMessage::EntityUpdateAuthority(entity, EntityAuthStatus::Available));
-    asserts.push(EntityMessage::DisableDelegationEntity(entity));
-    asserts.push(EntityMessage::UnpublishEntity(entity));
-    asserts.push(EntityMessage::DespawnEntity(entity));
+    asserts.push(EntityMessage::Spawn(entity));
+    asserts.push(EntityMessage::Publish(entity));
+    asserts.push(EntityMessage::EnableDelegation(entity));
+    asserts.push(EntityMessage::SetAuthority(entity, EntityAuthStatus::Granted));
+    asserts.push(EntityMessage::SetAuthority(entity, EntityAuthStatus::Available));
+    asserts.push(EntityMessage::DisableDelegation(entity));
+    asserts.push(EntityMessage::Unpublish(entity));
+    asserts.push(EntityMessage::Despawn(entity));
     asserts.check(&mut engine);
 }
 
 #[test]
 fn entity_auth_scrambled() {
-    let mut engine: Engine<RemoteEntity> = Engine::default();
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
 
     let entity = RemoteEntity::new(1);
 
-    engine.accept_message(8, EntityMessage::DespawnEntity(entity));
-    engine.accept_message(6, EntityMessage::DisableDelegationEntity(entity)); // this will never be received
-    engine.accept_message(4, EntityMessage::EntityUpdateAuthority(entity, EntityAuthStatus::Granted)); // this will never be received
-    engine.accept_message(2, EntityMessage::PublishEntity(entity));
-    engine.accept_message(1, EntityMessage::SpawnEntity(entity));
-    engine.accept_message(3, EntityMessage::EnableDelegationEntity(entity)); // this will never be received
-    engine.accept_message(5, EntityMessage::EntityUpdateAuthority(entity, EntityAuthStatus::Available)); // this will never be received
-    engine.accept_message(7, EntityMessage::UnpublishEntity(entity)); // this will never be received
+    engine.accept_message(8, EntityMessage::Despawn(entity));
+    engine.accept_message(6, EntityMessage::DisableDelegation(entity)); // this will never be received
+    engine.accept_message(4, EntityMessage::SetAuthority(entity, EntityAuthStatus::Granted)); // this will never be received
+    engine.accept_message(2, EntityMessage::Publish(entity));
+    engine.accept_message(1, EntityMessage::Spawn(entity));
+    engine.accept_message(3, EntityMessage::EnableDelegation(entity)); // this will never be received
+    engine.accept_message(5, EntityMessage::SetAuthority(entity, EntityAuthStatus::Available)); // this will never be received
+    engine.accept_message(7, EntityMessage::Unpublish(entity)); // this will never be received
 
     let mut asserts = AssertList::new();
-    asserts.push(EntityMessage::SpawnEntity(entity));
-    asserts.push(EntityMessage::PublishEntity(entity));
-    asserts.push(EntityMessage::DespawnEntity(entity));
+    asserts.push(EntityMessage::Spawn(entity));
+    asserts.push(EntityMessage::Publish(entity));
+    asserts.push(EntityMessage::Despawn(entity));
     asserts.check(&mut engine);
 }
 
 #[test]
 fn despawn_clears_stale_buffers() {
     // ── Arrange ────────────────────────────────────────────────────────────────
-    let mut engine: Engine<RemoteEntity> = Engine::default();
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
     let entity = RemoteEntity::new(1);
     let comp_a = component_kind::<1>();
     let comp_b = component_kind::<2>();
 
     // First life ─ valid lifecycle
-    engine.accept_message(1, EntityMessage::SpawnEntity(entity));
+    engine.accept_message(1, EntityMessage::Spawn(entity));
     engine.accept_message(2, EntityMessage::InsertComponent(entity, comp_a));
-    engine.accept_message(4, EntityMessage::DespawnEntity(entity));
+    engine.accept_message(4, EntityMessage::Despawn(entity));
 
     // Stale message that belongs to the *previous* life: must be dropped
     engine.accept_message(3, EntityMessage::InsertComponent(entity, comp_b));
 
     // Second life ─ fresh epoch
-    engine.accept_message(5, EntityMessage::SpawnEntity(entity));
+    engine.accept_message(5, EntityMessage::Spawn(entity));
 
     // ── Assert ────────────────────────────────────────────────────────────────
     let mut asserts = AssertList::new();
-    asserts.push(EntityMessage::SpawnEntity(entity));
+    asserts.push(EntityMessage::Spawn(entity));
     asserts.push(EntityMessage::InsertComponent(entity, comp_a));
-    asserts.push(EntityMessage::DespawnEntity(entity));
-    asserts.push(EntityMessage::SpawnEntity(entity)); // second life
+    asserts.push(EntityMessage::Despawn(entity));
+    asserts.push(EntityMessage::Spawn(entity)); // second life
     asserts.check(&mut engine);
 }
 
 #[test]
 fn component_dense_toggle_sequence() {
-    let mut engine: Engine<RemoteEntity> = Engine::default();
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
 
     let entity = RemoteEntity::new(1);
     let comp   = component_kind::<1>();
 
     // Happy‑path spawn
-    engine.accept_message(1,  EntityMessage::SpawnEntity(entity));
+    engine.accept_message(1,  EntityMessage::Spawn(entity));
 
     // Five out‑of‑order toggles for the SAME component
     engine.accept_message(10, EntityMessage::InsertComponent (entity, comp)); // earliest insert
@@ -313,7 +313,7 @@ fn component_dense_toggle_sequence() {
 
     // Expect: Spawn  → Insert(id 10) → Remove(id 13) → Insert(id 12)
     let mut asserts = AssertList::new();
-    asserts.push(EntityMessage::SpawnEntity      (entity));
+    asserts.push(EntityMessage::Spawn(entity));
     asserts.push(EntityMessage::InsertComponent  (entity, comp));
     asserts.push(EntityMessage::RemoveComponent  (entity, comp));
     asserts.push(EntityMessage::InsertComponent  (entity, comp));
@@ -323,7 +323,7 @@ fn component_dense_toggle_sequence() {
 
 #[test]
 fn component_backlog_on_entity_a_does_not_block_entity_b() {
-    let mut engine: Engine<RemoteEntity> = Engine::default();
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
 
     let entity_a = RemoteEntity::new(1);
     let entity_b = RemoteEntity::new(2);
@@ -333,194 +333,194 @@ fn component_backlog_on_entity_a_does_not_block_entity_b() {
     engine.accept_message(2, EntityMessage::InsertComponent(entity_a, comp_a));
 
     // 2. Independent spawn for Entity B should *not* be blocked
-    engine.accept_message(3, EntityMessage::SpawnEntity(entity_b));
+    engine.accept_message(3, EntityMessage::Spawn(entity_b));
 
     // Drain: expect only the spawn for Entity B
     let mut asserts = AssertList::new();
-    asserts.push(EntityMessage::SpawnEntity(entity_b));
+    asserts.push(EntityMessage::Spawn(entity_b));
     asserts.check(&mut engine);
 
     // 3. Now deliver the missing spawn for Entity A; its backlogged insert must flush
-    engine.accept_message(1, EntityMessage::SpawnEntity(entity_a));
+    engine.accept_message(1, EntityMessage::Spawn(entity_a));
 
     let mut asserts = AssertList::new();
-    asserts.push(EntityMessage::SpawnEntity(entity_a));
+    asserts.push(EntityMessage::Spawn(entity_a));
     asserts.push(EntityMessage::InsertComponent(entity_a, comp_a));
     asserts.check(&mut engine);
 }
 
 #[test]
 fn entity_auth_illegal_disable_delegation_dropped() {
-    let mut engine: Engine<RemoteEntity> = Engine::default();
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
     let entity = RemoteEntity::new(1);
 
     // Legal path up to Published …
-    engine.accept_message(1, EntityMessage::SpawnEntity(entity));
-    engine.accept_message(2, EntityMessage::PublishEntity(entity));
+    engine.accept_message(1, EntityMessage::Spawn(entity));
+    engine.accept_message(2, EntityMessage::Publish(entity));
 
     // missing (3, EnableDelegationEntity) message never arrives
 
     // `DisableDelegationEntity` while still Published (never Delegated)
-    engine.accept_message(4, EntityMessage::DisableDelegationEntity(entity));
+    engine.accept_message(4, EntityMessage::DisableDelegation(entity));
 
     // Follow with an obviously legal message so drain is non‑empty
-    engine.accept_message(5, EntityMessage::DespawnEntity(entity));
+    engine.accept_message(5, EntityMessage::Despawn(entity));
 
     // Expected: illegal message is silently dropped
     let mut asserts = AssertList::new();
-    asserts.push(EntityMessage::SpawnEntity(entity));
-    asserts.push(EntityMessage::PublishEntity(entity));
-    asserts.push(EntityMessage::DespawnEntity(entity));
+    asserts.push(EntityMessage::Spawn(entity));
+    asserts.push(EntityMessage::Publish(entity));
+    asserts.push(EntityMessage::Despawn(entity));
     asserts.check(&mut engine);
 }
 
 #[test]
 fn entity_auth_illegal_update_authority_dropped() {
-    let mut engine: Engine<RemoteEntity> = Engine::default();
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
     let entity = RemoteEntity::new(1);
 
-    engine.accept_message(1, EntityMessage::SpawnEntity(entity));
-    engine.accept_message(2, EntityMessage::PublishEntity(entity));
+    engine.accept_message(1, EntityMessage::Spawn(entity));
+    engine.accept_message(2, EntityMessage::Publish(entity));
 
     // missing (3, EnableDelegationEntity) message never arrives
 
     // Illegal: UpdateAuthority while still Published (never Delegated)
-    engine.accept_message(4, EntityMessage::EntityUpdateAuthority(
+    engine.accept_message(4, EntityMessage::SetAuthority(
         entity,
         EntityAuthStatus::Granted,
     ));
 
-    engine.accept_message(5, EntityMessage::DespawnEntity(entity));
+    engine.accept_message(5, EntityMessage::Despawn(entity));
 
     let mut asserts = AssertList::new();
-    asserts.push(EntityMessage::SpawnEntity(entity));
-    asserts.push(EntityMessage::PublishEntity(entity));
-    asserts.push(EntityMessage::DespawnEntity(entity));
+    asserts.push(EntityMessage::Spawn(entity));
+    asserts.push(EntityMessage::Publish(entity));
+    asserts.push(EntityMessage::Despawn(entity));
     asserts.check(&mut engine);
 }
 
 #[test]
 fn entity_auth_illegal_unpublish_while_delegated_dropped() {
-    let mut engine: Engine<RemoteEntity> = Engine::default();
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
     let entity = RemoteEntity::new(1);
 
-    engine.accept_message(1, EntityMessage::SpawnEntity(entity));
-    engine.accept_message(2, EntityMessage::PublishEntity(entity));
-    engine.accept_message(3, EntityMessage::EnableDelegationEntity(entity));
+    engine.accept_message(1, EntityMessage::Spawn(entity));
+    engine.accept_message(2, EntityMessage::Publish(entity));
+    engine.accept_message(3, EntityMessage::EnableDelegation(entity));
 
     // Illegal: Unpublish while still Delegated
-    engine.accept_message(5, EntityMessage::UnpublishEntity(entity));
+    engine.accept_message(5, EntityMessage::Unpublish(entity));
 
     // Legal sequence to close the loop: revoke delegation then unpublish
-    engine.accept_message(4, EntityMessage::DisableDelegationEntity(entity));
-    engine.accept_message(6, EntityMessage::DespawnEntity(entity));
+    engine.accept_message(4, EntityMessage::DisableDelegation(entity));
+    engine.accept_message(6, EntityMessage::Despawn(entity));
 
     let mut asserts = AssertList::new();
-    asserts.push(EntityMessage::SpawnEntity(entity));
-    asserts.push(EntityMessage::PublishEntity(entity));
-    asserts.push(EntityMessage::EnableDelegationEntity(entity));
-    asserts.push(EntityMessage::DisableDelegationEntity(entity));
-    asserts.push(EntityMessage::UnpublishEntity(entity));
-    asserts.push(EntityMessage::DespawnEntity(entity));
+    asserts.push(EntityMessage::Spawn(entity));
+    asserts.push(EntityMessage::Publish(entity));
+    asserts.push(EntityMessage::EnableDelegation(entity));
+    asserts.push(EntityMessage::DisableDelegation(entity));
+    asserts.push(EntityMessage::Unpublish(entity));
+    asserts.push(EntityMessage::Despawn(entity));
     asserts.check(&mut engine);
 }
 
 #[test]
 fn entity_auth_illegal_enable_delegation_while_already_delegated_dropped() {
-    let mut engine: Engine<RemoteEntity> = Engine::default();
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
     let entity = RemoteEntity::new(1);
 
     // Legal path up to Delegated …
-    engine.accept_message(1, EntityMessage::SpawnEntity(entity));
-    engine.accept_message(2, EntityMessage::PublishEntity(entity));
-    engine.accept_message(3, EntityMessage::EnableDelegationEntity(entity));
+    engine.accept_message(1, EntityMessage::Spawn(entity));
+    engine.accept_message(2, EntityMessage::Publish(entity));
+    engine.accept_message(3, EntityMessage::EnableDelegation(entity));
 
     // Illegal: second EnableDelegation while already Delegated
-    engine.accept_message(5, EntityMessage::EnableDelegationEntity(entity));
+    engine.accept_message(5, EntityMessage::EnableDelegation(entity));
 
     // Close the loop with a legal DisableDelegation and Despawn
-    engine.accept_message(4, EntityMessage::DisableDelegationEntity(entity));
-    engine.accept_message(6, EntityMessage::DespawnEntity(entity));
+    engine.accept_message(4, EntityMessage::DisableDelegation(entity));
+    engine.accept_message(6, EntityMessage::Despawn(entity));
 
     // Expect: duplicate EnableDelegation is buffered
     let mut asserts = AssertList::new();
-    asserts.push(EntityMessage::SpawnEntity(entity));
-    asserts.push(EntityMessage::PublishEntity(entity));
-    asserts.push(EntityMessage::EnableDelegationEntity(entity));
-    asserts.push(EntityMessage::DisableDelegationEntity(entity));
-    asserts.push(EntityMessage::EnableDelegationEntity(entity));
-    asserts.push(EntityMessage::DespawnEntity(entity));
+    asserts.push(EntityMessage::Spawn(entity));
+    asserts.push(EntityMessage::Publish(entity));
+    asserts.push(EntityMessage::EnableDelegation(entity));
+    asserts.push(EntityMessage::DisableDelegation(entity));
+    asserts.push(EntityMessage::EnableDelegation(entity));
+    asserts.push(EntityMessage::Despawn(entity));
     asserts.check(&mut engine);
 }
 
 #[test]
 fn entity_auth_illegal_publish_while_already_published_dropped() {
-    let mut engine: Engine<RemoteEntity> = Engine::default();
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
     let entity = RemoteEntity::new(1);
 
-    engine.accept_message(1, EntityMessage::SpawnEntity(entity));
-    engine.accept_message(2, EntityMessage::PublishEntity(entity));
+    engine.accept_message(1, EntityMessage::Spawn(entity));
+    engine.accept_message(2, EntityMessage::Publish(entity));
 
     // Duplicate Publish while still Published
-    engine.accept_message(6, EntityMessage::PublishEntity(entity));
+    engine.accept_message(6, EntityMessage::Publish(entity));
 
-    engine.accept_message(4, EntityMessage::DespawnEntity(entity));
+    engine.accept_message(4, EntityMessage::Despawn(entity));
 
     // Expect: second Publish is dropped
     let mut asserts = AssertList::new();
-    asserts.push(EntityMessage::SpawnEntity(entity));
-    asserts.push(EntityMessage::PublishEntity(entity));
-    asserts.push(EntityMessage::DespawnEntity(entity));
+    asserts.push(EntityMessage::Spawn(entity));
+    asserts.push(EntityMessage::Publish(entity));
+    asserts.push(EntityMessage::Despawn(entity));
     asserts.check(&mut engine);
 }
 
 #[test]
 fn entity_auth_illegal_disable_delegation_while_unpublished_dropped() {
-    let mut engine: Engine<RemoteEntity> = Engine::default();
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
     let entity = RemoteEntity::new(1);
 
-    engine.accept_message(1, EntityMessage::SpawnEntity(entity));
-    engine.accept_message(2, EntityMessage::PublishEntity(entity));
-    engine.accept_message(3, EntityMessage::UnpublishEntity(entity));
+    engine.accept_message(1, EntityMessage::Spawn(entity));
+    engine.accept_message(2, EntityMessage::Publish(entity));
+    engine.accept_message(3, EntityMessage::Unpublish(entity));
 
     // Illegal: DisableDelegation while Unpublished
-    engine.accept_message(6, EntityMessage::DisableDelegationEntity(entity));
+    engine.accept_message(6, EntityMessage::DisableDelegation(entity));
 
-    engine.accept_message(7, EntityMessage::DespawnEntity(entity));
+    engine.accept_message(7, EntityMessage::Despawn(entity));
 
     // Expect: DisableDelegation is dropped
     let mut asserts = AssertList::new();
-    asserts.push(EntityMessage::SpawnEntity(entity));
-    asserts.push(EntityMessage::PublishEntity(entity));
-    asserts.push(EntityMessage::UnpublishEntity(entity));
-    asserts.push(EntityMessage::DespawnEntity(entity));
+    asserts.push(EntityMessage::Spawn(entity));
+    asserts.push(EntityMessage::Publish(entity));
+    asserts.push(EntityMessage::Unpublish(entity));
+    asserts.push(EntityMessage::Despawn(entity));
     asserts.check(&mut engine);
 }
 
 #[test]
 fn entity_auth_publish_unpublish_cycle() {
-    let mut engine: Engine<RemoteEntity> = Engine::default();
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
 
     let entity = RemoteEntity::new(1);
 
     // Happy‑path: Spawn → Publish → Unpublish → Publish (again)
-    engine.accept_message(1, EntityMessage::SpawnEntity(entity));
-    engine.accept_message(2, EntityMessage::PublishEntity(entity));
-    engine.accept_message(3, EntityMessage::UnpublishEntity(entity));
-    engine.accept_message(4, EntityMessage::PublishEntity(entity));
+    engine.accept_message(1, EntityMessage::Spawn(entity));
+    engine.accept_message(2, EntityMessage::Publish(entity));
+    engine.accept_message(3, EntityMessage::Unpublish(entity));
+    engine.accept_message(4, EntityMessage::Publish(entity));
 
     let mut asserts = AssertList::new();
-    asserts.push(EntityMessage::SpawnEntity(entity));
-    asserts.push(EntityMessage::PublishEntity(entity));
-    asserts.push(EntityMessage::UnpublishEntity(entity));
-    asserts.push(EntityMessage::PublishEntity(entity));
+    asserts.push(EntityMessage::Spawn(entity));
+    asserts.push(EntityMessage::Publish(entity));
+    asserts.push(EntityMessage::Unpublish(entity));
+    asserts.push(EntityMessage::Publish(entity));
 
     asserts.check(&mut engine);
 }
 
 #[test]
 fn cross_entity_guard_band() {
-    let mut engine: Engine<RemoteEntity> = Engine::default();
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
 
     let entity_a = RemoteEntity::new(1);
     let entity_b = RemoteEntity::new(2);
@@ -531,12 +531,12 @@ fn cross_entity_guard_band() {
     let low_seq = 10;
 
     // Near‑wrap spawn for entity A, then low‑ID spawn for entity B.
-    engine.accept_message(near_flush_seq, EntityMessage::SpawnEntity(entity_a));
-    engine.accept_message(low_seq, EntityMessage::SpawnEntity(entity_b));
+    engine.accept_message(near_flush_seq, EntityMessage::Spawn(entity_a));
+    engine.accept_message(low_seq, EntityMessage::Spawn(entity_b));
 
     let mut asserts = AssertList::new();
-    asserts.push(EntityMessage::SpawnEntity(entity_a));
-    asserts.push(EntityMessage::SpawnEntity(entity_b));
+    asserts.push(EntityMessage::Spawn(entity_a));
+    asserts.push(EntityMessage::Spawn(entity_b));
     asserts.check(&mut engine);
 }
 
@@ -548,24 +548,24 @@ fn cross_entity_guard_band() {
 #[test]
 #[should_panic]
 fn duplicate_message_id_panics() {
-    let mut engine: Engine<RemoteEntity> = Engine::default();
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
     let entity = RemoteEntity::new(1);
 
     // First‑time acceptance — legal.
-    engine.accept_message(1, EntityMessage::SpawnEntity(entity));
+    engine.accept_message(1, EntityMessage::Spawn(entity));
     // Re‑injecting the exact same (id, entity, payload) must panic.
-    engine.accept_message(1, EntityMessage::SpawnEntity(entity));
+    engine.accept_message(1, EntityMessage::Spawn(entity));
 }
 
 #[test]
 fn max_in_flight_overlap_dropped() {
 
-    let mut engine: Engine<RemoteEntity> = Engine::default();
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
     let entity = RemoteEntity::new(1);
     let comp   = component_kind::<1>();
 
     // 1. Legitimate spawn at a low sequence‑number.
-    engine.accept_message(1, EntityMessage::SpawnEntity(entity));
+    engine.accept_message(1, EntityMessage::Spawn(entity));
 
     // 2. Craft an *ambiguous* ID that violates the “< max_in_flight” rule:
     //    Δid == max_in_flight + 1  ⇒  exactly the first overlapping value.
@@ -580,36 +580,36 @@ fn max_in_flight_overlap_dropped() {
 
     // ── Assert ────────────────────────────────────────────────────────────────
     let mut asserts = AssertList::new();
-    asserts.push(EntityMessage::SpawnEntity     (entity));
+    asserts.push(EntityMessage::Spawn(entity));
     asserts.push(EntityMessage::InsertComponent (entity, comp)); // only the *second* insert
     asserts.check(&mut engine);
 }
 
 #[test]
 fn component_survives_delegation_cycle() {
-    let mut engine: Engine<RemoteEntity> = Engine::default();
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
 
     let entity = RemoteEntity::new(1);
     let comp   = component_kind::<1>();
 
     // Authority cycle with a component toggle in the middle
-    engine.accept_message(1, EntityMessage::SpawnEntity              (entity));
-    engine.accept_message(2, EntityMessage::PublishEntity            (entity));
-    engine.accept_message(3, EntityMessage::EnableDelegationEntity   (entity));
+    engine.accept_message(1, EntityMessage::Spawn(entity));
+    engine.accept_message(2, EntityMessage::Publish(entity));
+    engine.accept_message(3, EntityMessage::EnableDelegation(entity));
     engine.accept_message(4, EntityMessage::InsertComponent          (entity, comp)); // component appears while delegated
-    engine.accept_message(5, EntityMessage::DisableDelegationEntity  (entity));       // back to Published
+    engine.accept_message(5, EntityMessage::DisableDelegation(entity));       // back to Published
     engine.accept_message(6, EntityMessage::RemoveComponent          (entity, comp)); // component removed after delegation revoked
-    engine.accept_message(7, EntityMessage::UnpublishEntity          (entity));       // cleanly unpublished
+    engine.accept_message(7, EntityMessage::Unpublish(entity));       // cleanly unpublished
 
     // Expected: every message—including the component events—survives the auth flip‑flop
     let mut asserts = AssertList::new();
-    asserts.push(EntityMessage::SpawnEntity            (entity));
-    asserts.push(EntityMessage::PublishEntity          (entity));
-    asserts.push(EntityMessage::EnableDelegationEntity (entity));
+    asserts.push(EntityMessage::Spawn(entity));
+    asserts.push(EntityMessage::Publish(entity));
+    asserts.push(EntityMessage::EnableDelegation(entity));
     asserts.push(EntityMessage::InsertComponent        (entity, comp));
-    asserts.push(EntityMessage::DisableDelegationEntity(entity));
+    asserts.push(EntityMessage::DisableDelegation(entity));
     asserts.push(EntityMessage::RemoveComponent        (entity, comp));
-    asserts.push(EntityMessage::UnpublishEntity        (entity));
+    asserts.push(EntityMessage::Unpublish(entity));
 
     asserts.check(&mut engine);
 }
@@ -617,45 +617,45 @@ fn component_survives_delegation_cycle() {
 #[test]
 fn despawn_resets_auth_buffers() {
     // ── Arrange ────────────────────────────────────────────────────────────────
-    let mut engine: Engine<RemoteEntity> = Engine::default();
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
     let entity = RemoteEntity::new(1);
 
     // 1st life
-    engine.accept_message(1, EntityMessage::SpawnEntity(entity));
-    engine.accept_message(2, EntityMessage::PublishEntity(entity));
-    engine.accept_message(3, EntityMessage::DespawnEntity(entity));
+    engine.accept_message(1, EntityMessage::Spawn(entity));
+    engine.accept_message(2, EntityMessage::Publish(entity));
+    engine.accept_message(3, EntityMessage::Despawn(entity));
 
     // 2nd life
     // (4, EntityMessage::SpawnEntity), never arrives
 
     // Stale auth message arrives
-    engine.accept_message(5, EntityMessage::PublishEntity(entity));
+    engine.accept_message(5, EntityMessage::Publish(entity));
 
     // (6, EntityMessage::DespawnEntity), never arrives
 
     // 3rd life
     // Fresh spawn that should *not* inherit the stale publish
-    engine.accept_message(7, EntityMessage::SpawnEntity(entity));
+    engine.accept_message(7, EntityMessage::Spawn(entity));
 
     // ── Assert ────────────────────────────────────────────────────────────────
     let mut asserts = AssertList::new();
-    asserts.push(EntityMessage::SpawnEntity (entity)); // life #1
-    asserts.push(EntityMessage::PublishEntity(entity));
-    asserts.push(EntityMessage::DespawnEntity(entity));
-    asserts.push(EntityMessage::SpawnEntity (entity)); // life #3
+    asserts.push(EntityMessage::Spawn(entity)); // life #1
+    asserts.push(EntityMessage::Publish(entity));
+    asserts.push(EntityMessage::Despawn(entity));
+    asserts.push(EntityMessage::Spawn(entity)); // life #3
     asserts.check(&mut engine); // The stale Publish (id 5) must be absent
 }
 
 #[test]
 fn component_backlog_isolation() {
-    let mut engine: Engine<RemoteEntity> = Engine::default();
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
 
     let entity  = RemoteEntity::new(1);
     let comp_a  = component_kind::<1>(); // Will backlog first
     let comp_b  = component_kind::<2>(); // Must drain immediately
 
     // 1. Entity spawns normally.
-    engine.accept_message(1, EntityMessage::SpawnEntity(entity));
+    engine.accept_message(1, EntityMessage::Spawn(entity));
 
     // 2. Illegal Remove for comp A (inserted = false) → back‑logged inside its channel.
     engine.accept_message(3, EntityMessage::RemoveComponent(entity, comp_a));
@@ -665,7 +665,7 @@ fn component_backlog_isolation() {
 
     // Drain #1: backlog in comp A must NOT block comp B.
     let mut asserts = AssertList::new();
-    asserts.push(EntityMessage::SpawnEntity     (entity));
+    asserts.push(EntityMessage::Spawn(entity));
     asserts.push(EntityMessage::InsertComponent (entity, comp_b));
     asserts.check(&mut engine);
 
@@ -681,7 +681,7 @@ fn component_backlog_isolation() {
 
 #[test]
 fn component_idempotent_duplicate_drops() {
-    let mut engine: Engine<RemoteEntity> = Engine::default();
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
 
     let entity = RemoteEntity::new(1);
     let comp   = component_kind::<1>();
@@ -694,7 +694,7 @@ fn component_idempotent_duplicate_drops() {
 
     // Life 2:
     // Legitimate lifecycle: Spawn → Insert(id 2) → Remove(id 3)
-    engine.accept_message(5, EntityMessage::SpawnEntity(entity));
+    engine.accept_message(5, EntityMessage::Spawn(entity));
     engine.accept_message(6, EntityMessage::InsertComponent (entity, comp));
 
     // 1. Duplicate *older* Insert (id 1) while already inserted → must be discarded.
@@ -708,7 +708,7 @@ fn component_idempotent_duplicate_drops() {
 
     // Drain: only the non‑duplicate path should surface.
     let mut asserts = AssertList::new();
-    asserts.push(EntityMessage::SpawnEntity     (entity));
+    asserts.push(EntityMessage::Spawn(entity));
     asserts.push(EntityMessage::InsertComponent (entity, comp));
     asserts.push(EntityMessage::RemoveComponent (entity, comp));
     asserts.check(&mut engine);
@@ -719,7 +719,7 @@ fn large_burst_at_max_in_flight() {
     
     // ── Arrange ────────────────────────────────────────────────────────────────
     // Create an engine with a *tiny* max_in_flight to keep the test fast.
-    let mut engine: Engine<RemoteEntity> = Engine::default();
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
     engine.config = EngineConfig {
         max_in_flight: 15,                       // 15 < 32768 ⇒ still safe
         flush_threshold: 65521,
@@ -729,7 +729,7 @@ fn large_burst_at_max_in_flight() {
     let comp   = component_kind::<1>();
 
     // Spawn first
-    engine.accept_message(1, EntityMessage::SpawnEntity(entity));
+    engine.accept_message(1, EntityMessage::Spawn(entity));
 
     // Emit *exactly* max_in_flight packets (IDs 2–16) in perfect order,
     // alternating Insert / Remove to stress the component FSM.
@@ -745,7 +745,7 @@ fn large_burst_at_max_in_flight() {
 
     // ── Expect all messages to drain in one shot ──────────────────────────────
     let mut asserts = AssertList::new();
-    asserts.push(EntityMessage::SpawnEntity(entity));
+    asserts.push(EntityMessage::Spawn(entity));
     for i in 0..engine.config.max_in_flight {
         if i % 2 == 0 {
             asserts.push(EntityMessage::InsertComponent(entity, comp));

@@ -46,7 +46,7 @@ impl<E: Copy + Hash + Eq + Debug> EntityMessageReceiver<E> {
     pub fn receive_messages(&mut self, log: bool) -> Vec<EntityMessage<E>> {
         let incoming_messages = self.receiver.receive_messages();
         for (message_index, message) in incoming_messages {
-            self.engine.accept_message(message_index, message, log);
+            self.engine.accept_message(message_index, message);
         }
         self.engine.receive_messages()
     }

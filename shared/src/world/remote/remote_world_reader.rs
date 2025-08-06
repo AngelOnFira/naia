@@ -122,22 +122,22 @@ impl RemoteWorldReader {
 
         match message_type {
             // Entity Creation
-            EntityMessageType::SpawnEntity => {
+            EntityMessageType::Spawn => {
                 // read entity
                 let remote_entity = RemoteEntity::de(reader)?;
 
                 self.receiver.buffer_message(
                     message_id,
-                    EntityMessage::SpawnEntity(remote_entity),
+                    EntityMessage::Spawn(remote_entity),
                 );
             }
             // Entity Deletion
-            EntityMessageType::DespawnEntity => {
+            EntityMessageType::Despawn => {
                 // read all data
                 let remote_entity = RemoteEntity::de(reader)?;
 
                 self.receiver
-                    .buffer_message(message_id, EntityMessage::DespawnEntity(remote_entity));
+                    .buffer_message(message_id, EntityMessage::Despawn(remote_entity));
             }
             // Add Component to Entity
             EntityMessageType::InsertComponent => {
@@ -166,35 +166,35 @@ impl RemoteWorldReader {
             }
             // Former SystemChannel messages - now handled as EntityMessages
             // These generate EntityResponseEvent directly instead of going through EntityMessage
-            EntityMessageType::PublishEntity => {
+            EntityMessageType::Publish => {
                 // read entity
                 let remote_entity = RemoteEntity::de(reader)?;
 
                 self.receiver
-                    .buffer_message(message_id, EntityMessage::PublishEntity(remote_entity));
+                    .buffer_message(message_id, EntityMessage::Publish(remote_entity));
             }
-            EntityMessageType::UnpublishEntity => {
+            EntityMessageType::Unpublish => {
                 // read entity
                 let remote_entity = RemoteEntity::de(reader)?;
 
                 self.receiver
-                    .buffer_message(message_id, EntityMessage::UnpublishEntity(remote_entity));
+                    .buffer_message(message_id, EntityMessage::Unpublish(remote_entity));
             }
-            EntityMessageType::EnableDelegationEntity => {
+            EntityMessageType::EnableDelegation => {
                 // read entity
                 let remote_entity = RemoteEntity::de(reader)?;
 
                 self.receiver
-                    .buffer_message(message_id, EntityMessage::EnableDelegationEntity(remote_entity));
+                    .buffer_message(message_id, EntityMessage::EnableDelegation(remote_entity));
             }
-            EntityMessageType::EnableDelegationEntityResponse => {
+            EntityMessageType::EnableDelegationResponse => {
                 // read entity
                 let remote_entity = RemoteEntity::de(reader)?;
 
                 self.receiver
-                    .buffer_message(message_id, EntityMessage::EnableDelegationEntityResponse(remote_entity));
+                    .buffer_message(message_id, EntityMessage::EnableDelegationResponse(remote_entity));
             }
-            EntityMessageType::EntityMigrateResponse => {
+            EntityMessageType::MigrateResponse => {
                 // read entity
                 let remote_entity = RemoteEntity::de(reader)?;
                 // read new host entity value
@@ -202,7 +202,7 @@ impl RemoteWorldReader {
 
                 self.receiver.buffer_message(
                     message_id,
-                    EntityMessage::EntityMigrateResponse(
+                    EntityMessage::MigrateResponse(
                         remote_entity,
                         HostEntity::new(new_host_entity_value),
                     ),
@@ -216,7 +216,7 @@ impl RemoteWorldReader {
 
                 self.receiver.buffer_message(
                     message_id,
-                    EntityMessage::EntityRequestAuthority(
+                    EntityMessage::RequestAuthority(
                         remote_entity,
                         RemoteEntity::new(remote_entity_value),
                     ),
@@ -226,16 +226,16 @@ impl RemoteWorldReader {
                 // read entity
                 let owned_entity = OwnedLocalEntity::de(reader)?;
 
-                self.receiver.buffer_message(message_id, EntityMessage::EntityReleaseAuthority(owned_entity));
+                self.receiver.buffer_message(message_id, EntityMessage::ReleaseAuthority(owned_entity));
             }
-            EntityMessageType::DisableDelegationEntity => {
+            EntityMessageType::DisableDelegation => {
                 // read entity
                 let remote_entity = RemoteEntity::de(reader)?;
 
                 self.receiver
-                    .buffer_message(message_id, EntityMessage::DisableDelegationEntity(remote_entity));
+                    .buffer_message(message_id, EntityMessage::DisableDelegation(remote_entity));
             }
-            EntityMessageType::UpdateAuthority => {
+            EntityMessageType::SetAuthority => {
                 // read entity
                 let remote_entity = RemoteEntity::de(reader)?;
                 // read auth status
@@ -243,7 +243,7 @@ impl RemoteWorldReader {
 
                 self.receiver.buffer_message(
                     message_id,
-                    EntityMessage::EntityUpdateAuthority(remote_entity, auth_status),
+                    EntityMessage::SetAuthority(remote_entity, auth_status),
                 );
             }
             EntityMessageType::Noop => {

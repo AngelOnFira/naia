@@ -88,13 +88,13 @@ impl HostWorldManager {
 
         on_entity_channel_opening(local_world_manager, global_entity);
         
-        self.entity_command_manager.send_outgoing_command(EntityCommand::SpawnEntity(*global_entity));
+        self.entity_command_manager.send_outgoing_command(EntityCommand::Spawn(*global_entity));
     }
 
     pub fn host_despawn_entity(&mut self, global_entity: &GlobalEntity) {
         self.host_world.remove(global_entity);
         
-        self.entity_command_manager.send_outgoing_command(EntityCommand::DespawnEntity(*global_entity));
+        self.entity_command_manager.send_outgoing_command(EntityCommand::Despawn(*global_entity));
     }
 
     pub fn host_insert_component(
@@ -272,7 +272,7 @@ impl HostWorldManager {
         command: EntityCommand,
     ) {
         match &command {
-            EntityCommand::SpawnEntity(_) | EntityCommand::DespawnEntity(_) | EntityCommand::InsertComponent(_, _) | EntityCommand::RemoveComponent(_, _) => {}
+            EntityCommand::Spawn(_) | EntityCommand::Despawn(_) | EntityCommand::InsertComponent(_, _) | EntityCommand::RemoveComponent(_, _) => {}
             command => {
                 info!("HostWorldManager: sending entity command: {:?}", command);
             }
@@ -317,10 +317,10 @@ impl HostWorldManager {
         let delivered_commands = self.entity_command_manager.take_delivered_commands();
         for command in delivered_commands {
             match command {
-                EntityMessage::SpawnEntity(entity) => {
+                EntityMessage::Spawn(entity) => {
                     self.on_remote_spawn_entity(&entity);
                 }
-                EntityMessage::DespawnEntity(entity) => {
+                EntityMessage::Despawn(entity) => {
                     self.on_remote_despawn_entity(local_world_manager, &entity);
                 }
                 EntityMessage::InsertComponent(entity, component_kind) => {

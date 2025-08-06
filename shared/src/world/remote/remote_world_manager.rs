@@ -134,7 +134,7 @@ impl RemoteWorldManager {
         for message in incoming_messages {
             // info!("Processing EntityMessage: {:?}", message);
             match message {
-                EntityMessage::SpawnEntity(remote_entity) => {
+                EntityMessage::Spawn(remote_entity) => {
                     // set up entity
                     let world_entity = world.spawn_entity();
                     let global_entity = spawner.spawn(world_entity, Some(remote_entity));
@@ -145,9 +145,9 @@ impl RemoteWorldManager {
                     }
 
                     self.outgoing_events
-                        .push(EntityEvent::SpawnEntity(global_entity));
+                        .push(EntityEvent::Spawn(global_entity));
                 }
-                EntityMessage::DespawnEntity(remote_entity) => {
+                EntityMessage::Despawn(remote_entity) => {
                     let global_entity = local_world_manager.remove_by_remote_entity(&remote_entity);
                     let world_entity = spawner.global_entity_to_entity(&global_entity).unwrap();
 
@@ -164,7 +164,7 @@ impl RemoteWorldManager {
                     world.despawn_entity(&world_entity);
 
                     self.outgoing_events
-                        .push(EntityEvent::DespawnEntity(global_entity));
+                        .push(EntityEvent::Despawn(global_entity));
                 }
                 EntityMessage::InsertComponent(remote_entity, component_kind) => {
                     let component = self.incoming_components
@@ -203,26 +203,26 @@ impl RemoteWorldManager {
                 msg => {
                     let msg_type = msg.get_type();
                     let event = match msg_type {
-                        EntityMessageType::EnableDelegationEntityResponse |
-                        EntityMessageType::EntityMigrateResponse |
+                        EntityMessageType::EnableDelegationResponse |
+                        EntityMessageType::MigrateResponse |
                         EntityMessageType::RequestAuthority => {
                             let msg = msg.to_host_message();
                             msg.to_event(local_world_manager)
                         }
                         EntityMessageType::ReleaseAuthority => {
-                            let EntityMessage::EntityReleaseAuthority(owned_entity) = msg else {
+                            let EntityMessage::ReleaseAuthority(owned_entity) = msg else {
                                 panic!("");
                             };
                             match owned_entity {
                                 OwnedLocalEntity::Remote(remote_entity) => {
                                     let remote_entity = RemoteEntity::new(remote_entity);
                                     let global_entity = local_world_manager.global_entity_from_remote(&remote_entity);
-                                    EntityEvent::EntityReleaseAuthority(global_entity)
+                                    EntityEvent::ReleaseAuthority(global_entity)
                                 }
                                 OwnedLocalEntity::Host(host_entity) => {
                                     let host_entity = HostEntity::new(host_entity);
                                     let global_entity = local_world_manager.global_entity_from_host(&host_entity);
-                                    EntityEvent::EntityReleaseAuthority(global_entity)
+                                    EntityEvent::ReleaseAuthority(global_entity)
                                 }
                             }
                         }

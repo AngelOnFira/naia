@@ -62,14 +62,13 @@ impl<E: Copy + Hash + Eq + Debug> Engine<E> {
         &mut self,
         id: MessageIndex,
         msg: EntityMessage<E>,
-        log: bool,
     ) {
         match msg.get_type() {
             // If the message are responses, immediately return
-            EntityMessageType::EnableDelegationEntityResponse | 
+            EntityMessageType::EnableDelegationResponse |
             EntityMessageType::RequestAuthority | 
             EntityMessageType::ReleaseAuthority | 
-            EntityMessageType::EntityMigrateResponse => {
+            EntityMessageType::MigrateResponse => {
                 self.outgoing_events.push(msg);
                 todo!(); // we should handle these in a different engine
                 return;
@@ -87,9 +86,9 @@ impl<E: Copy + Hash + Eq + Debug> Engine<E> {
             .entry(entity)
             .or_insert_with(|| { EntityChannel::new(self.host_type) });
 
-        if log {
-            info!("Engine::accept_message(id={}, entity={:?}, msgType={:?})", id, entity, msg.get_type());
-        }
+        // if log {
+        //     info!("Engine::accept_message(id={}, entity={:?}, msgType={:?})", id, entity, msg.get_type());
+        // }
 
         entity_channel.accept_message(id, msg.strip_entity());
 

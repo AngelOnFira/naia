@@ -176,7 +176,7 @@ impl EntityChannel {
             let id = *id;
 
             match msg.get_type() {
-                EntityMessageType::SpawnEntity => {
+                EntityMessageType::Spawn => {
                     if self.state != EntityChannelState::Despawned {
                         break;
                     }
@@ -209,8 +209,8 @@ impl EntityChannel {
                         component_channel.process_messages(self.state);
                         component_channel.drain_messages_into(component_kind, &mut self.outgoing_messages);
                     }
-                },
-                EntityMessageType::DespawnEntity => {
+                }
+                EntityMessageType::Despawn => {
                     if self.state != EntityChannelState::Spawned {
                         break;
                     }
@@ -225,7 +225,7 @@ impl EntityChannel {
 
                     // clear the buffer
                     self.buffered_messages.clear();
-                },
+                }
                 EntityMessageType::InsertComponent | EntityMessageType::RemoveComponent => {
 
                     let (id, msg) = self.buffered_messages.pop_front().unwrap();
@@ -238,9 +238,9 @@ impl EntityChannel {
                     component_channel.accept_message(self.state, id, msg);
                     component_channel.drain_messages_into(&component_kind, &mut self.outgoing_messages);
                 }
-                EntityMessageType::PublishEntity | EntityMessageType::UnpublishEntity |
-                EntityMessageType::EnableDelegationEntity | EntityMessageType::DisableDelegationEntity |
-                EntityMessageType::UpdateAuthority => {
+                EntityMessageType::Publish | EntityMessageType::Unpublish |
+                EntityMessageType::EnableDelegation | EntityMessageType::DisableDelegation |
+                EntityMessageType::SetAuthority => {
                     let (id, msg) = self.buffered_messages.pop_front().unwrap();
                     
                     // info!("EntityChannel::accept_message(id={}, msgType={:?})", id, msg.get_type());
