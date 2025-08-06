@@ -8,7 +8,7 @@ use std::{
 use log::info;
 
 use crate::{world::{
-    host::{entity_command_sender::EntityCommandManager, checked_map::{CheckedMap, CheckedSet}, entity_update_manager::EntityUpdateManager},
+    host::{entity_command_manager::EntityCommandManager, checked_map::{CheckedMap, CheckedSet}, entity_update_manager::EntityUpdateManager},
     entity::entity_converters::GlobalWorldManagerType, local_world_manager::LocalWorldManager,
 }, ComponentKind, DiffMask, EntityAndGlobalEntityConverter, EntityCommand, EntityMessage, GlobalEntity, HostEntity, HostType, Instant, MessageIndex, PacketIndex, WorldRefType};
 
