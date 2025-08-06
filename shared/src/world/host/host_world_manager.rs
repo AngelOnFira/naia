@@ -132,9 +132,9 @@ impl HostWorldManager {
     
     fn on_remote_spawn_entity(
         &mut self,
-        global_entity: &GlobalEntity,
+        _global_entity: &GlobalEntity,
     ) {
-        self.remote_world.insert(*global_entity, CheckedSet::<ComponentKind>::new());
+        // stub out for later
     }
     
     fn on_remote_despawn_entity(
@@ -142,7 +142,6 @@ impl HostWorldManager {
         local_world_manager: &mut LocalWorldManager,
         global_entity: &GlobalEntity,
     ) {
-        self.remote_world.remove(global_entity);
         on_remote_entity_channel_closed(local_world_manager, global_entity);
     }
     
@@ -151,11 +150,6 @@ impl HostWorldManager {
         global_entity: &GlobalEntity,
         component_kind: &ComponentKind,
     ) {
-        let Some(components) = self.remote_world.get_mut(global_entity) else {
-            panic!("World Channel: cannot insert component into remote entity that doesn't exist");
-        };
-        components.insert(*component_kind);
-
         self.entity_update_manager.register_component(global_entity, component_kind);
     }
     
@@ -164,11 +158,6 @@ impl HostWorldManager {
         global_entity: &GlobalEntity,
         component_kind: &ComponentKind,
     ) {
-        let Some(components) = self.remote_world.get_mut(global_entity) else {
-            panic!("World Channel: cannot remove component from remote entity that doesn't exist");
-        };
-        components.remove(component_kind);
-
         self.entity_update_manager.deregister_component(global_entity, component_kind);
     }
     
@@ -288,14 +277,16 @@ impl HostWorldManager {
         now: &Instant,
         rtt_millis: &f32,
     ) -> HostWorldEvents {
+        let next_send_commands = self.entity_command_manager.take_outgoing_commands(now, rtt_millis);
+        let remote_world = self.entity_command_manager.get_remote_world();
         HostWorldEvents {
-            next_send_commands: self.entity_command_manager.take_outgoing_commands(now, rtt_millis),
+            next_send_commands,
             next_send_updates: self.entity_update_manager.collect_next_updates(
                 world,
                 converter,
                 global_world_manager,
                 &self.host_world,
-                &self.remote_world,
+                remote_world,
             ),
         }
     }

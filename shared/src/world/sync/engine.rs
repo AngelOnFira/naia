@@ -128,4 +128,8 @@ impl<E: Copy + Hash + Eq + Debug> Engine<E> {
 
         self.entity_channels.remove(entity);
     }
+
+    pub(crate) fn get_remote_world(&self) -> &HashMap<E, EntityChannel> {
+        &self.entity_channels
+    }
 }

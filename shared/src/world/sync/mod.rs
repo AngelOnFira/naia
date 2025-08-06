@@ -55,14 +55,14 @@
 //!
 //! Together they form a lock‑free, allocation‑conscious pipeline for syncing ECS worlds in distributed systems.
 
-pub mod config;
-pub mod engine;
-
+mod config;
+mod engine;
 mod entity_channel;
 mod component_channel;
 mod auth_channel;
 
 pub use engine::Engine;
+pub use entity_channel::EntityChannel;
 
 #[cfg(test)]
 pub mod tests;

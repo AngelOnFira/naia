@@ -1,6 +1,8 @@
 use std::{fmt::Debug, hash::Hash};
+use std::collections::HashMap;
 
 use crate::{messages::channels::receivers::reliable_receiver::ReliableReceiver, world::{component::component_kinds::ComponentKind, sync::Engine}, EntityMessage, HostType, MessageIndex};
+use crate::world::sync::EntityChannel;
 
 pub struct EntityMessageReceiver<E: Copy + Hash + Eq + Debug> {
     receiver: ReliableReceiver<EntityMessage<E>>,
@@ -49,5 +51,9 @@ impl<E: Copy + Hash + Eq + Debug> EntityMessageReceiver<E> {
             self.engine.accept_message(message_index, message);
         }
         self.engine.receive_messages()
+    }
+
+    pub(crate) fn get_remote_world(&self) -> &HashMap<E, EntityChannel> {
+        self.engine.get_remote_world()
     }
 }

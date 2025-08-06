@@ -9,6 +9,7 @@ use std::time::Duration;
 use super::user_diff_handler::UserDiffHandler;
 use crate::{ComponentKind, EntityAndGlobalEntityConverter, GlobalEntity, GlobalWorldManagerType, Instant, WorldRefType, DiffMask, PacketIndex};
 use crate::world::host::checked_map::{CheckedMap, CheckedSet};
+use crate::world::sync::EntityChannel;
 
 const DROP_UPDATE_RTT_FACTOR: f32 = 1.5;
 
@@ -74,13 +75,13 @@ impl EntityUpdateManager {
         converter: &dyn EntityAndGlobalEntityConverter<E>,
         global_world_manager: &dyn GlobalWorldManagerType,
         host_world: &CheckedMap<GlobalEntity, CheckedSet<ComponentKind>>,
-        remote_world: &CheckedMap<GlobalEntity, CheckedSet<ComponentKind>>,
+        remote_world: &HashMap<GlobalEntity, EntityChannel>,
     ) -> HashMap<GlobalEntity, HashSet<ComponentKind>> {
         let mut output = HashMap::new();
 
         for (global_entity, host_components) in host_world.iter() {
             
-            let Some(remote_components) = remote_world.get(global_entity) else {
+            let Some(entity_channel) = remote_world.get(global_entity) else {
                 continue;
             };
 
@@ -91,7 +92,7 @@ impl EntityUpdateManager {
                 continue;
             }
             for component_kind in host_components.iter() {
-                if !remote_components.contains(component_kind) {
+                if !entity_channel.has_component_kind(component_kind) {
                     continue;
                 }
                 if self

@@ -90,7 +90,7 @@ pub(crate) enum EntityChannelState {
     Spawned,
 }
 
-pub(crate) struct EntityChannel {
+pub struct EntityChannel {
     host_type: HostType,
     component_channels: HashMap<ComponentKind, ComponentChannel>,
     outgoing_messages: Vec<EntityMessage<()>>,
@@ -165,7 +165,10 @@ impl EntityChannel {
 
             self.component_channels.insert(*component_kind, ComponentChannel::new_delegated());
         }
+    }
 
+    pub(crate) fn has_component_kind(&self, component_kind: &ComponentKind) -> bool {
+        self.component_channels.contains_key(component_kind)
     }
 
     fn process_messages(&mut self) {
