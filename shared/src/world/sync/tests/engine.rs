@@ -37,7 +37,7 @@ fn component_kind<const T: u8>() -> ComponentKind {
 #[test]
 fn engine_basic() {
 
-    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Server);
     
     let entity = RemoteEntity::new(1);
     let comp = component_kind::<1>();
@@ -59,7 +59,7 @@ fn engine_basic() {
 #[test]
 fn engine_entity_channels_do_not_block() {
 
-    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Server);
 
     let entity_a = RemoteEntity::new(1);
     let entity_b = RemoteEntity::new(2);
@@ -80,7 +80,7 @@ fn engine_entity_channels_do_not_block() {
 #[test]
 fn engine_component_channels_do_not_block() {
 
-    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Server);
 
     let entity = RemoteEntity::new(1);
     let comp_a = component_kind::<1>();
@@ -104,7 +104,7 @@ fn engine_component_channels_do_not_block() {
 
 #[test]
 fn wrap_ordering_simple() {
-    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Server);
 
     let entity = RemoteEntity::new(1);
     let comp = component_kind::<1>();
@@ -124,7 +124,7 @@ fn wrap_ordering_simple() {
 #[test]
 fn guard_band_flush() {
 
-    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Server);
     let entity = RemoteEntity::new(1);
 
     let near_flush_seq = engine.config.flush_threshold - 2;
@@ -141,7 +141,7 @@ fn guard_band_flush() {
 
 #[test]
 fn noop_safe() {
-    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Server);
 
     engine.accept_message(10, EntityMessage::Noop);
 
@@ -151,7 +151,7 @@ fn noop_safe() {
 
 #[test]
 fn backlog_drains_on_prereq_arrival() {
-    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Server);
     let entity = RemoteEntity::new(1);
     let comp = component_kind::<1>();
 
@@ -169,7 +169,7 @@ fn backlog_drains_on_prereq_arrival() {
 
 #[test]
 fn entity_despawn_before_spawn() {
-    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Server);
 
     let entity = RemoteEntity::new(1);
     let comp = component_kind::<1>();
@@ -188,7 +188,7 @@ fn entity_despawn_before_spawn() {
 
 #[test]
 fn component_remove_before_insert() {
-    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Server);
 
     let entity = RemoteEntity::new(1);
     let comp = component_kind::<1>();
@@ -206,7 +206,7 @@ fn component_remove_before_insert() {
 
 #[test]
 fn empty_drain_safe() {
-    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Server);
 
     // Drain when empty
     let out1 = engine.receive_messages();
@@ -219,7 +219,7 @@ fn empty_drain_safe() {
 
 #[test]
 fn entity_auth_basic() {
-    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Server);
 
     let entity = RemoteEntity::new(1);
 
@@ -246,7 +246,7 @@ fn entity_auth_basic() {
 
 #[test]
 fn entity_auth_scrambled() {
-    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Server);
 
     let entity = RemoteEntity::new(1);
 
@@ -269,7 +269,7 @@ fn entity_auth_scrambled() {
 #[test]
 fn despawn_clears_stale_buffers() {
     // ── Arrange ────────────────────────────────────────────────────────────────
-    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Server);
     let entity = RemoteEntity::new(1);
     let comp_a = component_kind::<1>();
     let comp_b = component_kind::<2>();
@@ -296,7 +296,7 @@ fn despawn_clears_stale_buffers() {
 
 #[test]
 fn component_dense_toggle_sequence() {
-    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Server);
 
     let entity = RemoteEntity::new(1);
     let comp   = component_kind::<1>();
@@ -323,7 +323,7 @@ fn component_dense_toggle_sequence() {
 
 #[test]
 fn component_backlog_on_entity_a_does_not_block_entity_b() {
-    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Server);
 
     let entity_a = RemoteEntity::new(1);
     let entity_b = RemoteEntity::new(2);
@@ -351,7 +351,7 @@ fn component_backlog_on_entity_a_does_not_block_entity_b() {
 
 #[test]
 fn entity_auth_illegal_disable_delegation_dropped() {
-    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Server);
     let entity = RemoteEntity::new(1);
 
     // Legal path up to Published …
@@ -376,7 +376,7 @@ fn entity_auth_illegal_disable_delegation_dropped() {
 
 #[test]
 fn entity_auth_illegal_update_authority_dropped() {
-    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Server);
     let entity = RemoteEntity::new(1);
 
     engine.accept_message(1, EntityMessage::Spawn(entity));
@@ -401,7 +401,7 @@ fn entity_auth_illegal_update_authority_dropped() {
 
 #[test]
 fn entity_auth_illegal_unpublish_while_delegated_dropped() {
-    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Server);
     let entity = RemoteEntity::new(1);
 
     engine.accept_message(1, EntityMessage::Spawn(entity));
@@ -427,7 +427,7 @@ fn entity_auth_illegal_unpublish_while_delegated_dropped() {
 
 #[test]
 fn entity_auth_illegal_enable_delegation_while_already_delegated_dropped() {
-    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Server);
     let entity = RemoteEntity::new(1);
 
     // Legal path up to Delegated …
@@ -455,7 +455,7 @@ fn entity_auth_illegal_enable_delegation_while_already_delegated_dropped() {
 
 #[test]
 fn entity_auth_illegal_publish_while_already_published_dropped() {
-    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Server);
     let entity = RemoteEntity::new(1);
 
     engine.accept_message(1, EntityMessage::Spawn(entity));
@@ -476,7 +476,7 @@ fn entity_auth_illegal_publish_while_already_published_dropped() {
 
 #[test]
 fn entity_auth_illegal_disable_delegation_while_unpublished_dropped() {
-    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Server);
     let entity = RemoteEntity::new(1);
 
     engine.accept_message(1, EntityMessage::Spawn(entity));
@@ -499,7 +499,7 @@ fn entity_auth_illegal_disable_delegation_while_unpublished_dropped() {
 
 #[test]
 fn entity_auth_publish_unpublish_cycle() {
-    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Server);
 
     let entity = RemoteEntity::new(1);
 
@@ -520,7 +520,7 @@ fn entity_auth_publish_unpublish_cycle() {
 
 #[test]
 fn cross_entity_guard_band() {
-    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Server);
 
     let entity_a = RemoteEntity::new(1);
     let entity_b = RemoteEntity::new(2);
@@ -548,7 +548,7 @@ fn cross_entity_guard_band() {
 #[test]
 #[should_panic]
 fn duplicate_message_id_panics() {
-    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Server);
     let entity = RemoteEntity::new(1);
 
     // First‑time acceptance — legal.
@@ -560,7 +560,7 @@ fn duplicate_message_id_panics() {
 #[test]
 fn max_in_flight_overlap_dropped() {
 
-    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Server);
     let entity = RemoteEntity::new(1);
     let comp   = component_kind::<1>();
 
@@ -587,7 +587,7 @@ fn max_in_flight_overlap_dropped() {
 
 #[test]
 fn component_survives_delegation_cycle() {
-    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Server);
 
     let entity = RemoteEntity::new(1);
     let comp   = component_kind::<1>();
@@ -617,7 +617,7 @@ fn component_survives_delegation_cycle() {
 #[test]
 fn despawn_resets_auth_buffers() {
     // ── Arrange ────────────────────────────────────────────────────────────────
-    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Server);
     let entity = RemoteEntity::new(1);
 
     // 1st life
@@ -648,7 +648,7 @@ fn despawn_resets_auth_buffers() {
 
 #[test]
 fn component_backlog_isolation() {
-    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Server);
 
     let entity  = RemoteEntity::new(1);
     let comp_a  = component_kind::<1>(); // Will backlog first
@@ -681,7 +681,7 @@ fn component_backlog_isolation() {
 
 #[test]
 fn component_idempotent_duplicate_drops() {
-    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Server);
 
     let entity = RemoteEntity::new(1);
     let comp   = component_kind::<1>();
@@ -719,7 +719,7 @@ fn large_burst_at_max_in_flight() {
     
     // ── Arrange ────────────────────────────────────────────────────────────────
     // Create an engine with a *tiny* max_in_flight to keep the test fast.
-    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Client);
+    let mut engine: Engine<RemoteEntity> = Engine::new(HostType::Server);
     engine.config = EngineConfig {
         max_in_flight: 15,                       // 15 < 32768 ⇒ still safe
         flush_threshold: 65521,
