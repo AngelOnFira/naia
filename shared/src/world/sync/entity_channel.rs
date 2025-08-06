@@ -240,8 +240,7 @@ impl EntityChannel {
                 }
                 EntityMessageType::PublishEntity | EntityMessageType::UnpublishEntity |
                 EntityMessageType::EnableDelegationEntity | EntityMessageType::DisableDelegationEntity |
-                EntityMessageType::RequestAuthority | EntityMessageType::ReleaseAuthority |
-                EntityMessageType::UpdateAuthority | EntityMessageType::EnableDelegationEntityResponse | EntityMessageType::EntityMigrateResponse => {
+                EntityMessageType::UpdateAuthority => {
                     let (id, msg) = self.buffered_messages.pop_front().unwrap();
                     
                     // info!("EntityChannel::accept_message(id={}, msgType={:?})", id, msg.get_type());
@@ -251,6 +250,9 @@ impl EntityChannel {
                 }
                 EntityMessageType::Noop => {
                     // Drop it
+                }
+                msg => {
+                    panic!("EntityChannel::accept_message() received an unexpected message type: {:?}", msg);
                 }
             }
         }

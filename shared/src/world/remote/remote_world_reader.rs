@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use log::warn;
 
-use crate::{messages::channels::receivers::indexed_message_reader::IndexedMessageReader, world::entity::local_entity::RemoteEntity, world::local_world_manager::LocalWorldManager, BitReader, ComponentKind, ComponentKinds, ComponentUpdate, EntityMessage, EntityMessageReceiver, EntityMessageType, EntityAuthStatus, GlobalEntity, HostEntity, LocalEntityAndGlobalEntityConverter, MessageIndex, Replicate, Serde, SerdeErr, Tick, HostType};
+use crate::{messages::channels::receivers::indexed_message_reader::IndexedMessageReader, world::entity::local_entity::RemoteEntity, world::local_world_manager::LocalWorldManager, BitReader, ComponentKind, ComponentKinds, ComponentUpdate, EntityMessage, EntityMessageReceiver, EntityMessageType, EntityAuthStatus, GlobalEntity, HostEntity, LocalEntityAndGlobalEntityConverter, MessageIndex, Replicate, Serde, SerdeErr, Tick, HostType, OwnedLocalEntity};
 
 pub struct RemoteWorldReader {
     receiver: EntityMessageReceiver<RemoteEntity>,
@@ -189,17 +189,24 @@ impl RemoteWorldReader {
             }
             EntityMessageType::EnableDelegationEntityResponse => {
                 // read entity
-                let host_entity = HostEntity::de(reader)?;
-
-                self.receiver
-                    .buffer_message(message_id, EntityMessage::EnableDelegationEntityResponse(host_entity.to_remote()));
-            }
-            EntityMessageType::DisableDelegationEntity => {
-                // read entity
                 let remote_entity = RemoteEntity::de(reader)?;
 
                 self.receiver
-                    .buffer_message(message_id, EntityMessage::DisableDelegationEntity(remote_entity));
+                    .buffer_message(message_id, EntityMessage::EnableDelegationEntityResponse(remote_entity));
+            }
+            EntityMessageType::EntityMigrateResponse => {
+                // read entity
+                let remote_entity = RemoteEntity::de(reader)?;
+                // read new host entity value
+                let new_host_entity_value = u16::de(reader)?;
+
+                self.receiver.buffer_message(
+                    message_id,
+                    EntityMessage::EntityMigrateResponse(
+                        remote_entity,
+                        HostEntity::new(new_host_entity_value),
+                    ),
+                );
             }
             EntityMessageType::RequestAuthority => {
                 // read entity
@@ -217,10 +224,16 @@ impl RemoteWorldReader {
             }
             EntityMessageType::ReleaseAuthority => {
                 // read entity
+                let owned_entity = OwnedLocalEntity::de(reader)?;
+
+                self.receiver.buffer_message(message_id, EntityMessage::EntityReleaseAuthority(owned_entity));
+            }
+            EntityMessageType::DisableDelegationEntity => {
+                // read entity
                 let remote_entity = RemoteEntity::de(reader)?;
 
                 self.receiver
-                    .buffer_message(message_id, EntityMessage::EntityReleaseAuthority(remote_entity));
+                    .buffer_message(message_id, EntityMessage::DisableDelegationEntity(remote_entity));
             }
             EntityMessageType::UpdateAuthority => {
                 // read entity
@@ -231,20 +244,6 @@ impl RemoteWorldReader {
                 self.receiver.buffer_message(
                     message_id,
                     EntityMessage::EntityUpdateAuthority(remote_entity, auth_status),
-                );
-            }
-            EntityMessageType::EntityMigrateResponse => {
-                // read entity
-                let remote_entity = RemoteEntity::de(reader)?;
-                // read new host entity value
-                let new_host_entity_value = u16::de(reader)?;
-
-                self.receiver.buffer_message(
-                    message_id,
-                    EntityMessage::EntityMigrateResponse(
-                        remote_entity,
-                        HostEntity::new(new_host_entity_value),
-                    ),
                 );
             }
             EntityMessageType::Noop => {

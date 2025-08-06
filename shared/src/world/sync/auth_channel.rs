@@ -175,10 +175,6 @@ impl AuthChannel {
 
                     self.pop_front_into_outgoing();
                 }
-                EntityMessage::EntityRequestAuthority(_, _) | EntityMessage::EntityReleaseAuthority(_) |
-                EntityMessage::EnableDelegationEntityResponse(_) | EntityMessage::EntityMigrateResponse(_, _) => {
-                    todo!();
-                }
                 _ => {
                     panic!("Unexpected message type in AuthChannel: {:?}", msg);
                 }

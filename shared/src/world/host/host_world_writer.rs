@@ -4,6 +4,8 @@ use std::{
     hash::Hash,
 };
 
+use log::info;
+
 use crate::{messages::channels::senders::indexed_message_writer::IndexedMessageWriter, world::{
     host::host_world_manager::CommandId,
     entity::entity_converters::GlobalWorldManagerType, local_world_manager::LocalWorldManager,
@@ -167,6 +169,8 @@ impl HostWorldWriter {
         next_send_commands: &mut VecDeque<(CommandId, EntityCommand)>,
     ) {
         let (command_id, command) = next_send_commands.front().unwrap();
+
+        info!("Writing command {command_id:?} of type {command:?} into packet {packet_index:?}");
 
         // write command id
         Self::write_command_id(writer, last_written_id, command_id);
@@ -353,6 +357,49 @@ impl HostWorldWriter {
                     );
                 }
             }
+            EntityCommand::DisableDelegationEntity(global_entity) => {
+                EntityMessageType::DisableDelegationEntity.ser(writer);
+
+                // write net entity
+                local_world_manager
+                    .entity_converter()
+                    .global_entity_to_host_entity(global_entity)
+                    .unwrap()
+                    .ser(writer);
+
+                // if we are writing to this packet, add it to record
+                if is_writing {
+                    host_manager.record_command_written(
+                        packet_index,
+                        command_id,
+                        EntityMessage::DisableDelegationEntity(*global_entity),
+                    );
+                }
+            }
+            EntityCommand::UpdateAuthority(global_entity, auth_status) => {
+                EntityMessageType::UpdateAuthority.ser(writer);
+
+                // write net entity
+                local_world_manager
+                    .entity_converter()
+                    .global_entity_to_host_entity(global_entity)
+                    .unwrap()
+                    .ser(writer);
+
+                // write auth status
+                auth_status.ser(writer);
+
+                // if we are writing to this packet, add it to record
+                if is_writing {
+                    host_manager.record_command_written(
+                        packet_index,
+                        command_id,
+                        EntityMessage::EntityUpdateAuthority(*global_entity, *auth_status),
+                    );
+                }
+            }
+            
+            // below are response-type commands
             EntityCommand::EnableDelegationEntityResponse(global_entity) => {
                 EntityMessageType::EnableDelegationEntityResponse.ser(writer);
 
@@ -372,22 +419,25 @@ impl HostWorldWriter {
                     );
                 }
             }
-            EntityCommand::DisableDelegationEntity(global_entity) => {
-                EntityMessageType::DisableDelegationEntity.ser(writer);
+            EntityCommand::EntityMigrateResponse(global_entity, new_host_entity_value) => {
+                EntityMessageType::EntityMigrateResponse.ser(writer);
 
                 // write net entity
                 local_world_manager
                     .entity_converter()
-                    .global_entity_to_host_entity(global_entity)
+                    .global_entity_to_remote_entity(global_entity)
                     .unwrap()
                     .ser(writer);
+
+                // write new host entity value
+                new_host_entity_value.ser(writer);
 
                 // if we are writing to this packet, add it to record
                 if is_writing {
                     host_manager.record_command_written(
                         packet_index,
                         command_id,
-                        EntityMessage::DisableDelegationEntity(*global_entity),
+                        EntityMessage::EntityMigrateResponse(*global_entity, *new_host_entity_value),
                     );
                 }
             }
@@ -416,63 +466,21 @@ impl HostWorldWriter {
             EntityCommand::ReleaseAuthority(global_entity) => {
                 EntityMessageType::ReleaseAuthority.ser(writer);
 
-                // write net entity
-                local_world_manager
+                // get owned entity
+                let owned_entity = local_world_manager
                     .entity_converter()
-                    .global_entity_to_remote_entity(global_entity)
+                    .global_entity_to_owned_entity(global_entity)
                     .unwrap()
-                    .ser(writer);
+                    .to_reversed(); // ! reverse it before sending it over the wire !
+                // write owned entity
+                owned_entity.ser(writer);
 
                 // if we are writing to this packet, add it to record
                 if is_writing {
                     host_manager.record_command_written(
                         packet_index,
                         command_id,
-                        EntityMessage::EntityReleaseAuthority(*global_entity),
-                    );
-                }
-            }
-            EntityCommand::UpdateAuthority(global_entity, auth_status) => {
-                EntityMessageType::UpdateAuthority.ser(writer);
-
-                // write net entity
-                local_world_manager
-                    .entity_converter()
-                    .global_entity_to_host_entity(global_entity)
-                    .unwrap()
-                    .ser(writer);
-
-                // write auth status
-                auth_status.ser(writer);
-
-                // if we are writing to this packet, add it to record
-                if is_writing {
-                    host_manager.record_command_written(
-                        packet_index,
-                        command_id,
-                        EntityMessage::EntityUpdateAuthority(*global_entity, *auth_status),
-                    );
-                }
-            }
-            EntityCommand::EntityMigrateResponse(global_entity, new_host_entity_value) => {
-                EntityMessageType::EntityMigrateResponse.ser(writer);
-
-                // write net entity
-                local_world_manager
-                    .entity_converter()
-                    .global_entity_to_host_entity(global_entity)
-                    .unwrap()
-                    .ser(writer);
-
-                // write new host entity value
-                new_host_entity_value.ser(writer);
-
-                // if we are writing to this packet, add it to record
-                if is_writing {
-                    host_manager.record_command_written(
-                        packet_index,
-                        command_id,
-                        EntityMessage::EntityMigrateResponse(*global_entity, *new_host_entity_value),
+                        EntityMessage::EntityReleaseAuthority(owned_entity),
                     );
                 }
             }

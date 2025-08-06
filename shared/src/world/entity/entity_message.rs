@@ -1,4 +1,4 @@
-use crate::{EntityAuthStatus, HostEntity, RemoteEntity, world::component::component_kinds::ComponentKind, EntityMessageType, EntityEvent, LocalWorldManager};
+use crate::{EntityAuthStatus, HostEntity, RemoteEntity, world::component::component_kinds::ComponentKind, EntityMessageType, EntityEvent, LocalWorldManager, OwnedLocalEntity};
 
 // Keep E here! TODO: remove
 #[derive(PartialEq, Eq, Debug, Clone)]
@@ -13,7 +13,7 @@ pub enum EntityMessage<E: Copy + Eq + PartialEq> {
     EnableDelegationEntityResponse(E),
     DisableDelegationEntity(E),
     EntityRequestAuthority(E, RemoteEntity),
-    EntityReleaseAuthority(E),
+    EntityReleaseAuthority(OwnedLocalEntity),
     EntityUpdateAuthority(E, EntityAuthStatus),
     EntityMigrateResponse(E, HostEntity),
 
@@ -33,7 +33,7 @@ impl<E: Copy + Eq + PartialEq> EntityMessage<E> {
             Self::EnableDelegationEntityResponse(entity) => Some(*entity),
             Self::DisableDelegationEntity(entity) => Some(*entity),
             Self::EntityRequestAuthority(entity, _) => Some(*entity),
-            Self::EntityReleaseAuthority(entity) => Some(*entity),
+            Self::EntityReleaseAuthority(_) => panic!("EntityReleaseAuthority should not call `entity()`"),
             Self::EntityUpdateAuthority(entity, _) => Some(*entity),
             Self::EntityMigrateResponse(entity, _) => Some(*entity),
             Self::Noop => None,
@@ -60,7 +60,7 @@ impl<E: Copy + Eq + PartialEq> EntityMessage<E> {
             Self::EnableDelegationEntityResponse(_) => EntityMessage::EnableDelegationEntityResponse(()),
             Self::DisableDelegationEntity(_) => EntityMessage::DisableDelegationEntity(()),
             Self::EntityRequestAuthority(_, other_entity) => EntityMessage::EntityRequestAuthority((), other_entity),
-            Self::EntityReleaseAuthority(_) => EntityMessage::EntityReleaseAuthority(()),
+            Self::EntityReleaseAuthority(_) => panic!("EntityReleaseAuthority should not call `strip_entity()`"),
             Self::EntityUpdateAuthority(_, status) => EntityMessage::EntityUpdateAuthority((), status),
             Self::EntityMigrateResponse(_, other_entity) => EntityMessage::EntityMigrateResponse((), other_entity),
             Self::Noop => panic!("Cannot strip entity from a Noop message"),
@@ -100,7 +100,7 @@ impl EntityMessage<()> {
             EntityMessage::EnableDelegationEntityResponse(_) => EntityMessage::EnableDelegationEntityResponse(entity),
             EntityMessage::DisableDelegationEntity(_) => EntityMessage::DisableDelegationEntity(entity),
             EntityMessage::EntityRequestAuthority(_, other_entity) => EntityMessage::EntityRequestAuthority(entity, other_entity),
-            EntityMessage::EntityReleaseAuthority(_) => EntityMessage::EntityReleaseAuthority(entity),
+            EntityMessage::EntityReleaseAuthority(_) => panic!("EntityReleaseAuthority should not call `with_entity()`"),
             EntityMessage::EntityUpdateAuthority(_, status) => EntityMessage::EntityUpdateAuthority(entity, status),
             EntityMessage::EntityMigrateResponse(_, other_entity) => EntityMessage::EntityMigrateResponse(entity, other_entity),
             EntityMessage::Noop => panic!("Cannot add entity to a Noop message"),
@@ -115,12 +115,13 @@ impl EntityMessage<RemoteEntity> {
             EntityMessage::EnableDelegationEntityResponse(entity) => {
                 EntityMessage::EnableDelegationEntityResponse(entity.to_host())
             }
+            EntityMessage::EntityMigrateResponse(entity, other_entity) => {
+                EntityMessage::EntityMigrateResponse(entity.to_host(), other_entity)
+            }
             EntityMessage::EntityRequestAuthority(entity, other_entity) => {
                 EntityMessage::EntityRequestAuthority(entity.to_host(), other_entity)
             }
-            EntityMessage::EntityReleaseAuthority(entity) => {
-                EntityMessage::EntityReleaseAuthority(entity.to_host())
-            }
+            EntityMessage::EntityReleaseAuthority(_) => panic!("EntityReleaseAuthority should not call `to_host_message()`"),
             msg => {
                 panic!("No reason to convert message {:?} to HostEntity", msg);
             }

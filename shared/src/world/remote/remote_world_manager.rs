@@ -14,7 +14,7 @@ use crate::{world::{
         entity_waitlist::{EntityWaitlist, WaitlistHandle, WaitlistStore},
         remote_world_reader::RemoteWorldEvents,
     },
-}, ComponentFieldUpdate, ComponentKind, ComponentKinds, ComponentUpdate, EntityMessage, EntityAndGlobalEntityConverter, GlobalEntity, GlobalEntitySpawner, GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter, Replicate, Tick, WorldMutType, EntityMessageType};
+}, ComponentFieldUpdate, ComponentKind, ComponentKinds, ComponentUpdate, EntityMessage, EntityAndGlobalEntityConverter, GlobalEntity, GlobalEntitySpawner, GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter, Replicate, Tick, WorldMutType, EntityMessageType, OwnedLocalEntity, HostEntity};
 
 pub struct RemoteWorldManager {
     pub entity_waitlist: EntityWaitlist,
@@ -162,7 +162,7 @@ impl RemoteWorldManager {
                     }
 
                     world.despawn_entity(&world_entity);
-                    
+
                     self.outgoing_events
                         .push(EntityEvent::DespawnEntity(global_entity));
                 }
@@ -203,9 +203,28 @@ impl RemoteWorldManager {
                 msg => {
                     let msg_type = msg.get_type();
                     let event = match msg_type {
-                        EntityMessageType::EnableDelegationEntityResponse | EntityMessageType::RequestAuthority | EntityMessageType::ReleaseAuthority => {
+                        EntityMessageType::EnableDelegationEntityResponse |
+                        EntityMessageType::EntityMigrateResponse |
+                        EntityMessageType::RequestAuthority => {
                             let msg = msg.to_host_message();
                             msg.to_event(local_world_manager)
+                        }
+                        EntityMessageType::ReleaseAuthority => {
+                            let EntityMessage::EntityReleaseAuthority(owned_entity) = msg else {
+                                panic!("");
+                            };
+                            match owned_entity {
+                                OwnedLocalEntity::Remote(remote_entity) => {
+                                    let remote_entity = RemoteEntity::new(remote_entity);
+                                    let global_entity = local_world_manager.global_entity_from_remote(&remote_entity);
+                                    EntityEvent::EntityReleaseAuthority(global_entity)
+                                }
+                                OwnedLocalEntity::Host(host_entity) => {
+                                    let host_entity = HostEntity::new(host_entity);
+                                    let global_entity = local_world_manager.global_entity_from_host(&host_entity);
+                                    EntityEvent::EntityReleaseAuthority(global_entity)
+                                }
+                            }
                         }
                         _ => msg.to_event(local_world_manager)
                     };

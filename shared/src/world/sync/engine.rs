@@ -31,7 +31,7 @@
 
 use std::{fmt::Debug, hash::Hash, collections::HashMap};
 
-use log::{info, warn};
+use log::info;
 
 use crate::{world::{sync::{entity_channel::EntityChannel, config::EngineConfig}, entity::entity_message::EntityMessage}, ComponentKind, EntityMessageType, HostType, MessageIndex};
 
@@ -64,19 +64,23 @@ impl<E: Copy + Hash + Eq + Debug> Engine<E> {
         msg: EntityMessage<E>,
         log: bool,
     ) {
-        let Some(entity) = msg.entity() else {
-            // was a no-op message
-            return;
-        };
-
-        // If the message are responses, immediately return
         match msg.get_type() {
-            EntityMessageType::EnableDelegationEntityResponse | EntityMessageType::RequestAuthority | EntityMessageType::ReleaseAuthority => {
+            // If the message are responses, immediately return
+            EntityMessageType::EnableDelegationEntityResponse | 
+            EntityMessageType::RequestAuthority | 
+            EntityMessageType::ReleaseAuthority | 
+            EntityMessageType::EntityMigrateResponse => {
                 self.outgoing_events.push(msg);
+                todo!(); // we should handle these in a different engine
+                return;
+            }
+            EntityMessageType::Noop => {
                 return;
             }
             _ => {}
         }
+
+        let entity = msg.entity().unwrap();
 
         // If the entity channel does not exist, create it
         let entity_channel = self.entity_channels
