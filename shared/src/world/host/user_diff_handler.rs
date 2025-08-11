@@ -50,10 +50,10 @@ impl UserDiffHandler {
 
     // Diff masks
     pub fn diff_mask(
-        &self,
+        &'_ self,
         entity: &GlobalEntity,
         component_kind: &ComponentKind,
-    ) -> RwLockReadGuard<DiffMask> {
+    ) -> RwLockReadGuard<'_, DiffMask> {
         let Some(receiver) = self.receivers.get(&(*entity, *component_kind)) else {
             panic!("Should not call this unless we're sure there's a receiver");
         };

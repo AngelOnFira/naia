@@ -65,7 +65,7 @@ impl MutReceiver {
         }
     }
 
-    pub fn mask(&self) -> RwLockReadGuard<DiffMask> {
+    pub fn mask(&'_ self) -> RwLockReadGuard<'_, DiffMask> {
         let Ok(mask) = self.mask.as_ref().read() else {
             panic!("Mask held on current thread");
         };

@@ -90,7 +90,7 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync> UserMut<'s, E> {
     }
 
     /// Returns an iterator of all the keys of the [`Room`]s the User belongs to
-    pub fn room_keys(&self) -> Iter<RoomKey> {
+    pub fn room_keys(&'_ self) -> Iter<'_, RoomKey> {
         self.server.user_room_keys(&self.key).unwrap()
     }
 }

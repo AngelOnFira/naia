@@ -566,7 +566,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
     /// Creates a new Entity and returns an EntityMut which can be used for
     /// further operations on the Entity
-    pub fn spawn_entity<W: WorldMutType<E>>(&mut self, mut world: W) -> EntityMut<E, W> {
+    pub fn spawn_entity<W: WorldMutType<E>>(&'_ mut self, mut world: W) -> EntityMut<'_, E, W> {
         let world_entity = world.spawn_entity();
 
         self.spawn_entity_inner(&world_entity);
@@ -939,7 +939,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// Retrieves an EntityRef that exposes read-only operations for the
     /// Entity.
     /// Panics if the Entity does not exist.
-    pub fn entity<W: WorldRefType<E>>(&self, world: W, entity: &E) -> EntityRef<E, W> {
+    pub fn entity<W: WorldRefType<E>>(&'_ self, world: W, entity: &E) -> EntityRef<'_, E, W> {
         if world.has_entity(entity) {
             return EntityRef::new(self, world, entity);
         }
@@ -949,7 +949,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// Retrieves an EntityMut that exposes read and write operations for the
     /// Entity.
     /// Panics if the Entity does not exist.
-    pub fn entity_mut<W: WorldMutType<E>>(&mut self, world: W, entity: &E) -> EntityMut<E, W> {
+    pub fn entity_mut<W: WorldMutType<E>>(&'_ mut self, world: W, entity: &E) -> EntityMut<'_, E, W> {
         if world.has_entity(entity) {
             return EntityMut::new(self, world, entity);
         }
@@ -982,7 +982,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// Retrieves an UserRef that exposes read-only operations for the User
     /// associated with the given UserKey.
     /// Panics if the user does not exist.
-    pub fn user(&self, user_key: &UserKey) -> UserRef<E> {
+    pub fn user(&'_ self, user_key: &UserKey) -> UserRef<'_, E> {
         if self.users.contains_key(user_key) {
             return UserRef::new(self, user_key);
         }
@@ -992,7 +992,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// Retrieves an UserMut that exposes read and write operations for the User
     /// associated with the given UserKey.
     /// Returns None if the user does not exist.
-    pub fn user_mut(&mut self, user_key: &UserKey) -> UserMut<E> {
+    pub fn user_mut(&'_ mut self, user_key: &UserKey) -> UserMut<'_, E> {
         if self.users.contains_key(user_key) {
             return UserMut::new(self, user_key);
         }
@@ -1018,7 +1018,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     }
 
     /// Returns a UserScopeRef, which is used to query whether a given user has
-    pub fn user_scope(&self, user_key: &UserKey) -> UserScopeRef<E> {
+    pub fn user_scope(&'_ self, user_key: &UserKey) -> UserScopeRef<'_, E> {
         if self.users.contains_key(user_key) {
             return UserScopeRef::new(self, user_key);
         }
@@ -1027,7 +1027,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
     /// Returns a UserScopeMut, which is used to include/exclude Entities for a
     /// given User
-    pub fn user_scope_mut(&mut self, user_key: &UserKey) -> UserScopeMut<E> {
+    pub fn user_scope_mut(&'_ mut self, user_key: &UserKey) -> UserScopeMut<'_, E> {
         if self.users.contains_key(user_key) {
             return UserScopeMut::new(self, user_key);
         }
@@ -1051,7 +1051,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// Creates a new Room on the Server and returns a corresponding RoomMut,
     /// which can be used to add users/entities to the room or retrieve its
     /// key
-    pub fn make_room(&mut self) -> RoomMut<E> {
+    pub fn make_room(&'_ mut self) -> RoomMut<'_, E> {
         let new_room = Room::new();
         let room_key = self.rooms.insert(new_room);
         RoomMut::new(self, &room_key)
@@ -1065,7 +1065,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// Retrieves an RoomMut that exposes read and write operations for the
     /// Room associated with the given RoomKey.
     /// Panics if the room does not exist.
-    pub fn room(&self, room_key: &RoomKey) -> RoomRef<E> {
+    pub fn room(&'_ self, room_key: &RoomKey) -> RoomRef<'_, E> {
         if self.rooms.contains_key(room_key) {
             return RoomRef::new(self, room_key);
         }
@@ -1075,7 +1075,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// Retrieves an RoomMut that exposes read and write operations for the
     /// Room associated with the given RoomKey.
     /// Panics if the room does not exist.
-    pub fn room_mut(&mut self, room_key: &RoomKey) -> RoomMut<E> {
+    pub fn room_mut(&'_ mut self, room_key: &RoomKey) -> RoomMut<'_, E> {
         if self.rooms.contains_key(room_key) {
             return RoomMut::new(self, room_key);
         }
@@ -1665,7 +1665,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     }
 
     /// Returns an iterator of all the keys of the [`Room`]s the User belongs to
-    pub(crate) fn user_room_keys(&self, user_key: &UserKey) -> Option<Iter<RoomKey>> {
+    pub(crate) fn user_room_keys(&'_ self, user_key: &UserKey) -> Option<Iter<'_, RoomKey>> {
         if let Some(user) = self.users.get(user_key) {
             return Some(user.room_keys().iter());
         }

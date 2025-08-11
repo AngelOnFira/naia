@@ -15,7 +15,7 @@ impl ComponentUpdate {
         Self { kind, buffer }
     }
 
-    pub fn reader(&self) -> BitReader {
+    pub fn reader(&'_ self) -> BitReader<'_> {
         self.buffer.borrow()
     }
 
@@ -49,7 +49,7 @@ impl ComponentFieldUpdate {
         self.id
     }
 
-    pub fn reader(&self) -> BitReader {
+    pub fn reader(&'_ self) -> BitReader<'_> {
         self.buffer.borrow()
     }
 }

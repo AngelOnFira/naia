@@ -184,7 +184,7 @@ impl MainServer {
     /// Retrieves an UserRef that exposes read-only operations for the User
     /// associated with the given UserKey.
     /// Panics if the user does not exist.
-    pub fn user(&self, user_key: &UserKey) -> MainUserRef {
+    pub fn user(&'_ self, user_key: &UserKey) -> MainUserRef<'_> {
         if self.users.contains_key(user_key) {
             return MainUserRef::new(self, user_key);
         }

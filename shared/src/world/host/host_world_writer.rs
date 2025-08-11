@@ -6,11 +6,16 @@ use std::{
 
 use log::info;
 
-use crate::{messages::channels::senders::indexed_message_writer::IndexedMessageWriter, world::{
-    host::host_world_manager::CommandId,
-    entity::entity_converters::GlobalWorldManagerType, local_world_manager::LocalWorldManager,
-}, BitWrite, BitWriter, ComponentKind, ComponentKinds, ConstBitLength, EntityMessage, EntityMessageType, EntityAndGlobalEntityConverter, EntityConverterMut, GlobalEntity, HostWorldEvents, HostWorldManager, Instant, MessageIndex, PacketIndex, Serde, WorldRefType, EntityCommand, UpdateEvents};
-use crate::world::host::entity_update_manager::EntityUpdateManager;
+use crate::{
+    messages::channels::senders::indexed_message_writer::IndexedMessageWriter,
+    world::{
+        host::{entity_update_manager::EntityUpdateManager, host_world_manager::CommandId},
+        entity::entity_converters::GlobalWorldManagerType, local_world_manager::LocalWorldManager,
+    },
+    BitWrite, BitWriter, ComponentKind, ComponentKinds, ConstBitLength, EntityMessage, EntityMessageType,
+    EntityAndGlobalEntityConverter, EntityConverterMut, GlobalEntity, HostWorldEvents, HostWorldManager,
+    Instant, MessageIndex, PacketIndex, Serde, WorldRefType, EntityCommand, UpdateEvents
+};
 
 pub struct HostWorldWriter;
 

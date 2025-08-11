@@ -61,7 +61,7 @@ impl EntityUpdateManager {
         self.diff_handler.or_diff_mask(entity, component_kind, new_diff_mask);
     }
 
-    pub fn get_diff_mask(&self, entity: &GlobalEntity, component_kind: &ComponentKind) -> RwLockReadGuard<DiffMask> {
+    pub fn get_diff_mask(&'_ self, entity: &GlobalEntity, component_kind: &ComponentKind) -> RwLockReadGuard<'_, DiffMask> {
         self.diff_handler.diff_mask(entity, component_kind)
     }
 

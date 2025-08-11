@@ -2,9 +2,11 @@ use std::collections::{HashMap, VecDeque};
 
 use naia_socket_shared::Instant;
 
-use crate::{ChannelSender, ComponentKind, EntityCommand, GlobalEntity, HostType, LocalWorldManager, ReliableSender};
-use crate::world::host::host_world_manager::CommandId;
-use crate::world::sync::{EntityChannelSender, SenderEngine};
+use crate::{
+    world::{host::host_world_manager::CommandId, sync::{EntityChannelSender, SenderEngine}},
+    ChannelSender, ComponentKind, EntityCommand, GlobalEntity, HostType, LocalWorldManager,
+    ReliableSender
+};
 
 pub struct EntityMessageSender {
     sender: ReliableSender<EntityCommand>,

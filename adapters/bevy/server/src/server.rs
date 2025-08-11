@@ -269,14 +269,14 @@ impl<'w> Server<'w> {
         }
     }
 
-    pub fn user(&self, user_key: &UserKey) -> UserRef<Entity> {
+    pub fn user(&'_ self, user_key: &UserKey) -> UserRef<'_, Entity> {
         match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.user(user_key),
             ServerImpl::Full(server) => server.user(user_key),
         }
     }
 
-    pub fn user_mut(&mut self, user_key: &UserKey) -> UserMut<Entity> {
+    pub fn user_mut(&'_ mut self, user_key: &UserKey) -> UserMut<'_, Entity> {
         match &mut *self.server_impl {
             ServerImpl::WorldOnly(server) => server.user_mut(user_key),
             ServerImpl::Full(server) => server.user_mut(user_key),
@@ -297,14 +297,14 @@ impl<'w> Server<'w> {
         }
     }
 
-    pub fn user_scope(&self, user_key: &UserKey) -> UserScopeRef<Entity> {
+    pub fn user_scope(&'_ self, user_key: &UserKey) -> UserScopeRef<'_, Entity> {
         match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.user_scope(user_key),
             ServerImpl::Full(server) => server.user_scope(user_key),
         }
     }
 
-    pub fn user_scope_mut(&mut self, user_key: &UserKey) -> UserScopeMut<Entity> {
+    pub fn user_scope_mut(&'_ mut self, user_key: &UserKey) -> UserScopeMut<'_, Entity> {
         match &mut *self.server_impl {
             ServerImpl::WorldOnly(server) => server.user_scope_mut(user_key),
             ServerImpl::Full(server) => server.user_scope_mut(user_key),
@@ -313,7 +313,7 @@ impl<'w> Server<'w> {
 
     //// Rooms ////
 
-    pub fn make_room(&mut self) -> RoomMut<Entity> {
+    pub fn make_room(&'_ mut self) -> RoomMut<'_, Entity> {
         match &mut *self.server_impl {
             ServerImpl::WorldOnly(server) => server.make_room(),
             ServerImpl::Full(server) => server.make_room(),
@@ -327,14 +327,14 @@ impl<'w> Server<'w> {
         }
     }
 
-    pub fn room(&self, room_key: &RoomKey) -> RoomRef<Entity> {
+    pub fn room(&'_ self, room_key: &RoomKey) -> RoomRef<'_, Entity> {
         match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.room(room_key),
             ServerImpl::Full(server) => server.room(room_key),
         }
     }
 
-    pub fn room_mut(&mut self, room_key: &RoomKey) -> RoomMut<Entity> {
+    pub fn room_mut(&'_ mut self, room_key: &RoomKey) -> RoomMut<'_, Entity> {
         match &mut *self.server_impl {
             ServerImpl::WorldOnly(server) => server.room_mut(room_key),
             ServerImpl::Full(server) => server.room_mut(room_key),

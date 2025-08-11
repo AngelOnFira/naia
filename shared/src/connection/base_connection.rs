@@ -3,14 +3,26 @@ use std::{hash::Hash, net::SocketAddr};
 use naia_serde::{BitReader, BitWriter, Serde, SerdeErr};
 use naia_socket_shared::Instant;
 
-use crate::{messages::{channels::channel_kinds::ChannelKinds, message_manager::MessageManager}, types::{HostType, PacketIndex}, world::{
-    entity::entity_converters::GlobalWorldManagerType,
-    host::{host_world_manager::HostWorldEvents, host_world_writer::HostWorldWriter},
-    local_world_manager::LocalWorldManager,
-    remote::remote_world_reader::RemoteWorldReader,
-}, AckManager, ComponentKind, ComponentKinds, ConnectionConfig, EntityAndGlobalEntityConverter, EntityConverterMut, EntityMessage, GlobalEntity, GlobalEntitySpawner, HostWorldManager, MessageKinds, PacketType, RemoteWorldManager, StandardHeader, Tick, Timer, UpdateEvents, WorldRefType};
-use crate::world::host::entity_update_manager::EntityUpdateManager;
-use super::packet_notifiable::PacketNotifiable;
+use crate::{
+    messages::{
+        channels::channel_kinds::ChannelKinds, message_manager::MessageManager
+    },
+    types::{HostType, PacketIndex},
+    world::{
+        entity::entity_converters::GlobalWorldManagerType,
+        host::{
+            host_world_manager::HostWorldManager,
+            host_world_writer::HostWorldWriter,
+            entity_update_manager::EntityUpdateManager
+        },
+        local_world_manager::LocalWorldManager,
+        remote::remote_world_reader::RemoteWorldReader,
+    },
+    AckManager, ComponentKind, ComponentKinds, ConnectionConfig, EntityAndGlobalEntityConverter,
+    EntityConverterMut, EntityMessage, GlobalEntity, GlobalEntitySpawner, HostWorldEvents,
+    MessageKinds, PacketNotifiable, PacketType, RemoteWorldManager, StandardHeader, Tick,
+    Timer, UpdateEvents, WorldRefType
+};
 
 /// Represents a connection to a remote host, and provides functionality to
 /// manage the connection and the communications to it
@@ -104,7 +116,7 @@ impl BaseConnection {
 
     pub fn collect_messages(&mut self, now: &Instant, rtt_millis: &f32) {
         self.host_world_manager
-            .handle_dropped_packets(now);
+            .handle_dropped_command_packets(now);
         self.entity_update_manager
             .handle_dropped_update_packets(now, rtt_millis);
         self.message_manager

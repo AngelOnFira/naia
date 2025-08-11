@@ -200,7 +200,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
     /// Creates a new Entity and returns an EntityMut which can be used for
     /// further operations on the Entity
-    pub fn spawn_entity<W: WorldMutType<E>>(&mut self, world: W) -> EntityMut<E, W> {
+    pub fn spawn_entity<W: WorldMutType<E>>(&'_ mut self, world: W) -> EntityMut<'_, E, W> {
         self.world_server.spawn_entity(world)
     }
 
@@ -267,14 +267,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Retrieves an EntityRef that exposes read-only operations for the
     /// Entity.
     /// Panics if the Entity does not exist.
-    pub fn entity<W: WorldRefType<E>>(&self, world: W, entity: &E) -> EntityRef<E, W> {
+    pub fn entity<W: WorldRefType<E>>(&'_ self, world: W, entity: &E) -> EntityRef<'_, E, W> {
         self.world_server.entity(world, entity)
     }
 
     /// Retrieves an EntityMut that exposes read and write operations for the
     /// Entity.
     /// Panics if the Entity does not exist.
-    pub fn entity_mut<W: WorldMutType<E>>(&mut self, world: W, entity: &E) -> EntityMut<E, W> {
+    pub fn entity_mut<W: WorldMutType<E>>(&'_ mut self, world: W, entity: &E) -> EntityMut<'_, E, W> {
         self.world_server.entity_mut(world, entity)
     }
 
@@ -297,7 +297,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Retrieves an UserRef that exposes read-only operations for the User
     /// associated with the given UserKey.
     /// Panics if the user does not exist.
-    pub fn user(&self, user_key: &UserKey) -> UserRef<E> {
+    pub fn user(&'_ self, user_key: &UserKey) -> UserRef<'_, E> {
         if self.user_exists(user_key) {
             return UserRef::new(&self.world_server, user_key);
         }
@@ -307,7 +307,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Retrieves an UserMut that exposes read and write operations for the User
     /// associated with the given UserKey.
     /// Returns None if the user does not exist.
-    pub fn user_mut(&mut self, user_key: &UserKey) -> UserMut<E> {
+    pub fn user_mut(&'_ mut self, user_key: &UserKey) -> UserMut<'_, E> {
         if self.user_exists(user_key) {
             return UserMut::new(&mut self.world_server, user_key);
         }
@@ -325,13 +325,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     }
 
     /// Returns a UserScopeRef, which is used to query whether a given user has
-    pub fn user_scope(&self, user_key: &UserKey) -> UserScopeRef<E> {
+    pub fn user_scope(&'_ self, user_key: &UserKey) -> UserScopeRef<'_, E> {
         self.world_server.user_scope(user_key)
     }
 
     /// Returns a UserScopeMut, which is used to include/exclude Entities for a
     /// given User
-    pub fn user_scope_mut(&mut self, user_key: &UserKey) -> UserScopeMut<E> {
+    pub fn user_scope_mut(&'_ mut self, user_key: &UserKey) -> UserScopeMut<'_, E> {
         self.world_server.user_scope_mut(user_key)
     }
 
@@ -340,7 +340,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Creates a new Room on the Server and returns a corresponding RoomMut,
     /// which can be used to add users/entities to the room or retrieve its
     /// key
-    pub fn make_room(&mut self) -> RoomMut<E> {
+    pub fn make_room(&'_ mut self) -> RoomMut<'_, E> {
         self.world_server.make_room()
     }
 
@@ -352,14 +352,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Retrieves an RoomMut that exposes read and write operations for the
     /// Room associated with the given RoomKey.
     /// Panics if the room does not exist.
-    pub fn room(&self, room_key: &RoomKey) -> RoomRef<E> {
+    pub fn room(&'_ self, room_key: &RoomKey) -> RoomRef<'_, E> {
         self.world_server.room(room_key)
     }
 
     /// Retrieves an RoomMut that exposes read and write operations for the
     /// Room associated with the given RoomKey.
     /// Panics if the room does not exist.
-    pub fn room_mut(&mut self, room_key: &RoomKey) -> RoomMut<E> {
+    pub fn room_mut(&'_ mut self, room_key: &RoomKey) -> RoomMut<'_, E> {
         self.world_server.room_mut(room_key)
     }
 

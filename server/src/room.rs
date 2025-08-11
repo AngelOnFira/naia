@@ -54,7 +54,7 @@ impl Room {
         }
     }
 
-    pub(crate) fn user_keys(&self) -> Iter<UserKey> {
+    pub(crate) fn user_keys(&'_ self) -> Iter<'_, UserKey> {
         self.users.iter()
     }
 
@@ -90,7 +90,7 @@ impl Room {
         self.entities.contains(global_entity)
     }
 
-    pub(crate) fn entities(&self) -> Iter<GlobalEntity> {
+    pub(crate) fn entities(&'_ self) -> Iter<'_, GlobalEntity> {
         self.entities.iter()
     }
 
