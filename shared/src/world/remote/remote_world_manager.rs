@@ -15,16 +15,24 @@ use crate::{world::{
         entity_event::EntityEvent,
         entity_waitlist::EntityWaitlist,
     },
+    sync::{EntityChannelReceiver, EntityChannelSender, SenderEngine},
 }, ComponentKind, ComponentKinds, ComponentUpdate, EntityMessage, EntityAndGlobalEntityConverter, GlobalEntity, GlobalEntitySpawner, GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter, Replicate, Tick, WorldMutType, EntityMessageType, OwnedLocalEntity, HostEntity, EntityMessageReceiver, HostType, MessageIndex};
-use crate::world::sync::{EntityChannelReceiver, EntityChannelSender, SenderEngine};
 
 pub struct RemoteWorldManager {
+    
+    // For Server, this contains the Entities that have been received from the Client, that the Client has authority over.
+    // For Client, this contains the Entities that have been received from the Server, that the Server has authority over.
     receiver: EntityMessageReceiver<RemoteEntity>,
+
+    // For Server, this will be set to None, as the Server does not delegate authority to the Client.
+    // For Client, this contains the Delegated Entities that the Client now has authority over.
+    delegated_world_opt: Option<SenderEngine>,
+    
+    // incoming messages
     incoming_components: HashMap<(RemoteEntity, ComponentKind), Box<dyn Replicate>>,
     incoming_updates: Vec<(Tick, GlobalEntity, ComponentUpdate)>,
     incoming_events: Vec<EntityEvent>,
     waitlist: RemoteWorldWaitlist,
-    delegated_world_opt: Option<SenderEngine>,
 }
 
 impl RemoteWorldManager {

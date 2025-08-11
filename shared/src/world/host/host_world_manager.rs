@@ -13,8 +13,16 @@ pub type CommandId = MessageIndex;
 /// Will use a reliable sender.
 /// Will wait for acks from the client to know the state of the client's ECS world ("remote")
 pub struct HostWorldManager {
+
+    // For Server, this contains the Entities that the Server has authority over, that it syncs to the Client
+    // For Client, this contains the non-delegated Entities that the Client has authority over, that it syncs to the Server
     outgoing_commands: EntityMessageSender,
+
+    // sent packets
     sent_command_packets: SequenceList<(Instant, Vec<(CommandId, EntityMessage<GlobalEntity>)>)>,
+
+    // For Server, this contains the Entities that the Server has authority over, that have been delivered to the Client
+    // For Client, this contains the non-delegated Entities that the Client has authority over, that have been delivered to the Server
     delivered_commands: EntityMessageReceiver<GlobalEntity>,
 }
 
