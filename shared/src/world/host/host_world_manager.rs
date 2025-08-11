@@ -8,16 +8,6 @@ const RESEND_COMMAND_RTT_FACTOR: f32 = 1.5;
 
 pub type CommandId = MessageIndex;
 
-pub struct HostWorldEvents {
-    pub next_send_commands: VecDeque<(CommandId, EntityCommand)>,
-}
-
-impl HostWorldEvents {
-    pub fn has_events(&self) -> bool {
-        !self.next_send_commands.is_empty()
-    }
-}
-
 /// Channel to perform ECS replication between server and client
 /// Only handles entity commands (Spawn/despawn entity and insert/remove components)
 /// Will use a reliable sender.
@@ -43,11 +33,8 @@ impl HostWorldManager {
         &mut self,
         now: &Instant,
         rtt_millis: &f32,
-    ) -> HostWorldEvents {
-        let next_send_commands = self.outgoing_commands.take_outgoing_commands(now, rtt_millis);
-        HostWorldEvents {
-            next_send_commands,
-        }
+    ) -> VecDeque<(CommandId, EntityCommand)> {
+        self.outgoing_commands.take_outgoing_commands(now, rtt_millis)
     }
     
     pub fn send_outgoing_command(

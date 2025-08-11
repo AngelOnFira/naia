@@ -1,8 +1,9 @@
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::hash::Hash;
 
 use log::warn;
 
-use naia_shared::{BaseConnection, BitReader, BitWriter, ChannelKinds, ComponentKinds, ConnectionConfig, EntityAndGlobalEntityConverter, EntityEvent, GlobalEntitySpawner, GlobalWorldManagerType, HostType, HostWorldEvents, Instant, MessageKinds, OwnedBitReader, PacketType, Protocol, Serde, SerdeErr, StandardHeader, Tick, Timer, UpdateEvents, WorldMutType, WorldRefType};
+use naia_shared::{BaseConnection, BitReader, BitWriter, ChannelKinds, ComponentKind, ComponentKinds, ConnectionConfig, EntityAndGlobalEntityConverter, EntityCommand, EntityEvent, GlobalEntity, GlobalEntitySpawner, GlobalWorldManagerType, HostType, Instant, MessageIndex, MessageKinds, OwnedBitReader, PacketType, Protocol, Serde, SerdeErr, StandardHeader, Tick, Timer, WorldMutType, WorldRefType};
 
 use crate::{
     connection::{
@@ -237,10 +238,10 @@ impl Connection {
         world: &W,
         converter: &dyn EntityAndGlobalEntityConverter<E>,
         global_world_manager: &GlobalWorldManager,
-        host_world_events: &mut HostWorldEvents,
-        update_events: &mut UpdateEvents,
+        host_world_events: &mut VecDeque<(MessageIndex, EntityCommand)>,
+        update_events: &mut HashMap<GlobalEntity, HashSet<ComponentKind>>,
     ) -> bool {
-        if host_world_events.has_events() || update_events.has_events()
+        if !host_world_events.is_empty() || !update_events.is_empty()
             || self.base.message_manager.has_outgoing_messages()
             || self.tick_buffer.has_messages()
         {
@@ -273,8 +274,8 @@ impl Connection {
         world: &W,
         entity_converter: &dyn EntityAndGlobalEntityConverter<E>,
         global_world_manager: &GlobalWorldManager,
-        host_world_events: &mut HostWorldEvents,
-        update_events: &mut UpdateEvents,
+        host_world_events: &mut VecDeque<(MessageIndex, EntityCommand)>,
+        update_events: &mut HashMap<GlobalEntity, HashSet<ComponentKind>>,
     ) -> BitWriter {
         let next_packet_index = self.base.next_packet_index();
 

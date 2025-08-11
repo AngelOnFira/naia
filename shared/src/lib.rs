@@ -133,8 +133,7 @@ pub use world::{
     host::{
         entity_command::EntityCommand,
         global_diff_handler::GlobalDiffHandler,
-        host_world_manager::{HostWorldEvents, HostWorldManager},
-        entity_update_manager::UpdateEvents,
+        host_world_manager::HostWorldManager,
         mut_channel::{MutChannelType, MutReceiver},
     },
     local_world_manager::LocalWorldManager,

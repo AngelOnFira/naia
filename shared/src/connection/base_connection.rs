@@ -1,28 +1,22 @@
 use std::{hash::Hash, net::SocketAddr};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 use naia_serde::{BitReader, BitWriter, Serde, SerdeErr};
 use naia_socket_shared::Instant;
 
-use crate::{
-    messages::{
-        channels::channel_kinds::ChannelKinds, message_manager::MessageManager
+use crate::{messages::{
+    channels::channel_kinds::ChannelKinds, message_manager::MessageManager
+}, types::{HostType, PacketIndex}, world::{
+    entity::entity_converters::GlobalWorldManagerType,
+    host::{
+        host_world_manager::HostWorldManager,
+        host_world_writer::HostWorldWriter,
+        entity_update_manager::EntityUpdateManager
     },
-    types::{HostType, PacketIndex},
-    world::{
-        entity::entity_converters::GlobalWorldManagerType,
-        host::{
-            host_world_manager::HostWorldManager,
-            host_world_writer::HostWorldWriter,
-            entity_update_manager::EntityUpdateManager
-        },
-        local_world_manager::LocalWorldManager,
-        remote::remote_world_reader::RemoteWorldReader,
-    },
-    AckManager, ComponentKind, ComponentKinds, ConnectionConfig, EntityAndGlobalEntityConverter,
-    EntityConverterMut, EntityMessage, GlobalEntity, GlobalEntitySpawner, HostWorldEvents,
-    MessageKinds, PacketNotifiable, PacketType, RemoteWorldManager, StandardHeader, Tick,
-    Timer, UpdateEvents, WorldRefType
-};
+    local_world_manager::LocalWorldManager,
+    remote::remote_world_reader::RemoteWorldReader,
+}, AckManager, ComponentKind, ComponentKinds, ConnectionConfig, EntityAndGlobalEntityConverter, EntityCommand, EntityConverterMut, EntityMessage, GlobalEntity, GlobalEntitySpawner, MessageKinds, PacketNotifiable, PacketType, RemoteWorldManager, StandardHeader, Tick, Timer, WorldRefType};
+use crate::world::host::host_world_manager::CommandId;
 
 /// Represents a connection to a remote host, and provides functionality to
 /// manage the connection and the communications to it
@@ -157,8 +151,8 @@ impl BaseConnection {
         global_world_manager: &dyn GlobalWorldManagerType,
         has_written: &mut bool,
         write_world_events: bool,
-        host_world_events: &mut HostWorldEvents,
-        update_events: &mut UpdateEvents,
+        host_world_events: &mut VecDeque<(CommandId, EntityCommand)>,
+        update_events: &mut HashMap<GlobalEntity, HashSet<ComponentKind>>,
     ) {
         // write messages
         self.write_messages(
@@ -216,6 +210,7 @@ impl BaseConnection {
         if read_world_events {
             self.remote_world_reader.read_world_events(
                 &mut self.local_world_manager,
+                &mut self.remote_world_manager,
                 component_kinds,
                 client_tick,
                 reader,
@@ -262,7 +257,7 @@ impl BaseConnection {
         world: &W,
         converter: &dyn EntityAndGlobalEntityConverter<E>,
         global_world_manager: &dyn GlobalWorldManagerType,
-    ) -> UpdateEvents {
+    ) -> HashMap<GlobalEntity, HashSet<ComponentKind>> {
         let host_world = self.host_world_manager.get_host_world();
         let remote_world = self.host_world_manager.get_remote_world();
         self.entity_update_manager.take_outgoing_events(world, converter, global_world_manager, host_world, remote_world)

@@ -1,36 +1,27 @@
-use std::collections::HashMap;
-
 use log::warn;
 
-use crate::{messages::channels::receivers::indexed_message_reader::IndexedMessageReader, world::entity::local_entity::RemoteEntity, world::local_world_manager::LocalWorldManager, BitReader, ComponentKind, ComponentKinds, ComponentUpdate, EntityMessage, EntityMessageReceiver, EntityMessageType, EntityAuthStatus, GlobalEntity, HostEntity, LocalEntityAndGlobalEntityConverter, MessageIndex, Replicate, Serde, SerdeErr, Tick, HostType, OwnedLocalEntity};
+use crate::{
+    messages::channels::receivers::indexed_message_reader::IndexedMessageReader,
+    world::{entity::local_entity::RemoteEntity, local_world_manager::LocalWorldManager},
+    BitReader, ComponentKind, ComponentKinds, EntityMessage, EntityMessageReceiver,
+    EntityMessageType, EntityAuthStatus, HostEntity, LocalEntityAndGlobalEntityConverter,
+    MessageIndex, Serde, SerdeErr, Tick, HostType, OwnedLocalEntity,
+    RemoteWorldManager
+};
 
 pub struct RemoteWorldReader {
     receiver: EntityMessageReceiver<RemoteEntity>,
-    received_components: HashMap<(RemoteEntity, ComponentKind), Box<dyn Replicate>>,
-    received_updates: Vec<(Tick, GlobalEntity, ComponentUpdate)>,
-}
-
-pub struct RemoteWorldEvents {
-    pub incoming_messages: Vec<EntityMessage<RemoteEntity>>,
-    pub incoming_components: HashMap<(RemoteEntity, ComponentKind), Box<dyn Replicate>>,
-    pub incoming_updates: Vec<(Tick, GlobalEntity, ComponentUpdate)>,
 }
 
 impl RemoteWorldReader {
     pub fn new(host_type: HostType) -> Self {
         Self {
             receiver: EntityMessageReceiver::new(host_type),
-            received_components: HashMap::default(),
-            received_updates: Vec::new(),
         }
     }
 
-    pub fn take_incoming_events(&mut self) -> RemoteWorldEvents {
-        RemoteWorldEvents {
-            incoming_messages: self.receiver.receive_messages(),
-            incoming_components: std::mem::take(&mut self.received_components),
-            incoming_updates: std::mem::take(&mut self.received_updates),
-        }
+    pub fn take_incoming_events(&mut self) -> Vec<EntityMessage<RemoteEntity>> {
+        self.receiver.receive_messages()
     }
 
     pub fn track_hosts_redundant_remote_entity(
@@ -65,17 +56,19 @@ impl RemoteWorldReader {
     pub fn read_world_events(
         &mut self,
         local_world_manager: &mut LocalWorldManager,
+        remote_world_manager: &mut RemoteWorldManager,
         component_kinds: &ComponentKinds,
         tick: &Tick,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
         // read entity updates
-        self.read_updates(local_world_manager, component_kinds, tick, reader)?;
+        self.read_updates(local_world_manager, remote_world_manager, component_kinds, tick, reader)?;
 
         // read entity messages
         self.read_messages(
             local_world_manager.entity_converter(),
             component_kinds,
+            remote_world_manager,
             reader,
         )?;
 
@@ -87,6 +80,7 @@ impl RemoteWorldReader {
         &mut self,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
         component_kinds: &ComponentKinds,
+        remote_world_manager: &mut RemoteWorldManager,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
         let mut last_read_id: Option<MessageIndex> = None;
@@ -98,7 +92,7 @@ impl RemoteWorldReader {
                 break;
             }
 
-            self.read_message(converter, component_kinds, reader, &mut last_read_id)?;
+            self.read_message(converter, component_kinds, remote_world_manager, reader, &mut last_read_id)?;
         }
 
         Ok(())
@@ -113,6 +107,7 @@ impl RemoteWorldReader {
         &mut self,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
         component_kinds: &ComponentKinds,
+        remote_world_manager: &mut RemoteWorldManager,
         reader: &mut BitReader,
         last_read_id: &mut Option<MessageIndex>,
     ) -> Result<(), SerdeErr> {
@@ -150,8 +145,11 @@ impl RemoteWorldReader {
                     message_id,
                     EntityMessage::InsertComponent(remote_entity, new_component_kind),
                 );
-                self.received_components
-                    .insert((remote_entity, new_component_kind), new_component);
+                remote_world_manager.insert_received_component(
+                    remote_entity,
+                    new_component_kind,
+                    new_component,
+                );
             }
             // Component Removal
             EntityMessageType::RemoveComponent => {
@@ -258,6 +256,7 @@ impl RemoteWorldReader {
     fn read_updates(
         &mut self,
         local_world_manager: &LocalWorldManager,
+        remote_world_manager: &mut RemoteWorldManager,
         component_kinds: &ComponentKinds,
         tick: &Tick,
         reader: &mut BitReader,
@@ -273,6 +272,7 @@ impl RemoteWorldReader {
 
             self.read_update(
                 local_world_manager,
+                remote_world_manager,
                 component_kinds,
                 tick,
                 reader,
@@ -287,6 +287,7 @@ impl RemoteWorldReader {
     fn read_update(
         &mut self,
         local_world_manager: &LocalWorldManager,
+        remote_world_manager: &mut RemoteWorldManager,
         component_kinds: &ComponentKinds,
         tick: &Tick,
         reader: &mut BitReader,
@@ -305,8 +306,7 @@ impl RemoteWorldReader {
             if local_world_manager.has_remote_entity(remote_entity) {
                 let world_entity = local_world_manager.global_entity_from_remote(remote_entity);
 
-                self.received_updates
-                    .push((*tick, world_entity, component_update));
+                remote_world_manager.insert_received_update(*tick, world_entity, component_update);
             } else {
                 warn!("read_update(): SKIPPED READ UPDATE!");
             }

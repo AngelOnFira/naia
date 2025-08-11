@@ -13,8 +13,8 @@ use crate::{
         entity::entity_converters::GlobalWorldManagerType, local_world_manager::LocalWorldManager,
     },
     BitWrite, BitWriter, ComponentKind, ComponentKinds, ConstBitLength, EntityMessage, EntityMessageType,
-    EntityAndGlobalEntityConverter, EntityConverterMut, GlobalEntity, HostWorldEvents, HostWorldManager,
-    Instant, MessageIndex, PacketIndex, Serde, WorldRefType, EntityCommand, UpdateEvents
+    EntityAndGlobalEntityConverter, EntityConverterMut, GlobalEntity, HostWorldManager,
+    Instant, MessageIndex, PacketIndex, Serde, WorldRefType, EntityCommand,
 };
 
 pub struct HostWorldWriter;
@@ -41,8 +41,8 @@ impl HostWorldWriter {
         has_written: &mut bool,
         host_manager: &mut HostWorldManager,
         update_manager: &mut EntityUpdateManager,
-        world_events: &mut HostWorldEvents,
-        update_events: &mut UpdateEvents,
+        world_events: &mut VecDeque<(CommandId, EntityCommand)>,
+        update_events: &mut HashMap<GlobalEntity, HashSet<ComponentKind>>,
     ) {
         // write entity updates
         Self::write_updates(
@@ -56,7 +56,7 @@ impl HostWorldWriter {
             local_world_manager,
             has_written,
             update_manager,
-            &mut update_events.next_send_updates,
+            update_events,
         );
 
         // write entity commands
@@ -71,7 +71,7 @@ impl HostWorldWriter {
             local_world_manager,
             has_written,
             host_manager,
-            &mut world_events.next_send_commands,
+            world_events,
         );
     }
 

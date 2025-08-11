@@ -15,7 +15,6 @@ use crate::{
             remote_world_waitlist::RemoteWorldWaitlist,
             entity_event::EntityEvent,
             entity_waitlist::EntityWaitlist,
-            remote_world_reader::RemoteWorldEvents,
         },
     },
     ComponentKind, ComponentKinds, ComponentUpdate, EntityMessage, EntityAndGlobalEntityConverter,
@@ -27,7 +26,8 @@ use crate::{
 pub struct RemoteWorldManager {
     waitlist: RemoteWorldWaitlist,
     incoming_components: HashMap<(RemoteEntity, ComponentKind), Box<dyn Replicate>>,
-    outgoing_events: Vec<EntityEvent>,
+    incoming_updates: Vec<(Tick, GlobalEntity, ComponentUpdate)>,
+    incoming_events: Vec<EntityEvent>,
 }
 
 impl RemoteWorldManager {
@@ -35,7 +35,8 @@ impl RemoteWorldManager {
         Self {
             waitlist: RemoteWorldWaitlist::new(),
             incoming_components: HashMap::new(),
-            outgoing_events: Vec::new(),
+            incoming_updates: Vec::new(),
+            incoming_events: Vec::new(),
         }
     }
 
@@ -45,6 +46,24 @@ impl RemoteWorldManager {
 
     pub fn entity_waitlist_mut(&mut self) -> &mut EntityWaitlist {
         self.waitlist.entity_waitlist_mut()
+    }
+
+    pub(crate) fn insert_received_component(
+        &mut self,
+        remote_entity: RemoteEntity,
+        component_kind: ComponentKind,
+        component: Box<dyn Replicate>,
+    ) {
+        self.incoming_components.insert((remote_entity, component_kind), component);
+    }
+
+    pub(crate) fn insert_received_update(
+        &mut self,
+        tick: Tick,
+        global_entity: GlobalEntity,
+        component_update: ComponentUpdate
+    ) {
+        self.incoming_updates.push((tick, global_entity, component_update));
     }
 
     pub fn on_entity_channel_opened(
@@ -64,19 +83,8 @@ impl RemoteWorldManager {
         component_kinds: &ComponentKinds,
         world: &mut W,
         now: &Instant,
-        world_events: RemoteWorldEvents,
+        incoming_messages: Vec<EntityMessage<RemoteEntity>>,
     ) -> Vec<EntityEvent> {
-
-        let RemoteWorldEvents {
-            incoming_updates,
-            incoming_messages,
-            incoming_components,
-        } = world_events;
-
-        // Store incoming components for later processing
-        for ((remote_entity, component_kind), component) in incoming_components {
-            self.incoming_components.insert((remote_entity, component_kind), component);
-        }
 
         self.process_updates(
             global_world_manager,
@@ -85,7 +93,6 @@ impl RemoteWorldManager {
             component_kinds,
             world,
             now,
-            incoming_updates,
         );
         self.process_incoming_messages(
             spawner,
@@ -96,7 +103,7 @@ impl RemoteWorldManager {
             incoming_messages,
         );
 
-        std::mem::take(&mut self.outgoing_events)
+        std::mem::take(&mut self.incoming_events)
     }
 
     /// Process incoming Entity messages.
@@ -152,7 +159,7 @@ impl RemoteWorldManager {
                         local_world_manager.insert_remote_entity(&global_entity, remote_entity);
                     }
 
-                    self.outgoing_events
+                    self.incoming_events
                         .push(EntityEvent::Spawn(global_entity));
                 }
                 EntityMessage::Despawn(remote_entity) => {
@@ -171,7 +178,7 @@ impl RemoteWorldManager {
 
                     world.despawn_entity(&world_entity);
 
-                    self.outgoing_events
+                    self.incoming_events
                         .push(EntityEvent::Despawn(global_entity));
                 }
                 EntityMessage::InsertComponent(remote_entity, component_kind) => {
@@ -236,7 +243,7 @@ impl RemoteWorldManager {
                         }
                         _ => msg.to_event(local_world_manager)
                     };
-                    self.outgoing_events.push(event);
+                    self.incoming_events.push(event);
                 }
             }
         }
@@ -298,7 +305,7 @@ impl RemoteWorldManager {
         
         world.insert_boxed_component(&world_entity, component);
 
-        self.outgoing_events
+        self.incoming_events
             .push(EntityEvent::InsertComponent(global_entity, *component_kind));
     }
 
@@ -315,7 +322,7 @@ impl RemoteWorldManager {
         // Remove from world
         if let Some(component) = world.remove_component_of_kind(&world_entity, &component_kind) {
             // Send out event
-            self.outgoing_events
+            self.incoming_events
                 .push(EntityEvent::RemoveComponent(global_entity, component));
         }
     }
@@ -353,7 +360,6 @@ impl RemoteWorldManager {
         component_kinds: &ComponentKinds,
         world: &mut W,
         now: &Instant,
-        incoming_updates: Vec<(Tick, GlobalEntity, ComponentUpdate)>,
     ) {
         self.process_ready_updates(
             in_scope_entities,
@@ -361,7 +367,6 @@ impl RemoteWorldManager {
             world_converter,
             component_kinds,
             world,
-            incoming_updates,
         );
         self.process_waitlist_updates(local_converter, world_converter, world, now);
     }
@@ -374,8 +379,8 @@ impl RemoteWorldManager {
         world_converter: &dyn EntityAndGlobalEntityConverter<E>,
         component_kinds: &ComponentKinds,
         world: &mut W,
-        incoming_updates: Vec<(Tick, GlobalEntity, ComponentUpdate)>,
     ) {
+        let incoming_updates = std::mem::take(&mut self.incoming_updates);
         for (tick, global_entity, component_kind) in self.waitlist.process_ready_updates(
                 in_scope_entities,
                 local_converter,
@@ -384,7 +389,7 @@ impl RemoteWorldManager {
                 world,
                 incoming_updates
         ) {
-            self.outgoing_events.push(EntityEvent::UpdateComponent(
+            self.incoming_events.push(EntityEvent::UpdateComponent(
                 tick,
                 global_entity,
                 component_kind,
@@ -405,7 +410,7 @@ impl RemoteWorldManager {
             world,
             now,
         ) {
-            self.outgoing_events.push(EntityEvent::UpdateComponent(
+            self.incoming_events.push(EntityEvent::UpdateComponent(
                 tick,
                 global_entity,
                 component_kind,
