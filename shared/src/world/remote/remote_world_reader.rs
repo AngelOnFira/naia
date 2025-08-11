@@ -3,41 +3,15 @@ use log::warn;
 use crate::{
     messages::channels::receivers::indexed_message_reader::IndexedMessageReader,
     world::{entity::local_entity::RemoteEntity, local_world_manager::LocalWorldManager},
-    BitReader, ComponentKind, ComponentKinds, EntityMessage, EntityMessageReceiver,
+    BitReader, ComponentKind, ComponentKinds, EntityMessage,
     EntityMessageType, EntityAuthStatus, HostEntity, LocalEntityAndGlobalEntityConverter,
-    MessageIndex, Serde, SerdeErr, Tick, HostType, OwnedLocalEntity,
+    MessageIndex, Serde, SerdeErr, Tick, OwnedLocalEntity,
     RemoteWorldManager
 };
 
-pub struct RemoteWorldReader {
-    receiver: EntityMessageReceiver<RemoteEntity>,
-}
+pub struct RemoteWorldReader;
 
 impl RemoteWorldReader {
-    pub fn new(host_type: HostType) -> Self {
-        Self {
-            receiver: EntityMessageReceiver::new(host_type),
-        }
-    }
-
-    pub fn take_incoming_events(&mut self) -> Vec<EntityMessage<RemoteEntity>> {
-        self.receiver.receive_messages()
-    }
-
-    pub fn track_hosts_redundant_remote_entity(
-        &mut self,
-        remote_entity: &RemoteEntity,
-        component_kinds: &Vec<ComponentKind>,
-    ) {
-        self.receiver
-            .track_hosts_redundant_remote_entity(remote_entity, component_kinds);
-    }
-
-    pub fn untrack_hosts_redundant_remote_entity(&mut self, remote_entity: &RemoteEntity) {
-        if self.receiver.host_has_redundant_remote_entity(remote_entity) {
-            self.receiver.untrack_hosts_redundant_remote_entity(remote_entity);
-        }
-    }
 
     // Reading
 
@@ -54,7 +28,6 @@ impl RemoteWorldReader {
     }
 
     pub fn read_world_events(
-        &mut self,
         local_world_manager: &mut LocalWorldManager,
         remote_world_manager: &mut RemoteWorldManager,
         component_kinds: &ComponentKinds,
@@ -62,10 +35,10 @@ impl RemoteWorldReader {
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
         // read entity updates
-        self.read_updates(local_world_manager, remote_world_manager, component_kinds, tick, reader)?;
+        Self::read_updates(local_world_manager, remote_world_manager, component_kinds, tick, reader)?;
 
         // read entity messages
-        self.read_messages(
+        Self::read_messages(
             local_world_manager.entity_converter(),
             component_kinds,
             remote_world_manager,
@@ -77,7 +50,6 @@ impl RemoteWorldReader {
 
     /// Read incoming Entity messages.
     fn read_messages(
-        &mut self,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
         component_kinds: &ComponentKinds,
         remote_world_manager: &mut RemoteWorldManager,
@@ -92,7 +64,7 @@ impl RemoteWorldReader {
                 break;
             }
 
-            self.read_message(converter, component_kinds, remote_world_manager, reader, &mut last_read_id)?;
+            Self::read_message(converter, component_kinds, remote_world_manager, reader, &mut last_read_id)?;
         }
 
         Ok(())
@@ -104,7 +76,6 @@ impl RemoteWorldReader {
     /// We can use a UnorderedReliableReceiver buffer because the messages have already been
     /// ordered by the client's jitter buffer
     fn read_message(
-        &mut self,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
         component_kinds: &ComponentKinds,
         remote_world_manager: &mut RemoteWorldManager,
@@ -121,7 +92,7 @@ impl RemoteWorldReader {
                 // read entity
                 let remote_entity = RemoteEntity::de(reader)?;
 
-                self.receiver.buffer_message(
+                remote_world_manager.receive_message(
                     message_id,
                     EntityMessage::Spawn(remote_entity),
                 );
@@ -131,8 +102,7 @@ impl RemoteWorldReader {
                 // read all data
                 let remote_entity = RemoteEntity::de(reader)?;
 
-                self.receiver
-                    .buffer_message(message_id, EntityMessage::Despawn(remote_entity));
+                remote_world_manager.receive_message(message_id, EntityMessage::Despawn(remote_entity));
             }
             // Add Component to Entity
             EntityMessageType::InsertComponent => {
@@ -141,7 +111,7 @@ impl RemoteWorldReader {
                 let new_component = component_kinds.read(reader, converter)?;
                 let new_component_kind = new_component.kind();
 
-                self.receiver.buffer_message(
+                remote_world_manager.receive_message(
                     message_id,
                     EntityMessage::InsertComponent(remote_entity, new_component_kind),
                 );
@@ -157,7 +127,7 @@ impl RemoteWorldReader {
                 let remote_entity = RemoteEntity::de(reader)?;
                 let component_kind = ComponentKind::de(component_kinds, reader)?;
 
-                self.receiver.buffer_message(
+                remote_world_manager.receive_message(
                     message_id,
                     EntityMessage::RemoveComponent(remote_entity, component_kind),
                 );
@@ -168,29 +138,25 @@ impl RemoteWorldReader {
                 // read entity
                 let remote_entity = RemoteEntity::de(reader)?;
 
-                self.receiver
-                    .buffer_message(message_id, EntityMessage::Publish(remote_entity));
+                remote_world_manager.receive_message(message_id, EntityMessage::Publish(remote_entity));
             }
             EntityMessageType::Unpublish => {
                 // read entity
                 let remote_entity = RemoteEntity::de(reader)?;
 
-                self.receiver
-                    .buffer_message(message_id, EntityMessage::Unpublish(remote_entity));
+                remote_world_manager.receive_message(message_id, EntityMessage::Unpublish(remote_entity));
             }
             EntityMessageType::EnableDelegation => {
                 // read entity
                 let remote_entity = RemoteEntity::de(reader)?;
 
-                self.receiver
-                    .buffer_message(message_id, EntityMessage::EnableDelegation(remote_entity));
+                remote_world_manager.receive_message(message_id, EntityMessage::EnableDelegation(remote_entity));
             }
             EntityMessageType::EnableDelegationResponse => {
                 // read entity
                 let remote_entity = RemoteEntity::de(reader)?;
 
-                self.receiver
-                    .buffer_message(message_id, EntityMessage::EnableDelegationResponse(remote_entity));
+                remote_world_manager.receive_message(message_id, EntityMessage::EnableDelegationResponse(remote_entity));
             }
             EntityMessageType::MigrateResponse => {
                 // read entity
@@ -198,7 +164,7 @@ impl RemoteWorldReader {
                 // read new host entity value
                 let new_host_entity_value = u16::de(reader)?;
 
-                self.receiver.buffer_message(
+                remote_world_manager.receive_message(
                     message_id,
                     EntityMessage::MigrateResponse(
                         remote_entity,
@@ -212,7 +178,7 @@ impl RemoteWorldReader {
                 // read remote entity value
                 let remote_entity_value = u16::de(reader)?;
 
-                self.receiver.buffer_message(
+                remote_world_manager.receive_message(
                     message_id,
                     EntityMessage::RequestAuthority(
                         remote_entity,
@@ -224,14 +190,13 @@ impl RemoteWorldReader {
                 // read entity
                 let owned_entity = OwnedLocalEntity::de(reader)?;
 
-                self.receiver.buffer_message(message_id, EntityMessage::ReleaseAuthority(owned_entity));
+                remote_world_manager.receive_message(message_id, EntityMessage::ReleaseAuthority(owned_entity));
             }
             EntityMessageType::DisableDelegation => {
                 // read entity
                 let remote_entity = RemoteEntity::de(reader)?;
 
-                self.receiver
-                    .buffer_message(message_id, EntityMessage::DisableDelegation(remote_entity));
+                remote_world_manager.receive_message(message_id, EntityMessage::DisableDelegation(remote_entity));
             }
             EntityMessageType::SetAuthority => {
                 // read entity
@@ -239,13 +204,13 @@ impl RemoteWorldReader {
                 // read auth status
                 let auth_status = EntityAuthStatus::de(reader)?;
 
-                self.receiver.buffer_message(
+                remote_world_manager.receive_message(
                     message_id,
                     EntityMessage::SetAuthority(remote_entity, auth_status),
                 );
             }
             EntityMessageType::Noop => {
-                self.receiver.buffer_message(message_id, EntityMessage::Noop);
+                remote_world_manager.receive_message(message_id, EntityMessage::Noop);
             }
         }
 
@@ -254,7 +219,6 @@ impl RemoteWorldReader {
 
     /// Read component updates from raw bits
     fn read_updates(
-        &mut self,
         local_world_manager: &LocalWorldManager,
         remote_world_manager: &mut RemoteWorldManager,
         component_kinds: &ComponentKinds,
@@ -270,7 +234,7 @@ impl RemoteWorldReader {
 
             let remote_entity = RemoteEntity::de(reader)?;
 
-            self.read_update(
+            Self::read_update(
                 local_world_manager,
                 remote_world_manager,
                 component_kinds,
@@ -285,7 +249,6 @@ impl RemoteWorldReader {
 
     /// Read component updates from raw bits for a given entity
     fn read_update(
-        &mut self,
         local_world_manager: &LocalWorldManager,
         remote_world_manager: &mut RemoteWorldManager,
         component_kinds: &ComponentKinds,

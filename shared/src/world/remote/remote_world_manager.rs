@@ -7,36 +7,32 @@ use log::warn;
 
 use naia_socket_shared::Instant;
 
-use crate::{
-    world::{
-        entity::{local_entity::RemoteEntity, in_scope_entities::{InScopeEntities, InScopeEntitiesMut}},
-        local_world_manager::LocalWorldManager,
-        remote::{
-            remote_world_waitlist::RemoteWorldWaitlist,
-            entity_event::EntityEvent,
-            entity_waitlist::EntityWaitlist,
-        },
+use crate::{world::{
+    entity::{local_entity::RemoteEntity, in_scope_entities::{InScopeEntities, InScopeEntitiesMut}},
+    local_world_manager::LocalWorldManager,
+    remote::{
+        remote_world_waitlist::RemoteWorldWaitlist,
+        entity_event::EntityEvent,
+        entity_waitlist::EntityWaitlist,
     },
-    ComponentKind, ComponentKinds, ComponentUpdate, EntityMessage, EntityAndGlobalEntityConverter,
-    GlobalEntity, GlobalEntitySpawner, GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter,
-    Replicate, Tick, WorldMutType, EntityMessageType, OwnedLocalEntity,
-    HostEntity
-};
+}, ComponentKind, ComponentKinds, ComponentUpdate, EntityMessage, EntityAndGlobalEntityConverter, GlobalEntity, GlobalEntitySpawner, GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter, Replicate, Tick, WorldMutType, EntityMessageType, OwnedLocalEntity, HostEntity, EntityMessageReceiver, HostType, MessageIndex};
 
 pub struct RemoteWorldManager {
-    waitlist: RemoteWorldWaitlist,
+    receiver: EntityMessageReceiver<RemoteEntity>,
     incoming_components: HashMap<(RemoteEntity, ComponentKind), Box<dyn Replicate>>,
     incoming_updates: Vec<(Tick, GlobalEntity, ComponentUpdate)>,
     incoming_events: Vec<EntityEvent>,
+    waitlist: RemoteWorldWaitlist,
 }
 
 impl RemoteWorldManager {
-    pub fn new() -> Self {
+    pub fn new(host_type: HostType) -> Self {
         Self {
-            waitlist: RemoteWorldWaitlist::new(),
+            receiver: EntityMessageReceiver::new(host_type),
             incoming_components: HashMap::new(),
             incoming_updates: Vec::new(),
             incoming_events: Vec::new(),
+            waitlist: RemoteWorldWaitlist::new(),
         }
     }
 
@@ -46,6 +42,29 @@ impl RemoteWorldManager {
 
     pub fn entity_waitlist_mut(&mut self) -> &mut EntityWaitlist {
         self.waitlist.entity_waitlist_mut()
+    }
+    
+    pub fn receive_message(&mut self, message_id: MessageIndex, message: EntityMessage<RemoteEntity>) {
+        self.receiver.buffer_message(message_id, message);
+    }
+
+    pub fn take_incoming_events(&mut self) -> Vec<EntityMessage<RemoteEntity>> {
+        self.receiver.receive_messages()
+    }
+
+    pub fn track_hosts_redundant_remote_entity(
+        &mut self,
+        remote_entity: &RemoteEntity,
+        component_kinds: &Vec<ComponentKind>,
+    ) {
+        self.receiver
+            .track_hosts_redundant_remote_entity(remote_entity, component_kinds);
+    }
+
+    pub fn untrack_hosts_redundant_remote_entity(&mut self, remote_entity: &RemoteEntity) {
+        if self.receiver.host_has_redundant_remote_entity(remote_entity) {
+            self.receiver.untrack_hosts_redundant_remote_entity(remote_entity);
+        }
     }
 
     pub(crate) fn insert_received_component(

@@ -897,7 +897,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 .unwrap();
             connection
                 .base
-                .remote_world_reader
+                .remote_world_manager
                 .track_hosts_redundant_remote_entity(remote_entity, &component_kinds);
         }
     }
@@ -917,7 +917,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             .set_primary_to_host(global_entity);
         connection
             .base
-            .remote_world_reader
+            .remote_world_manager
             .untrack_hosts_redundant_remote_entity(&remote_entity);
     }
 

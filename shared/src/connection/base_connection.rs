@@ -24,7 +24,6 @@ pub struct BaseConnection {
     pub message_manager: MessageManager,
     pub host_world_manager: HostWorldManager,
     pub remote_world_manager: RemoteWorldManager,
-    pub remote_world_reader: RemoteWorldReader,
     pub entity_update_manager: EntityUpdateManager,
     pub local_world_manager: LocalWorldManager,
     ack_manager: AckManager,
@@ -44,8 +43,7 @@ impl BaseConnection {
         Self {
             message_manager: MessageManager::new(host_type, channel_kinds),
             host_world_manager: HostWorldManager::new(host_type),
-            remote_world_manager: RemoteWorldManager::new(),
-            remote_world_reader: RemoteWorldReader::new(host_type),
+            remote_world_manager: RemoteWorldManager::new(host_type),
             entity_update_manager: EntityUpdateManager::new(address, global_world_manager),
             local_world_manager: LocalWorldManager::new(user_key),
             ack_manager: AckManager::new(),
@@ -208,7 +206,7 @@ impl BaseConnection {
 
         // read world events
         if read_world_events {
-            self.remote_world_reader.read_world_events(
+            RemoteWorldReader::read_world_events(
                 &mut self.local_world_manager,
                 &mut self.remote_world_manager,
                 component_kinds,
