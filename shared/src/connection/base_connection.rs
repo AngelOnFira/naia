@@ -15,7 +15,7 @@ use crate::{messages::{
     },
     local_world_manager::LocalWorldManager,
     remote::remote_world_reader::RemoteWorldReader,
-}, AckManager, ComponentKind, ComponentKinds, ConnectionConfig, EntityAndGlobalEntityConverter, EntityCommand, EntityConverterMut, EntityMessage, GlobalEntity, GlobalEntitySpawner, MessageKinds, PacketNotifiable, PacketType, RemoteWorldManager, StandardHeader, Tick, Timer, WorldRefType};
+}, AckManager, ComponentKind, ComponentKinds, ConnectionConfig, EntityAndGlobalEntityConverter, EntityCommand, EntityConverterMut, EntityMessage, GlobalEntity, GlobalEntitySpawner, MessageKinds, PacketNotifiable, PacketType, RemoteEntity, RemoteWorldManager, StandardHeader, Tick, Timer, WorldRefType};
 use crate::world::host::host_world_manager::CommandId;
 
 /// Represents a connection to a remote host, and provides functionality to
@@ -289,6 +289,21 @@ impl BaseConnection {
         component_kind: &ComponentKind,
     ) {
         self.entity_update_manager.deregister_component(global_entity, component_kind);
+    }
+
+    pub fn track_hosts_redundant_remote_entity(
+        &mut self,
+        remote_entity: &RemoteEntity,
+        component_kinds: &Vec<ComponentKind>,
+    ) {
+        todo!();
+    }
+
+    pub fn untrack_hosts_redundant_remote_entity(
+        &mut self,
+        remote_entity: &RemoteEntity
+    ) {
+        todo!();
     }
 }
 

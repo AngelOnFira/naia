@@ -1,8 +1,6 @@
-use std::{fmt::Debug, hash::Hash};
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Debug, hash::Hash};
 
-use crate::{messages::channels::receivers::reliable_receiver::ReliableReceiver, world::{component::component_kinds::ComponentKind, sync::ReceiverEngine}, EntityMessage, HostType, MessageIndex};
-use crate::world::sync::EntityChannelReceiver;
+use crate::{messages::channels::receivers::reliable_receiver::ReliableReceiver, world::sync::{ReceiverEngine, EntityChannelReceiver}, EntityMessage, HostType, MessageIndex};
 
 pub struct EntityMessageReceiver<E: Copy + Hash + Eq + Debug> {
     receiver: ReliableReceiver<EntityMessage<E>>,
@@ -15,25 +13,6 @@ impl<E: Copy + Hash + Eq + Debug> EntityMessageReceiver<E> {
             receiver: ReliableReceiver::new(),
             engine: ReceiverEngine::new(host_type),
         }
-    }
-
-    pub fn host_has_redundant_remote_entity(
-        &self,
-        entity: &E,
-    ) -> bool {
-        self.engine.host_has_remote_entity(entity)
-    }
-
-    pub fn track_hosts_redundant_remote_entity(
-        &mut self,
-        entity: &E,
-        component_kinds: &Vec<ComponentKind>,
-    ) {
-        self.engine.track_hosts_redundant_remote_entity(entity, component_kinds);
-    }
-
-    pub fn untrack_hosts_redundant_remote_entity(&mut self, entity: &E) {
-        self.engine.untrack_hosts_redundant_remote_entity(entity);
     }
 
     /// Buffer a read [`EntityMessage`] so that it can be processed later
@@ -53,7 +32,7 @@ impl<E: Copy + Hash + Eq + Debug> EntityMessageReceiver<E> {
         self.engine.receive_messages()
     }
 
-    pub(crate) fn get_remote_world(&self) -> &HashMap<E, EntityChannelReceiver> {
-        self.engine.get_remote_world()
+    pub(crate) fn get_world(&self) -> &HashMap<E, EntityChannelReceiver> {
+        self.engine.get_world()
     }
 }

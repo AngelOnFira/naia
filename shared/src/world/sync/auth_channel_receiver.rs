@@ -71,14 +71,6 @@ impl AuthChannelReceiver {
         }
     }
 
-    pub(crate) fn new_delegated() -> Self {
-        Self {
-            state: EntityAuthChannelState::Delegated,
-            buffered_messages: OrderedIds::new(),
-            outgoing_messages: Vec::new(),
-        }
-    }
-
     /// Is invoked by `EntityChannel` when the entity despawns; this wipes all buffered state so a future *re‑spawn* starts clean.
     pub(crate) fn reset(&mut self) {
         *self = Self::new();

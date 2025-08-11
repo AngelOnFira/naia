@@ -1770,7 +1770,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             .unwrap();
         connection
             .base
-            .remote_world_manager
             .track_hosts_redundant_remote_entity(&remote_entity, &component_kinds);
     }
 }

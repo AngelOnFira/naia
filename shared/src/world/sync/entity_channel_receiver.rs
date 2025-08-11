@@ -113,18 +113,6 @@ impl EntityChannelReceiver {
         }
     }
 
-    pub(crate) fn new_delegated(host_type: HostType) -> Self {
-        Self {
-            host_type,
-            component_channels: HashMap::new(),
-            outgoing_messages: Vec::new(),
-            state: EntityChannelState::Spawned,
-            auth_channel: AuthChannelReceiver::new_delegated(),
-            buffered_messages: OrderedIds::new(),
-            last_epoch_id: None,
-        }
-    }
-
     pub(crate) fn accept_message(
         &mut self,
         id: MessageIndex,
@@ -154,17 +142,6 @@ impl EntityChannelReceiver {
             received_messages.push(rmsg.with_entity(entity));
         }
         outgoing_events.append(&mut received_messages);
-    }
-
-    pub(crate) fn setup_delegated_components(&mut self, component_kinds: &Vec<ComponentKind>) {
-        // Setup the component channels for the delegated components
-        for component_kind in component_kinds {
-            if self.component_channels.contains_key(component_kind) {
-                panic!("EntityChannel already has a component channel for {:?}", component_kind);
-            }
-
-            self.component_channels.insert(*component_kind, ComponentChannelReceiver::new_delegated());
-        }
     }
 
     pub(crate) fn has_component_kind(&self, component_kind: &ComponentKind) -> bool {

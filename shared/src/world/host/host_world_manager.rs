@@ -162,7 +162,7 @@ impl HostWorldManager {
     }
 
     pub fn get_remote_world(&self) -> &HashMap<GlobalEntity, EntityChannelReceiver> {
-        self.delivered_commands.get_remote_world()
+        self.delivered_commands.get_world()
     }
 
     pub fn entity_release_authority(

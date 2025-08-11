@@ -52,21 +52,6 @@ impl RemoteWorldManager {
         self.receiver.receive_messages()
     }
 
-    pub fn track_hosts_redundant_remote_entity(
-        &mut self,
-        remote_entity: &RemoteEntity,
-        component_kinds: &Vec<ComponentKind>,
-    ) {
-        self.receiver
-            .track_hosts_redundant_remote_entity(remote_entity, component_kinds);
-    }
-
-    pub fn untrack_hosts_redundant_remote_entity(&mut self, remote_entity: &RemoteEntity) {
-        if self.receiver.host_has_redundant_remote_entity(remote_entity) {
-            self.receiver.untrack_hosts_redundant_remote_entity(remote_entity);
-        }
-    }
-
     pub(crate) fn insert_received_component(
         &mut self,
         remote_entity: RemoteEntity,

@@ -56,15 +56,6 @@ impl ComponentChannelReceiver {
         }
     }
 
-    pub(crate) fn new_delegated() -> Self {
-        Self {
-            inserted: true,
-            last_epoch_id: None,
-            buffered_messages: OrderedIds::new(),
-            outgoing_messages: VecDeque::new(),
-        }
-    }
-
     pub(crate) fn drain_messages_into(
         &mut self,
         component_kind: &ComponentKind,

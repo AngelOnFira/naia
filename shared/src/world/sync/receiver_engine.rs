@@ -31,7 +31,7 @@
 
 use std::{fmt::Debug, hash::Hash, collections::HashMap};
 
-use crate::{world::{sync::{entity_channel_receiver::EntityChannelReceiver, config::EngineConfig}, entity::entity_message::EntityMessage}, ComponentKind, EntityMessageType, HostType, MessageIndex};
+use crate::{world::{sync::{entity_channel_receiver::EntityChannelReceiver, config::EngineConfig}, entity::entity_message::EntityMessage}, EntityMessageType, HostType, MessageIndex};
 
 pub struct ReceiverEngine<E: Copy + Hash + Eq + Debug> {
     host_type: HostType,
@@ -100,34 +100,7 @@ impl<E: Copy + Hash + Eq + Debug> ReceiverEngine<E> {
         std::mem::take(&mut self.outgoing_events)
     }
 
-    pub fn host_has_remote_entity(&self, entity: &E) -> bool {
-        self.entity_channels.contains_key(entity)
-    }
-    
-    pub fn track_hosts_redundant_remote_entity(
-        &mut self,
-        entity: &E,
-        component_kinds: &Vec<ComponentKind>,
-    ) {
-        if self.entity_channels.contains_key(entity) {
-            panic!("Attempted to track hosts for redundant remote entity which already exists: {:?}", entity);
-        }
-
-        self.entity_channels.insert(*entity, EntityChannelReceiver::new_delegated(self.host_type));
-
-        let entity_channel = self.entity_channels.get_mut(entity).unwrap();
-        entity_channel.setup_delegated_components(component_kinds);
-    }
-
-    pub fn untrack_hosts_redundant_remote_entity(&mut self, entity: &E) {
-        if !self.entity_channels.contains_key(entity) {
-            panic!("Attempted to untrack hosts for redundant remote entity which does not exist: {:?}", entity);
-        }
-
-        self.entity_channels.remove(entity);
-    }
-
-    pub(crate) fn get_remote_world(&self) -> &HashMap<E, EntityChannelReceiver> {
+    pub(crate) fn get_world(&self) -> &HashMap<E, EntityChannelReceiver> {
         &self.entity_channels
     }
 }
