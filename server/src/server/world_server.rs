@@ -2208,7 +2208,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                             .base
                             .host_world_manager
                             .remote_despawn_entity(&global_entity);
-                        connection.base.on_remote_despawn_entity(&global_entity);
+                        connection.base.host_world_manager.on_remote_despawn_entity(
+                            &mut connection.base.local_world_manager,
+                            &global_entity
+                        );
 
                         self.despawn_entity_worldless(&world_entity);
                     } else {

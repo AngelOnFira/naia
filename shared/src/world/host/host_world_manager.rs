@@ -1,7 +1,15 @@
-use std::collections::{HashMap, VecDeque};
-use std::time::Duration;
+use std::{time::Duration, collections::{HashMap, VecDeque}};
 
-use crate::{sequence_list::SequenceList, world::{entity::entity_message_sender::EntityMessageSender, sync::{EntityChannelReceiver, EntityChannelSender}}, EntityMessage, EntityMessageReceiver, GlobalEntity, Instant, PacketIndex, HostType, ComponentKind, LocalWorldManager, MessageIndex, EntityCommand, PacketNotifiable};
+use crate::{
+    sequence_list::SequenceList,
+    world::{
+        entity::entity_message_sender::EntityMessageSender,
+        sync::{EntityChannelReceiver, EntityChannelSender},
+        host::entity_update_manager::EntityUpdateManager,
+    },
+    EntityMessage, EntityMessageReceiver, GlobalEntity, Instant, PacketIndex, HostType,
+    ComponentKind, LocalWorldManager, MessageIndex, EntityCommand, PacketNotifiable
+};
 
 const COMMAND_RECORD_TTL: Duration = Duration::from_secs(60);
 const RESEND_COMMAND_RTT_FACTOR: f32 = 1.5;
@@ -71,7 +79,7 @@ impl HostWorldManager {
         }
     }
 
-    pub fn host_spawn_entity(
+    fn host_spawn_entity(
         &mut self,
         local_world_manager: &mut LocalWorldManager,
         global_entity: &GlobalEntity,
@@ -124,7 +132,7 @@ impl HostWorldManager {
         sent_actions_list.push((*command_id, message));
     }
 
-    pub fn handle_dropped_command_packets(&mut self, now: &Instant) {
+    pub(crate) fn handle_dropped_command_packets(&mut self, now: &Instant) {
         let mut pop = false;
 
         loop {
@@ -143,7 +151,7 @@ impl HostWorldManager {
         }
     }
     
-    pub fn notify_packet_delivered(
+    pub(crate) fn notify_packet_delivered(
         &mut self,
         packet_index: PacketIndex,
     ) {
@@ -158,18 +166,12 @@ impl HostWorldManager {
             }
         }
     }
-    
-    pub fn take_delivered_commands(
-        &mut self,
-    ) -> Vec<EntityMessage<GlobalEntity>> {
-        self.delivered_commands.receive_messages()
-    }
 
-    pub fn get_host_world(&self) -> &HashMap<GlobalEntity, EntityChannelSender> {
+    pub(crate) fn get_host_world(&self) -> &HashMap<GlobalEntity, EntityChannelSender> {
         self.outgoing_commands.get_world()
     }
 
-    pub fn get_remote_world(&self) -> &HashMap<GlobalEntity, EntityChannelReceiver> {
+    pub(crate) fn get_remote_world(&self) -> &HashMap<GlobalEntity, EntityChannelReceiver> {
         self.delivered_commands.get_world()
     }
 
@@ -178,6 +180,69 @@ impl HostWorldManager {
         global_entity: &GlobalEntity,
     ) {
         self.send_outgoing_command(EntityCommand::ReleaseAuthority(*global_entity));
+    }
+
+    pub(crate) fn process_received_commands(
+        &mut self,
+        local_world_manager: &mut LocalWorldManager,
+        entity_update_manager: &mut EntityUpdateManager,
+    ) {
+        for command in self.delivered_commands.receive_messages() {
+            match command {
+                EntityMessage::Spawn(entity) => {
+                    self.on_remote_spawn_entity(&entity);
+                }
+                EntityMessage::Despawn(entity) => {
+                    self.on_remote_despawn_entity(local_world_manager, &entity);
+                }
+                EntityMessage::InsertComponent(entity, component_kind) => {
+                    self.on_remote_insert_component(entity_update_manager, &entity, &component_kind);
+                }
+                EntityMessage::RemoveComponent(entity, component) => {
+                    self.on_remote_remove_component(entity_update_manager, &entity, &component);
+                }
+                EntityMessage::Noop => {
+                    // do nothing
+                }
+                _ => {
+                    // Only Auth-related messages are left here
+                    // Right now it doesn't seem like we need to track auth state here
+                }
+            }
+        }
+    }
+
+    fn on_remote_spawn_entity(
+        &mut self,
+        _global_entity: &GlobalEntity,
+    ) {
+        // stubbed
+    }
+
+    pub fn on_remote_despawn_entity(
+        &mut self,
+        local_world_manager: &mut LocalWorldManager,
+        global_entity: &GlobalEntity,
+    ) {
+        local_world_manager.remove_by_global_entity(global_entity);
+    }
+
+    fn on_remote_insert_component(
+        &mut self,
+        entity_update_manager: &mut EntityUpdateManager,
+        global_entity: &GlobalEntity,
+        component_kind: &ComponentKind,
+    ) {
+        entity_update_manager.register_component(global_entity, component_kind);
+    }
+
+    fn on_remote_remove_component(
+        &mut self,
+        entity_update_manager: &mut EntityUpdateManager,
+        global_entity: &GlobalEntity,
+        component_kind: &ComponentKind,
+    ) {
+        entity_update_manager.deregister_component(global_entity, component_kind);
     }
 }
 

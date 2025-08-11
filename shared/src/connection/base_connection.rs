@@ -1,5 +1,4 @@
-use std::{hash::Hash, net::SocketAddr};
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::{collections::{HashMap, HashSet, VecDeque}, hash::Hash, net::SocketAddr};
 
 use naia_serde::{BitReader, BitWriter, Serde, SerdeErr};
 use naia_socket_shared::Instant;
@@ -9,14 +8,13 @@ use crate::{messages::{
 }, types::{HostType, PacketIndex}, world::{
     entity::entity_converters::GlobalWorldManagerType,
     host::{
-        host_world_manager::HostWorldManager,
+        host_world_manager::{HostWorldManager, CommandId},
         host_world_writer::HostWorldWriter,
         entity_update_manager::EntityUpdateManager
     },
     local_world_manager::LocalWorldManager,
     remote::remote_world_reader::RemoteWorldReader,
-}, AckManager, ComponentKind, ComponentKinds, ConnectionConfig, EntityAndGlobalEntityConverter, EntityCommand, EntityConverterMut, EntityMessage, GlobalEntity, GlobalEntitySpawner, MessageKinds, PacketNotifiable, PacketType, RemoteEntity, RemoteWorldManager, StandardHeader, Tick, Timer, WorldRefType};
-use crate::world::host::host_world_manager::CommandId;
+}, AckManager, ComponentKind, ComponentKinds, ConnectionConfig, EntityAndGlobalEntityConverter, EntityCommand, EntityConverterMut, GlobalEntity, GlobalEntitySpawner, MessageKinds, PacketNotifiable, PacketType, RemoteEntity, RemoteWorldManager, StandardHeader, Tick, Timer, WorldRefType};
 
 /// Represents a connection to a remote host, and provides functionality to
 /// manage the connection and the communications to it
@@ -223,31 +221,10 @@ impl BaseConnection {
     }
 
     pub fn process_received_commands(&mut self) {
-        let received_commands = self.host_world_manager.take_delivered_commands();
-
-        for command in received_commands {
-            match command {
-                EntityMessage::Spawn(entity) => {
-                    self.on_remote_spawn_entity(&entity);
-                }
-                EntityMessage::Despawn(entity) => {
-                    self.on_remote_despawn_entity(&entity);
-                }
-                EntityMessage::InsertComponent(entity, component_kind) => {
-                    self.on_remote_insert_component(&entity, &component_kind);
-                }
-                EntityMessage::RemoveComponent(entity, component) => {
-                    self.on_remote_remove_component(&entity, &component);
-                }
-                EntityMessage::Noop => {
-                    // do nothing
-                }
-                _ => {
-                    // Only Auth-related messages are left here
-                    // Right now it doesn't seem like we need to track auth state here
-                }
-            }
-        }
+        self.host_world_manager.process_received_commands(
+            &mut self.local_world_manager,
+            &mut self.entity_update_manager,
+        );
     }
 
     pub fn take_update_events<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
@@ -259,36 +236,6 @@ impl BaseConnection {
         let host_world = self.host_world_manager.get_host_world();
         let remote_world = self.host_world_manager.get_remote_world();
         self.entity_update_manager.take_outgoing_events(world, converter, global_world_manager, host_world, remote_world)
-    }
-
-    pub fn on_remote_spawn_entity(
-        &mut self,
-        global_entity: &GlobalEntity,
-    ) {
-        // stubbed
-    }
-    
-    pub fn on_remote_despawn_entity(
-            &mut self,
-            global_entity: &GlobalEntity,
-        ) {
-        self.local_world_manager.remove_by_global_entity(global_entity);
-    }
-
-    fn on_remote_insert_component(
-        &mut self,
-        global_entity: &GlobalEntity,
-        component_kind: &ComponentKind,
-    ) {
-        self.entity_update_manager.register_component(global_entity, component_kind);
-    }
-
-    fn on_remote_remove_component(
-        &mut self,
-        global_entity: &GlobalEntity,
-        component_kind: &ComponentKind,
-    ) {
-        self.entity_update_manager.deregister_component(global_entity, component_kind);
     }
 
     pub fn track_hosts_redundant_remote_entity(
@@ -306,13 +253,3 @@ impl BaseConnection {
         todo!();
     }
 }
-
-// impl PacketNotifiable for BaseConnection {
-//     fn notify_packet_delivered(&mut self, sent_packet_index: PacketIndex) {
-//         self.message_manager
-//             .notify_packet_delivered(sent_packet_index);
-//         self.entity_update_manager.notify_packet_delivered(sent_packet_index);
-//         self.host_world_manager
-//             .notify_packet_delivered(sent_packet_index);
-//     }
-// }
