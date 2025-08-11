@@ -15,14 +15,14 @@ pub type CommandId = MessageIndex;
 pub struct HostWorldManager {
 
     // For Server, this contains the Entities that the Server has authority over, that it syncs to the Client
-    // For Client, this contains the non-delegated Entities that the Client has authority over, that it syncs to the Server
+    // For Client, this contains the non-Delegated Entities that the Client has authority over, that it syncs to the Server
     outgoing_commands: EntityMessageSender,
 
     // sent packets
     sent_command_packets: SequenceList<(Instant, Vec<(CommandId, EntityMessage<GlobalEntity>)>)>,
 
     // For Server, this contains the Entities that the Server has authority over, that have been delivered to the Client
-    // For Client, this contains the non-delegated Entities that the Client has authority over, that have been delivered to the Server
+    // For Client, this contains the non-Delegated Entities that the Client has authority over, that have been delivered to the Server
     delivered_commands: EntityMessageReceiver<GlobalEntity>,
 }
 
