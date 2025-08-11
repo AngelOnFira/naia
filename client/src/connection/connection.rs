@@ -140,7 +140,7 @@ impl Connection {
             &protocol.message_kinds,
             now,
             self.base.local_world_manager.entity_converter(),
-            &mut self.base.remote_world_manager.entity_waitlist,
+            self.base.remote_world_manager.entity_waitlist_mut(),
         );
         for (channel_kind, messages) in messages {
             for message in messages {

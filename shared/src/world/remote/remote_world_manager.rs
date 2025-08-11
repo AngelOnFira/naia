@@ -17,7 +17,7 @@ use crate::{world::{
 }, ComponentFieldUpdate, ComponentKind, ComponentKinds, ComponentUpdate, EntityMessage, EntityAndGlobalEntityConverter, GlobalEntity, GlobalEntitySpawner, GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter, Replicate, Tick, WorldMutType, EntityMessageType, OwnedLocalEntity, HostEntity};
 
 pub struct RemoteWorldManager {
-    pub entity_waitlist: EntityWaitlist,
+    entity_waitlist: EntityWaitlist,
     incoming_components: HashMap<(RemoteEntity, ComponentKind), Box<dyn Replicate>>,
     insert_waitlist_store: WaitlistStore<(GlobalEntity, Box<dyn Replicate>)>,
     insert_waitlist_map: HashMap<(GlobalEntity, ComponentKind), WaitlistHandle>,
@@ -37,6 +37,14 @@ impl RemoteWorldManager {
             update_waitlist_map: HashMap::new(),
             outgoing_events: Vec::new(),
         }
+    }
+
+    pub fn entity_waitlist(&self) -> &EntityWaitlist {
+        &self.entity_waitlist
+    }
+
+    pub fn entity_waitlist_mut(&mut self) -> &mut EntityWaitlist {
+        &mut self.entity_waitlist
     }
 
     pub fn on_entity_channel_opened(

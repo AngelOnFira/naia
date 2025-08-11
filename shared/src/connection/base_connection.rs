@@ -207,7 +207,7 @@ impl BaseConnection {
         self.message_manager.read_messages(
             channel_kinds,
             message_kinds,
-            &mut self.remote_world_manager.entity_waitlist,
+            self.remote_world_manager.entity_waitlist_mut(),
             &mut reserver,
             reader,
         )?;
