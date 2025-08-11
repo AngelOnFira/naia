@@ -257,6 +257,17 @@ impl BaseConnection {
         }
     }
 
+    pub fn take_update_events<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
+        &mut self,
+        world: &W,
+        converter: &dyn EntityAndGlobalEntityConverter<E>,
+        global_world_manager: &dyn GlobalWorldManagerType,
+    ) -> UpdateEvents {
+        let host_world = self.host_world_manager.get_host_world();
+        let remote_world = self.host_world_manager.get_remote_world();
+        self.entity_update_manager.take_outgoing_events(world, converter, global_world_manager, host_world, remote_world)
+    }
+
     pub fn on_remote_spawn_entity(
         &mut self,
         global_entity: &GlobalEntity,

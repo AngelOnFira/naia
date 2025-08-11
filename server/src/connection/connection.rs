@@ -191,14 +191,10 @@ impl Connection {
             now,
             &rtt_millis,
         );
-        let host_world = self.base.host_world_manager.get_host_world();
-        let remote_world = self.base.host_world_manager.get_remote_world();
-        let mut update_events = self.base.entity_update_manager.take_outgoing_events(
+        let mut update_events = self.base.take_update_events(
             world,
             converter,
             global_world_manager,
-            host_world,
-            remote_world,
         );
 
         let mut any_sent = false;
