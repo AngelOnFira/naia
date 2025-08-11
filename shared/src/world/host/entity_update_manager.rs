@@ -40,13 +40,44 @@ impl EntityUpdateManager {
         host_world: &HashMap<GlobalEntity, EntityChannelSender>,
         remote_world: &HashMap<GlobalEntity, EntityChannelReceiver>,
     ) -> HashMap<GlobalEntity, HashSet<ComponentKind>> {
-        self.collect_next_updates(
-            world,
-            converter,
-            global_world_manager,
-            host_world,
-            remote_world,
-        )
+        let mut output = HashMap::new();
+
+        for (global_entity, host_entity_channel) in host_world.iter() {
+
+            let Some(remote_entity_channel) = remote_world.get(global_entity) else {
+                continue;
+            };
+
+            let Ok(world_entity) = converter.global_entity_to_entity(global_entity) else {
+                panic!("World Channel: cannot convert global entity ({:?}) to world entity", global_entity);
+            };
+            if !world.has_entity(&world_entity) {
+                continue;
+            }
+            for component_kind in host_entity_channel.component_kinds().iter() {
+                if !remote_entity_channel.has_component_kind(component_kind) {
+                    continue;
+                }
+                if self
+                    .diff_handler
+                    .diff_mask_is_clear(global_entity, component_kind)
+                {
+                    continue;
+                }
+                let entity_is_replicating =
+                    global_world_manager.entity_is_replicating(global_entity);
+                let world_has_component =
+                    world.has_component_of_kind(&world_entity, component_kind);
+                if entity_is_replicating && world_has_component {
+                    if !output.contains_key(global_entity) {
+                        output.insert(*global_entity, HashSet::new());
+                    }
+                    let send_component_set = output.get_mut(global_entity).unwrap();
+                    send_component_set.insert(*component_kind);
+                }
+            }
+        }
+        output
     }
 
     // Main
@@ -84,54 +115,6 @@ impl EntityUpdateManager {
     }
 
     // Collect
-
-    pub fn collect_next_updates<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
-        &self,
-        world: &W,
-        converter: &dyn EntityAndGlobalEntityConverter<E>,
-        global_world_manager: &dyn GlobalWorldManagerType,
-        host_world: &HashMap<GlobalEntity, EntityChannelSender>,
-        remote_world: &HashMap<GlobalEntity, EntityChannelReceiver>,
-    ) -> HashMap<GlobalEntity, HashSet<ComponentKind>> {
-        let mut output = HashMap::new();
-
-        for (global_entity, host_entity_channel) in host_world.iter() {
-            
-            let Some(remote_entity_channel) = remote_world.get(global_entity) else {
-                continue;
-            };
-
-            let Ok(world_entity) = converter.global_entity_to_entity(global_entity) else {
-                panic!("World Channel: cannot convert global entity ({:?}) to world entity", global_entity);
-            };
-            if !world.has_entity(&world_entity) {
-                continue;
-            }
-            for component_kind in host_entity_channel.component_kinds().iter() {
-                if !remote_entity_channel.has_component_kind(component_kind) {
-                    continue;
-                }
-                if self
-                    .diff_handler
-                    .diff_mask_is_clear(global_entity, component_kind)
-                {
-                    continue;
-                }
-                let entity_is_replicating =
-                    global_world_manager.entity_is_replicating(global_entity);
-                let world_has_component =
-                    world.has_component_of_kind(&world_entity, component_kind);
-                if entity_is_replicating && world_has_component {
-                    if !output.contains_key(global_entity) {
-                        output.insert(*global_entity, HashSet::new());
-                    }
-                    let send_component_set = output.get_mut(global_entity).unwrap();
-                    send_component_set.insert(*component_kind);
-                }
-            }
-        }
-        output
-    }
 
     pub fn handle_dropped_update_packets(&mut self, now: &Instant, rtt_millis: &f32) {
         let drop_duration = Duration::from_millis((DROP_UPDATE_RTT_FACTOR * rtt_millis) as u64);
