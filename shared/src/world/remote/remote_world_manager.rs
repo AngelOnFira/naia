@@ -1,50 +1,50 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     hash::Hash,
 };
 
-use log::{info, warn};
+use log::warn;
+
 use naia_socket_shared::Instant;
 
-use crate::{world::{
-    entity::{local_entity::RemoteEntity, in_scope_entities::{InScopeEntities, InScopeEntitiesMut}},
-    local_world_manager::LocalWorldManager,
-    remote::{
-        entity_event::EntityEvent,
-        entity_waitlist::{EntityWaitlist, WaitlistHandle, WaitlistStore},
-        remote_world_reader::RemoteWorldEvents,
+use crate::{
+    world::{
+        entity::{local_entity::RemoteEntity, in_scope_entities::{InScopeEntities, InScopeEntitiesMut}},
+        local_world_manager::LocalWorldManager,
+        remote::{
+            remote_world_waitlist::RemoteWorldWaitlist,
+            entity_event::EntityEvent,
+            entity_waitlist::EntityWaitlist,
+            remote_world_reader::RemoteWorldEvents,
+        },
     },
-}, ComponentFieldUpdate, ComponentKind, ComponentKinds, ComponentUpdate, EntityMessage, EntityAndGlobalEntityConverter, GlobalEntity, GlobalEntitySpawner, GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter, Replicate, Tick, WorldMutType, EntityMessageType, OwnedLocalEntity, HostEntity};
+    ComponentKind, ComponentKinds, ComponentUpdate, EntityMessage, EntityAndGlobalEntityConverter,
+    GlobalEntity, GlobalEntitySpawner, GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter,
+    Replicate, Tick, WorldMutType, EntityMessageType, OwnedLocalEntity,
+    HostEntity
+};
 
 pub struct RemoteWorldManager {
-    entity_waitlist: EntityWaitlist,
+    waitlist: RemoteWorldWaitlist,
     incoming_components: HashMap<(RemoteEntity, ComponentKind), Box<dyn Replicate>>,
-    insert_waitlist_store: WaitlistStore<(GlobalEntity, Box<dyn Replicate>)>,
-    insert_waitlist_map: HashMap<(GlobalEntity, ComponentKind), WaitlistHandle>,
-    update_waitlist_store: WaitlistStore<(Tick, GlobalEntity, ComponentKind, ComponentFieldUpdate)>,
-    update_waitlist_map: HashMap<(GlobalEntity, ComponentKind), HashMap<u8, WaitlistHandle>>,
     outgoing_events: Vec<EntityEvent>,
 }
 
 impl RemoteWorldManager {
     pub fn new() -> Self {
         Self {
-            entity_waitlist: EntityWaitlist::new(),
+            waitlist: RemoteWorldWaitlist::new(),
             incoming_components: HashMap::new(),
-            insert_waitlist_store: WaitlistStore::new(),
-            insert_waitlist_map: HashMap::new(),
-            update_waitlist_store: WaitlistStore::new(),
-            update_waitlist_map: HashMap::new(),
             outgoing_events: Vec::new(),
         }
     }
 
     pub fn entity_waitlist(&self) -> &EntityWaitlist {
-        &self.entity_waitlist
+        self.waitlist.entity_waitlist()
     }
 
     pub fn entity_waitlist_mut(&mut self) -> &mut EntityWaitlist {
-        &mut self.entity_waitlist
+        self.waitlist.entity_waitlist_mut()
     }
 
     pub fn on_entity_channel_opened(
@@ -53,7 +53,7 @@ impl RemoteWorldManager {
         // converter: &dyn LocalEntityAndGlobalEntityConverter,
         global_entity: &GlobalEntity
     ) {
-        self.entity_waitlist.add_entity(in_scope_entities, global_entity);
+        self.waitlist.on_entity_channel_opened(in_scope_entities, global_entity);
     }
 
     pub fn process_world_events<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
@@ -266,15 +266,8 @@ impl RemoteWorldManager {
                 //     "Remote World Manager: queueing component {:?} for entity {:?} in waitlist",
                 //     &name, global_entity
                 // );
-                let handle = self.entity_waitlist.queue(
-                    converter,
-                    &global_entity_set,
-                    &mut self.insert_waitlist_store,
-                    (global_entity, component),
-                );
 
-                self.insert_waitlist_map
-                    .insert((global_entity, *component_kind), handle);
+                self.waitlist.waitlist_queue_entity(converter, &global_entity, component, component_kind, &global_entity_set);
             } else {
                 panic!("Remote World Manager: cannot convert remote entity set to global entity set for waitlisting");
             }
@@ -316,24 +309,7 @@ impl RemoteWorldManager {
         world_entity: E,
         component_kind: ComponentKind,
     ) {
-        // Remove from insert waitlist if it's there
-        if let Some(handle) = self
-            .insert_waitlist_map
-            .remove(&(global_entity, component_kind))
-        {
-            self.insert_waitlist_store.remove(&handle);
-            self.entity_waitlist.remove_waiting_handle(&handle);
-            return;
-        }
-        // Remove Component from update waitlist if it's there
-        if let Some(handle_map) = self
-            .update_waitlist_map
-            .remove(&(global_entity, component_kind))
-        {
-            for (_index, handle) in handle_map {
-                self.update_waitlist_store.remove(&handle);
-                self.entity_waitlist.remove_waiting_handle(&handle);
-            }
+        if self.waitlist.process_remove(&global_entity, &component_kind) {
             return;
         }
         // Remove from world
@@ -351,37 +327,17 @@ impl RemoteWorldManager {
         world: &mut W,
         now: &Instant,
     ) {
-        if let Some(list) = self
-            .entity_waitlist
-            .collect_ready_items(now, &mut self.insert_waitlist_store)
-        {
-            for (global_entity, mut component) in list {
-                let component_kind = component.kind();
-
-                // let name = component.name();
-                // warn!(
-                //     "Remote World Manager: processing waitlisted insert for component {:?} for entity {:?}",
-                //     &name, global_entity
-                // );
-                
-                self.insert_waitlist_map
-                    .remove(&(global_entity, component_kind));
-
-                {
-                    component.relations_complete(local_converter);
-                }
-
-                let world_entity = world_converter
-                    .global_entity_to_entity(&global_entity)
-                    .unwrap();
-                self.finish_insert(
-                    world,
-                    global_entity,
-                    world_entity,
-                    component,
-                    &component_kind,
-                );
-            }
+        for (global_entity, component_kind, component) in self.waitlist.entities_to_insert(now, local_converter) {
+            let world_entity = world_converter
+                .global_entity_to_entity(&global_entity)
+                .unwrap();
+            self.finish_insert(
+                world,
+                global_entity,
+                world_entity,
+                component,
+                &component_kind,
+            );
         }
     }
 
@@ -418,94 +374,21 @@ impl RemoteWorldManager {
         world_converter: &dyn EntityAndGlobalEntityConverter<E>,
         component_kinds: &ComponentKinds,
         world: &mut W,
-        mut incoming_updates: Vec<(Tick, GlobalEntity, ComponentUpdate)>,
+        incoming_updates: Vec<(Tick, GlobalEntity, ComponentUpdate)>,
     ) {
-        for (tick, global_entity, component_update) in incoming_updates.drain(..) {
-            let component_kind = component_update.kind;
-
-            // split the component_update into the waiting and ready parts
-            let Ok((waiting_updates_opt, ready_update_opt)) =
-                component_update.split_into_waiting_and_ready(local_converter, component_kinds)
-            else {
-                warn!("Remote World Manager: cannot read malformed component update message");
-                continue;
-            };
-
-            if waiting_updates_opt.is_some() && ready_update_opt.is_some() {
-                warn!("Incoming Update split into BOTH waiting and ready parts");
-            }
-            if waiting_updates_opt.is_some() && ready_update_opt.is_none() {
-                warn!("Incoming Update split into ONLY waiting part");
-            }
-            if waiting_updates_opt.is_none() && ready_update_opt.is_some() {
-                // warn!("Incoming Update split into ONLY ready part");
-            }
-            if waiting_updates_opt.is_none() && ready_update_opt.is_none() {
-                panic!("Incoming Update split into NEITHER waiting nor ready parts. This should not happen.");
-            }
-
-            // if it exists, queue the waiting part of the component update
-            if let Some(waiting_updates) = waiting_updates_opt {
-                for (waiting_remote_entity, waiting_field_update) in waiting_updates {
-                    if let Ok(waiting_global_entity) =
-                        local_converter.remote_entity_to_global_entity(&waiting_remote_entity)
-                    {
-                        let field_id = waiting_field_update.field_id();
-
-                        // Have to convert the single waiting entity to a HashSet ..
-                        // TODO: make this more efficient
-                        let mut waiting_entities = HashSet::new();
-                        waiting_entities.insert(waiting_global_entity);
-
-                        let handle = self.entity_waitlist.queue(
-                            in_scope_entities,
-                            &waiting_entities,
-                            &mut self.update_waitlist_store,
-                            (tick, global_entity, component_kind, waiting_field_update),
-                        );
-                        let component_field_key = (global_entity, component_kind);
-                        if !self.update_waitlist_map.contains_key(&component_field_key) {
-                            self.update_waitlist_map
-                                .insert(component_field_key, HashMap::new());
-                        }
-                        let handle_map = self
-                            .update_waitlist_map
-                            .get_mut(&component_field_key)
-                            .unwrap();
-                        if let Some(old_handle) = handle_map.get(&field_id) {
-                            self.update_waitlist_store.remove(&handle);
-                            self.entity_waitlist.remove_waiting_handle(old_handle);
-                        }
-                        handle_map.insert(field_id, handle);
-                    } else {
-                        warn!("Remote World Manager: cannot convert remote entity to global entity for waitlisting");
-                    }
-                }
-            }
-            // if it exists, apply the ready part of the component update
-            if let Some(ready_update) = ready_update_opt {
-                let world_entity = world_converter
-                    .global_entity_to_entity(&global_entity)
-                    .unwrap();
-                if world
-                    .component_apply_update(
-                        local_converter,
-                        &world_entity,
-                        &component_kind,
-                        ready_update,
-                    )
-                    .is_err()
-                {
-                    warn!("Remote World Manager: cannot read malformed component update message");
-                    continue;
-                }
-
-                self.outgoing_events.push(EntityEvent::UpdateComponent(
-                    tick,
-                    global_entity,
-                    component_kind,
-                ));
-            }
+        for (tick, global_entity, component_kind) in self.waitlist.process_ready_updates(
+                in_scope_entities,
+                local_converter,
+                world_converter,
+                component_kinds,
+                world,
+                incoming_updates
+        ) {
+            self.outgoing_events.push(EntityEvent::UpdateComponent(
+                tick,
+                global_entity,
+                component_kind,
+            ));
         }
     }
 
@@ -516,48 +399,17 @@ impl RemoteWorldManager {
         world: &mut W,
         now: &Instant,
     ) {
-        if let Some(list) = self
-            .entity_waitlist
-            .collect_ready_items(now, &mut self.update_waitlist_store)
-        {
-            for (tick, global_entity, component_kind, ready_update) in list {
-                info!("processing waiting update!");
-
-                let component_key = (global_entity, component_kind);
-                let mut remove_entry = false;
-                if let Some(component_map) = self.update_waitlist_map.get_mut(&component_key) {
-                    component_map.remove(&ready_update.field_id());
-                    if component_map.is_empty() {
-                        remove_entry = true;
-                    }
-                }
-                if remove_entry {
-                    self.update_waitlist_map.remove(&component_key);
-                }
-
-                let world_entity = world_converter
-                    .global_entity_to_entity(&global_entity)
-                    .unwrap();
-
-                if world
-                    .component_apply_field_update(
-                        local_converter,
-                        &world_entity,
-                        &component_kind,
-                        ready_update,
-                    )
-                    .is_err()
-                {
-                    warn!("Remote World Manager: cannot read malformed complete waitlisted component update message");
-                    continue;
-                }
-
-                self.outgoing_events.push(EntityEvent::UpdateComponent(
-                    tick,
-                    global_entity,
-                    component_kind,
-                ));
-            }
+        for (tick, global_entity, component_kind) in self.waitlist.process_waitlist_updates(
+            local_converter,
+            world_converter,
+            world,
+            now,
+        ) {
+            self.outgoing_events.push(EntityEvent::UpdateComponent(
+                tick,
+                global_entity,
+                component_kind,
+            ));
         }
     }
 }
