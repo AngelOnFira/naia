@@ -158,7 +158,7 @@ impl HostWorldManager {
     }
 
     pub fn get_host_world(&self) -> &HashMap<GlobalEntity, EntityChannelSender> {
-        self.outgoing_commands.get_host_world()
+        self.outgoing_commands.get_world()
     }
 
     pub fn get_remote_world(&self) -> &HashMap<GlobalEntity, EntityChannelReceiver> {

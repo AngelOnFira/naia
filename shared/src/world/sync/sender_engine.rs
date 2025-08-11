@@ -18,7 +18,7 @@ impl SenderEngine {
         }
     }
 
-    pub(crate) fn get_host_world(&self) -> &HashMap<GlobalEntity, EntityChannelSender> {
+    pub(crate) fn get_world(&self) -> &HashMap<GlobalEntity, EntityChannelSender> {
         &self.entity_channels
     }
 }

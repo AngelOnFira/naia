@@ -16,6 +16,7 @@ use crate::{world::{
         entity_waitlist::EntityWaitlist,
     },
 }, ComponentKind, ComponentKinds, ComponentUpdate, EntityMessage, EntityAndGlobalEntityConverter, GlobalEntity, GlobalEntitySpawner, GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter, Replicate, Tick, WorldMutType, EntityMessageType, OwnedLocalEntity, HostEntity, EntityMessageReceiver, HostType, MessageIndex};
+use crate::world::sync::{EntityChannelReceiver, EntityChannelSender, SenderEngine};
 
 pub struct RemoteWorldManager {
     receiver: EntityMessageReceiver<RemoteEntity>,
@@ -23,16 +24,23 @@ pub struct RemoteWorldManager {
     incoming_updates: Vec<(Tick, GlobalEntity, ComponentUpdate)>,
     incoming_events: Vec<EntityEvent>,
     waitlist: RemoteWorldWaitlist,
+    delegated_world_opt: Option<SenderEngine>,
 }
 
 impl RemoteWorldManager {
     pub fn new(host_type: HostType) -> Self {
+        let delegated_world_opt = if host_type == HostType::Client {
+            Some(SenderEngine::new(host_type))
+        } else {
+            None
+        };
         Self {
             receiver: EntityMessageReceiver::new(host_type),
             incoming_components: HashMap::new(),
             incoming_updates: Vec::new(),
             incoming_events: Vec::new(),
             waitlist: RemoteWorldWaitlist::new(),
+            delegated_world_opt,
         }
     }
 
@@ -43,7 +51,15 @@ impl RemoteWorldManager {
     pub fn entity_waitlist_mut(&mut self) -> &mut EntityWaitlist {
         self.waitlist.entity_waitlist_mut()
     }
-    
+
+    pub fn get_host_world(&self) -> Option<&HashMap<GlobalEntity, EntityChannelSender>> {
+        self.delegated_world_opt.as_ref().map(|engine| engine.get_world())
+    }
+
+    pub fn get_remote_world(&self) -> &HashMap<RemoteEntity, EntityChannelReceiver> {
+        self.receiver.get_world()
+    }
+
     pub fn receive_message(&mut self, message_id: MessageIndex, message: EntityMessage<RemoteEntity>) {
         self.receiver.buffer_message(message_id, message);
     }

@@ -84,7 +84,7 @@ impl EntityMessageSender {
         todo!("close entity channel");
     }
 
-    pub(crate) fn get_host_world(&self) -> &HashMap<GlobalEntity, EntityChannelSender> {
-        self.engine.get_host_world()
+    pub(crate) fn get_world(&self) -> &HashMap<GlobalEntity, EntityChannelSender> {
+        self.engine.get_world()
     }
 }
