@@ -9,11 +9,12 @@ use log::info;
 use crate::{
     messages::channels::senders::indexed_message_writer::IndexedMessageWriter,
     world::{
-        host::{entity_update_manager::EntityUpdateManager, host_world_manager::CommandId},
-        entity::entity_converters::GlobalWorldManagerType, local_world_manager::LocalWorldManager,
+        world_manager::WorldManager,
+        host::host_world_manager::CommandId,
+        entity::entity_converters::GlobalWorldManagerType,
     },
     BitWrite, BitWriter, ComponentKind, ComponentKinds, ConstBitLength, EntityMessage, EntityMessageType,
-    EntityAndGlobalEntityConverter, EntityConverterMut, GlobalEntity, HostWorldManager,
+    EntityAndGlobalEntityConverter, GlobalEntity,
     Instant, MessageIndex, PacketIndex, Serde, WorldRefType, EntityCommand,
 };
 
@@ -37,10 +38,8 @@ impl HostWorldWriter {
         world: &W,
         entity_converter: &dyn EntityAndGlobalEntityConverter<E>,
         global_world_manager: &dyn GlobalWorldManagerType,
-        local_world_manager: &mut LocalWorldManager,
+        world_manager: &mut WorldManager,
         has_written: &mut bool,
-        host_manager: &mut HostWorldManager,
-        update_manager: &mut EntityUpdateManager,
         world_events: &mut VecDeque<(CommandId, EntityCommand)>,
         update_events: &mut HashMap<GlobalEntity, HashSet<ComponentKind>>,
     ) {
@@ -53,9 +52,8 @@ impl HostWorldWriter {
             world,
             entity_converter,
             global_world_manager,
-            local_world_manager,
+            world_manager,
             has_written,
-            update_manager,
             update_events,
         );
 
@@ -68,9 +66,8 @@ impl HostWorldWriter {
             world,
             entity_converter,
             global_world_manager,
-            local_world_manager,
+            world_manager,
             has_written,
-            host_manager,
             world_events,
         );
     }
@@ -83,9 +80,8 @@ impl HostWorldWriter {
         world: &W,
         entity_converter: &dyn EntityAndGlobalEntityConverter<E>,
         global_world_manager: &dyn GlobalWorldManagerType,
-        local_world_manager: &mut LocalWorldManager,
+        world_manager: &mut WorldManager,
         has_written: &mut bool,
-        host_manager: &mut HostWorldManager,
         next_send_commands: &mut VecDeque<(CommandId, EntityCommand)>,
     ) {
         let mut last_counted_id: Option<MessageIndex> = None;
@@ -106,12 +102,11 @@ impl HostWorldWriter {
                 world,
                 entity_converter,
                 global_world_manager,
-                local_world_manager,
+                world_manager,
                 packet_index,
                 &mut counter,
                 &mut last_counted_id,
                 false,
-                host_manager,
                 next_send_commands,
             );
             if counter.overflowed() {
@@ -131,7 +126,7 @@ impl HostWorldWriter {
             *has_written = true;
 
             // optimization
-            host_manager.insert_sent_command_packet(
+            world_manager.host.insert_sent_command_packet(
                 packet_index,
                 now.clone(),
             );
@@ -144,12 +139,11 @@ impl HostWorldWriter {
                 world,
                 entity_converter,
                 global_world_manager,
-                local_world_manager,
+                world_manager,
                 packet_index,
                 writer,
                 &mut last_written_id,
                 true,
-                host_manager,
                 next_send_commands,
             );
 
@@ -168,12 +162,11 @@ impl HostWorldWriter {
         world: &W,
         entity_converter: &dyn EntityAndGlobalEntityConverter<E>,
         global_world_manager: &dyn GlobalWorldManagerType,
-        local_world_manager: &mut LocalWorldManager,
+        world_manager: &mut WorldManager,
         packet_index: &PacketIndex,
         writer: &mut dyn BitWrite,
         last_written_id: &mut Option<CommandId>,
         is_writing: bool,
-        host_manager: &mut HostWorldManager,
         next_send_commands: &mut VecDeque<(CommandId, EntityCommand)>,
     ) {
         let (command_id, command) = next_send_commands.front().unwrap();
@@ -188,7 +181,7 @@ impl HostWorldWriter {
                 EntityMessageType::Spawn.ser(writer);
 
                 // write net entity
-                local_world_manager
+                world_manager
                     .entity_converter()
                     .global_entity_to_host_entity(global_entity)
                     .unwrap()
@@ -196,7 +189,7 @@ impl HostWorldWriter {
 
                 // if we are writing to this packet, add it to record
                 if is_writing {
-                    host_manager.record_command_written(
+                    world_manager.host.record_command_written(
                         packet_index,
                         command_id,
                         EntityMessage::Spawn(*global_entity),
@@ -207,15 +200,14 @@ impl HostWorldWriter {
                 EntityMessageType::Despawn.ser(writer);
 
                 // write net entity
-                local_world_manager
-                    .entity_converter()
+                world_manager.entity_converter()
                     .global_entity_to_host_entity(global_entity)
                     .unwrap()
                     .ser(writer);
 
                 // if we are writing to this packet, add it to record
                 if is_writing {
-                    host_manager.record_command_written(
+                    world_manager.host.record_command_written(
                         packet_index,
                         command_id,
                         EntityMessage::Despawn(*global_entity),
@@ -228,14 +220,14 @@ impl HostWorldWriter {
                     .global_entity_to_entity(global_entity)
                     .unwrap();
 
-                if !host_manager.host_has_entity(global_entity) || !world.has_component_of_kind(&world_entity, component_kind)
+                if !world_manager.host.host_has_entity(global_entity) || !world.has_component_of_kind(&world_entity, component_kind)
                 {
                     EntityMessageType::Noop.ser(writer);
 
                     // if we are actually writing this packet
                     if is_writing {
                         // add it to command record
-                        host_manager.record_command_written(
+                        world_manager.host.record_command_written(
                             packet_index,
                             command_id,
                             EntityMessage::Noop,
@@ -245,14 +237,13 @@ impl HostWorldWriter {
                     EntityMessageType::InsertComponent.ser(writer);
 
                     // write net entity
-                    local_world_manager
+                    world_manager
                         .entity_converter()
                         .global_entity_to_host_entity(global_entity)
                         .unwrap()
                         .ser(writer);
 
-                    let mut converter =
-                        EntityConverterMut::new(global_world_manager, local_world_manager);
+                    let mut converter = world_manager.entity_converter_mut(global_world_manager);
 
                     // write component payload
                     world
@@ -263,7 +254,7 @@ impl HostWorldWriter {
                     // if we are actually writing this packet
                     if is_writing {
                         // add it to command record
-                        host_manager.record_command_written(
+                        world_manager.host.record_command_written(
                             packet_index,
                             command_id,
                             EntityMessage::InsertComponent(*global_entity, *component_kind),
@@ -272,13 +263,13 @@ impl HostWorldWriter {
                 }
             }
             EntityCommand::RemoveComponent(global_entity, component_kind) => {
-                if !host_manager.host_has_entity(global_entity) {
+                if !world_manager.host.host_has_entity(global_entity) {
                     EntityMessageType::Noop.ser(writer);
 
                     // if we are actually writing this packet
                     if is_writing {
                         // add it to command record
-                        host_manager.record_command_written(
+                        world_manager.host.record_command_written(
                             packet_index,
                             command_id,
                             EntityMessage::Noop,
@@ -288,7 +279,7 @@ impl HostWorldWriter {
                     EntityMessageType::RemoveComponent.ser(writer);
 
                     // write net entity
-                    local_world_manager
+                    world_manager
                         .entity_converter()
                         .global_entity_to_host_entity(global_entity)
                         .unwrap()
@@ -299,7 +290,7 @@ impl HostWorldWriter {
 
                     // if we are writing to this packet, add it to record
                     if is_writing {
-                        host_manager.record_command_written(
+                        world_manager.host.record_command_written(
                             packet_index,
                             command_id,
                             EntityMessage::RemoveComponent(*global_entity, *component_kind),
@@ -312,7 +303,7 @@ impl HostWorldWriter {
                 EntityMessageType::Publish.ser(writer);
 
                 // write net entity
-                local_world_manager
+                world_manager
                     .entity_converter()
                     .global_entity_to_host_entity(global_entity)
                     .unwrap()
@@ -320,7 +311,7 @@ impl HostWorldWriter {
 
                 // if we are writing to this packet, add it to record
                 if is_writing {
-                    host_manager.record_command_written(
+                    world_manager.host.record_command_written(
                         packet_index,
                         command_id,
                         EntityMessage::Publish(*global_entity),
@@ -331,7 +322,7 @@ impl HostWorldWriter {
                 EntityMessageType::Unpublish.ser(writer);
 
                 // write net entity
-                local_world_manager
+                world_manager
                     .entity_converter()
                     .global_entity_to_host_entity(global_entity)
                     .unwrap()
@@ -339,7 +330,7 @@ impl HostWorldWriter {
 
                 // if we are writing to this packet, add it to record
                 if is_writing {
-                    host_manager.record_command_written(
+                    world_manager.host.record_command_written(
                         packet_index,
                         command_id,
                         EntityMessage::Unpublish(*global_entity),
@@ -350,7 +341,7 @@ impl HostWorldWriter {
                 EntityMessageType::EnableDelegation.ser(writer);
 
                 // write net entity
-                local_world_manager
+                world_manager
                     .entity_converter()
                     .global_entity_to_host_entity(global_entity)
                     .unwrap()
@@ -358,7 +349,7 @@ impl HostWorldWriter {
 
                 // if we are writing to this packet, add it to record
                 if is_writing {
-                    host_manager.record_command_written(
+                    world_manager.host.record_command_written(
                         packet_index,
                         command_id,
                         EntityMessage::EnableDelegation(*global_entity),
@@ -369,7 +360,7 @@ impl HostWorldWriter {
                 EntityMessageType::DisableDelegation.ser(writer);
 
                 // write net entity
-                local_world_manager
+                world_manager
                     .entity_converter()
                     .global_entity_to_host_entity(global_entity)
                     .unwrap()
@@ -377,7 +368,7 @@ impl HostWorldWriter {
 
                 // if we are writing to this packet, add it to record
                 if is_writing {
-                    host_manager.record_command_written(
+                    world_manager.host.record_command_written(
                         packet_index,
                         command_id,
                         EntityMessage::DisableDelegation(*global_entity),
@@ -388,7 +379,7 @@ impl HostWorldWriter {
                 EntityMessageType::SetAuthority.ser(writer);
 
                 // write net entity
-                local_world_manager
+                world_manager
                     .entity_converter()
                     .global_entity_to_host_entity(global_entity)
                     .unwrap()
@@ -399,7 +390,7 @@ impl HostWorldWriter {
 
                 // if we are writing to this packet, add it to record
                 if is_writing {
-                    host_manager.record_command_written(
+                    world_manager.host.record_command_written(
                         packet_index,
                         command_id,
                         EntityMessage::SetAuthority(*global_entity, *auth_status),
@@ -412,7 +403,7 @@ impl HostWorldWriter {
                 EntityMessageType::EnableDelegationResponse.ser(writer);
 
                 // write net entity
-                local_world_manager
+                world_manager
                     .entity_converter()
                     .global_entity_to_remote_entity(global_entity)
                     .unwrap()
@@ -420,7 +411,7 @@ impl HostWorldWriter {
 
                 // if we are writing to this packet, add it to record
                 if is_writing {
-                    host_manager.record_command_written(
+                    world_manager.host.record_command_written(
                         packet_index,
                         command_id,
                         EntityMessage::EnableDelegationResponse(*global_entity),
@@ -431,7 +422,7 @@ impl HostWorldWriter {
                 EntityMessageType::MigrateResponse.ser(writer);
 
                 // write net entity
-                local_world_manager
+                world_manager
                     .entity_converter()
                     .global_entity_to_remote_entity(global_entity)
                     .unwrap()
@@ -442,7 +433,7 @@ impl HostWorldWriter {
 
                 // if we are writing to this packet, add it to record
                 if is_writing {
-                    host_manager.record_command_written(
+                    world_manager.host.record_command_written(
                         packet_index,
                         command_id,
                         EntityMessage::MigrateResponse(*global_entity, *new_host_entity_value),
@@ -453,7 +444,7 @@ impl HostWorldWriter {
                 EntityMessageType::RequestAuthority.ser(writer);
 
                 // write net entity
-                local_world_manager
+                world_manager
                     .entity_converter()
                     .global_entity_to_remote_entity(global_entity)
                     .unwrap()
@@ -464,7 +455,7 @@ impl HostWorldWriter {
 
                 // if we are writing to this packet, add it to record
                 if is_writing {
-                    host_manager.record_command_written(
+                    world_manager.host.record_command_written(
                         packet_index,
                         command_id,
                         EntityMessage::RequestAuthority(*global_entity, *host_entity),
@@ -475,7 +466,7 @@ impl HostWorldWriter {
                 EntityMessageType::ReleaseAuthority.ser(writer);
 
                 // get owned entity
-                let owned_entity = local_world_manager
+                let owned_entity = world_manager
                     .entity_converter()
                     .global_entity_to_owned_entity(global_entity)
                     .unwrap()
@@ -485,7 +476,7 @@ impl HostWorldWriter {
 
                 // if we are writing to this packet, add it to record
                 if is_writing {
-                    host_manager.record_command_written(
+                    world_manager.host.record_command_written(
                         packet_index,
                         command_id,
                         EntityMessage::ReleaseAuthority(owned_entity),
@@ -544,16 +535,15 @@ impl HostWorldWriter {
         world: &W,
         converter: &dyn EntityAndGlobalEntityConverter<E>,
         global_world_manager: &dyn GlobalWorldManagerType,
-        local_world_manager: &mut LocalWorldManager,
+        world_manager: &mut WorldManager,
         has_written: &mut bool,
-        update_manager: &mut EntityUpdateManager,
         next_send_updates: &mut HashMap<GlobalEntity, HashSet<ComponentKind>>,
     ) {
         let all_update_entities: Vec<GlobalEntity> = next_send_updates.keys().copied().collect();
 
         for global_entity in all_update_entities {
             // get LocalEntity
-            let host_entity = local_world_manager
+            let host_entity = world_manager
                 .entity_converter()
                 .global_entity_to_host_entity(&global_entity)
                 .unwrap();
@@ -585,13 +575,12 @@ impl HostWorldWriter {
                 now,
                 world,
                 global_world_manager,
-                local_world_manager,
+                world_manager,
                 packet_index,
                 writer,
                 &global_entity,
                 &world_entity,
                 has_written,
-                update_manager,
                 next_send_updates,
             );
 
@@ -612,24 +601,23 @@ impl HostWorldWriter {
         now: &Instant,
         world: &W,
         global_world_manager: &dyn GlobalWorldManagerType,
-        local_world_manager: &mut LocalWorldManager,
+        world_manager: &mut WorldManager,
         packet_index: &PacketIndex,
         writer: &mut BitWriter,
         global_entity: &GlobalEntity,
         world_entity: &E,
         has_written: &mut bool,
-        update_manager: &mut EntityUpdateManager,
         next_send_updates: &mut HashMap<GlobalEntity, HashSet<ComponentKind>>,
     ) {
         let mut written_component_kinds = Vec::new();
         let component_kind_set = next_send_updates.get(global_entity).unwrap();
         for component_kind in component_kind_set {
             // get diff mask
-            let diff_mask = update_manager
+            let diff_mask = world_manager.updater
                 .get_diff_mask(global_entity, component_kind)
                 .clone();
 
-            let mut converter = EntityConverterMut::new(global_world_manager, local_world_manager);
+            let mut converter = world_manager.entity_converter_mut(global_world_manager);
 
             // check that we can write the next component update
             let mut counter = writer.counter();
@@ -670,8 +658,8 @@ impl HostWorldWriter {
                 .write_update(&diff_mask, writer, &mut converter);
 
             written_component_kinds.push(*component_kind);
-            
-            update_manager.record_update(
+
+            world_manager.updater.record_update(
                 now,
                 packet_index,
                 global_entity,

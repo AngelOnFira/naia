@@ -55,8 +55,8 @@ impl Connection {
         let existing_entities = global_world_manager.entities();
         for entity in existing_entities {
             let component_kinds = global_world_manager.component_kinds(&entity).unwrap();
-            connection.base.host_world_manager.host_init_entity(
-                &mut connection.base.local_world_manager,
+            connection.base.world_manager.host.host_init_entity(
+                &mut connection.base.world_manager.local,
                 &entity,
                 component_kinds,
             );
@@ -140,8 +140,8 @@ impl Connection {
         let messages = self.base.message_manager.receive_messages(
             &protocol.message_kinds,
             now,
-            self.base.local_world_manager.entity_converter(),
-            self.base.remote_world_manager.entity_waitlist_mut(),
+            self.base.world_manager.local.entity_converter(),
+            self.base.world_manager.remote.entity_waitlist_mut(),
         );
         for (channel_kind, messages) in messages {
             for message in messages {
@@ -167,11 +167,11 @@ impl Connection {
         }
 
         // Receive World Events
-        let remote_events = self.base.remote_world_manager.take_incoming_events();
-        self.base.remote_world_manager.process_world_events(
+        let remote_events = self.base.world_manager.remote.take_incoming_events();
+        self.base.world_manager.remote.process_world_events(
             global_entity_map,
             global_world_manager,
-            &mut self.base.local_world_manager,
+            &mut self.base.world_manager.local,
             &protocol.component_kinds,
             world,
             now,
@@ -197,7 +197,7 @@ impl Connection {
             &self.time_manager.client_sending_tick,
             &self.time_manager.server_receivable_tick,
         );
-        let mut host_world_events = self.base.host_world_manager.take_outgoing_events(
+        let mut host_world_events = self.base.world_manager.host.take_outgoing_events(
             now,
             &rtt_millis,
         );
@@ -301,7 +301,7 @@ impl Connection {
         self.tick_buffer.write_messages(
             &protocol,
             global_world_manager,
-            &mut self.base.local_world_manager,
+            &mut self.base.world_manager.local,
             &mut writer,
             next_packet_index,
             &client_tick,

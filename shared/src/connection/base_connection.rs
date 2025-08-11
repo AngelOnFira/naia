@@ -6,24 +6,20 @@ use naia_socket_shared::Instant;
 use crate::{messages::{
     channels::channel_kinds::ChannelKinds, message_manager::MessageManager
 }, types::{HostType, PacketIndex}, world::{
+    world_manager::WorldManager,
     entity::entity_converters::GlobalWorldManagerType,
     host::{
-        host_world_manager::{HostWorldManager, CommandId},
+        host_world_manager::CommandId,
         host_world_writer::HostWorldWriter,
-        entity_update_manager::EntityUpdateManager
     },
-    local_world_manager::LocalWorldManager,
     remote::remote_world_reader::RemoteWorldReader,
-}, AckManager, ComponentKind, ComponentKinds, ConnectionConfig, EntityAndGlobalEntityConverter, EntityCommand, EntityConverterMut, GlobalEntity, GlobalEntitySpawner, MessageKinds, PacketNotifiable, PacketType, RemoteEntity, RemoteWorldManager, StandardHeader, Tick, Timer, WorldRefType};
+}, AckManager, ComponentKind, ComponentKinds, ConnectionConfig, EntityAndGlobalEntityConverter, EntityCommand, GlobalEntity, GlobalEntitySpawner, MessageKinds, PacketNotifiable, PacketType, RemoteEntity, StandardHeader, Tick, Timer, WorldRefType};
 
 /// Represents a connection to a remote host, and provides functionality to
 /// manage the connection and the communications to it
 pub struct BaseConnection {
     pub message_manager: MessageManager,
-    pub host_world_manager: HostWorldManager,
-    pub remote_world_manager: RemoteWorldManager,
-    pub entity_update_manager: EntityUpdateManager,
-    pub local_world_manager: LocalWorldManager,
+    pub world_manager: WorldManager,
     ack_manager: AckManager,
     heartbeat_timer: Timer,
 }
@@ -40,10 +36,7 @@ impl BaseConnection {
     ) -> Self {
         Self {
             message_manager: MessageManager::new(host_type, channel_kinds),
-            host_world_manager: HostWorldManager::new(host_type),
-            remote_world_manager: RemoteWorldManager::new(host_type),
-            entity_update_manager: EntityUpdateManager::new(address, global_world_manager),
-            local_world_manager: LocalWorldManager::new(user_key),
+            world_manager: WorldManager::new(address, host_type, user_key, global_world_manager),
             ack_manager: AckManager::new(),
             heartbeat_timer: Timer::new(connection_config.heartbeat_interval),
         }
@@ -81,7 +74,7 @@ impl BaseConnection {
         header: &StandardHeader,
         packet_notifiables: &mut [&mut dyn PacketNotifiable],
     ) {
-        let mut base_packet_notifiables: [&mut dyn PacketNotifiable; 2] = [&mut self.message_manager, &mut self.host_world_manager];
+        let mut base_packet_notifiables: [&mut dyn PacketNotifiable; 2] = [&mut self.message_manager, &mut self.world_manager];
         self.ack_manager.process_incoming_header(
             header,
             &mut base_packet_notifiables,
@@ -105,10 +98,7 @@ impl BaseConnection {
     }
 
     pub fn collect_messages(&mut self, now: &Instant, rtt_millis: &f32) {
-        self.host_world_manager
-            .handle_dropped_command_packets(now);
-        self.entity_update_manager
-            .handle_dropped_update_packets(now, rtt_millis);
+        self.world_manager.collect_messages(now, rtt_millis);
         self.message_manager
             .collect_outgoing_messages(now, rtt_millis);
     }
@@ -122,8 +112,7 @@ impl BaseConnection {
         packet_index: PacketIndex,
         has_written: &mut bool,
     ) {
-        let mut converter =
-            EntityConverterMut::new(global_world_manager, &mut self.local_world_manager);
+        let mut converter = self.world_manager.entity_converter_mut(global_world_manager);
         self.message_manager.write_messages(
             channel_kinds,
             message_kinds,
@@ -170,10 +159,8 @@ impl BaseConnection {
                 world,
                 entity_converter,
                 global_world_manager,
-                &mut self.local_world_manager,
+                &mut self.world_manager,
                 has_written,
-                &mut self.host_world_manager,
-                &mut self.entity_update_manager,
                 host_world_events,
                 update_events,
             );
@@ -191,13 +178,13 @@ impl BaseConnection {
         read_world_events: bool,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
-        let mut reserver = self.local_world_manager.global_entity_reserver(global_entity_manager, spawner);
+        let mut reserver = self.world_manager.local.global_entity_reserver(global_entity_manager, spawner);
         
         // read messages
         self.message_manager.read_messages(
             channel_kinds,
             message_kinds,
-            self.remote_world_manager.entity_waitlist_mut(),
+            self.world_manager.remote.entity_waitlist_mut(),
             &mut reserver,
             reader,
         )?;
@@ -205,8 +192,8 @@ impl BaseConnection {
         // read world events
         if read_world_events {
             RemoteWorldReader::read_world_events(
-                &mut self.local_world_manager,
-                &mut self.remote_world_manager,
+                &mut self.world_manager.local,
+                &mut self.world_manager.remote,
                 component_kinds,
                 client_tick,
                 reader,
@@ -217,13 +204,13 @@ impl BaseConnection {
     }
 
     pub fn remote_entities(&self) -> Vec<GlobalEntity> {
-        self.local_world_manager.remote_entities()
+        self.world_manager.local.remote_entities()
     }
 
     pub fn process_received_commands(&mut self) {
-        self.host_world_manager.process_received_commands(
-            &mut self.local_world_manager,
-            &mut self.entity_update_manager,
+        self.world_manager.host.process_received_commands(
+            &mut self.world_manager.local,
+            &mut self.world_manager.updater,
         );
     }
 
@@ -233,9 +220,9 @@ impl BaseConnection {
         converter: &dyn EntityAndGlobalEntityConverter<E>,
         global_world_manager: &dyn GlobalWorldManagerType,
     ) -> HashMap<GlobalEntity, HashSet<ComponentKind>> {
-        let host_world = self.host_world_manager.get_host_world();
-        let remote_world = self.host_world_manager.get_remote_world();
-        self.entity_update_manager.take_outgoing_events(world, converter, global_world_manager, host_world, remote_world)
+        let host_world = self.world_manager.host.get_host_world();
+        let remote_world = self.world_manager.host.get_remote_world();
+        self.world_manager.updater.take_outgoing_events(world, converter, global_world_manager, host_world, remote_world)
     }
 
     pub fn track_hosts_redundant_remote_entity(
