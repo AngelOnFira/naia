@@ -1210,7 +1210,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 connection
                     .base
                     .world_manager
-                    .remove_reserved_host_entity(global_entity);
+                    .host_remove_reserved_entity(global_entity);
             }
             (EntityAuthStatus::Available, EntityAuthStatus::Available) => {
                 // auth was released before it was granted, continue as normal
