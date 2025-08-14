@@ -77,7 +77,7 @@ impl Connection {
             message_kinds,
             &server_tick,
             &client_tick,
-            self.base.world_manager.entity_map.entity_converter(),
+            self.base.world_manager.entity_converter(),
             reader,
         )?;
 
@@ -112,11 +112,12 @@ impl Connection {
     ) -> Vec<EntityEvent> {
         
         // Receive Message Events
+        let (entity_converter, entity_waitlist) = self.base.world_manager.get_message_processor_helpers();
         let messages = self.base.message_manager.receive_messages(
             message_kinds,
             now,
-            self.base.world_manager.entity_map.entity_converter(),
-            self.base.world_manager.remote.entity_waitlist_mut(),
+            entity_converter,
+            entity_waitlist,
         );
         for (channel_kind, messages) in messages {
             for message in messages {
@@ -149,11 +150,10 @@ impl Connection {
 
         // Receive World Events
         if client_authoritative_entities {
-            let remote_events = self.base.world_manager.remote.take_incoming_events();
-            return self.base.world_manager.remote.process_world_events(
+            let remote_events = self.base.world_manager.take_incoming_events();
+            return self.base.world_manager.process_world_events(
                 global_entity_map,
                 global_world_manager,
-                &mut self.base.world_manager.entity_map,
                 component_kinds,
                 world,
                 now,
@@ -188,7 +188,7 @@ impl Connection {
     ) {
         let rtt_millis = self.ping_manager.rtt_average;
         self.base.collect_messages(now, &rtt_millis);
-        let mut host_world_events = self.base.world_manager.host.take_outgoing_events(
+        let mut host_world_events = self.base.world_manager.take_outgoing_events(
             now,
             &rtt_millis,
         );

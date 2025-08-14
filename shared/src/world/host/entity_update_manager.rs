@@ -2,13 +2,11 @@ use std::{
     collections::{HashMap, HashSet},
     hash::Hash,
     net::SocketAddr,
+    sync::RwLockReadGuard,
+    time::Duration,
 };
-use std::sync::RwLockReadGuard;
-use std::time::Duration;
 
-use super::user_diff_handler::UserDiffHandler;
-use crate::{ComponentKind, EntityAndGlobalEntityConverter, GlobalEntity, GlobalWorldManagerType, Instant, WorldRefType, DiffMask, PacketIndex};
-use crate::world::sync::{EntityChannelReceiver, EntityChannelSender};
+use crate::{world::host::user_diff_handler::UserDiffHandler, ComponentKind, EntityAndGlobalEntityConverter, GlobalEntity, GlobalWorldManagerType, Instant, WorldRefType, DiffMask, PacketIndex};
 
 const DROP_UPDATE_RTT_FACTOR: f32 = 1.5;
 
@@ -37,47 +35,28 @@ impl EntityUpdateManager {
         world: &W,
         converter: &dyn EntityAndGlobalEntityConverter<E>,
         global_world_manager: &dyn GlobalWorldManagerType,
-        host_world: &HashMap<GlobalEntity, EntityChannelSender>,
-        remote_world: &HashMap<GlobalEntity, EntityChannelReceiver>,
+        mut updatable_world: HashMap<GlobalEntity, HashSet<ComponentKind>>,
     ) -> HashMap<GlobalEntity, HashSet<ComponentKind>> {
-        let mut output = HashMap::new();
-
-        for (global_entity, host_entity_channel) in host_world.iter() {
-
-            let Some(remote_entity_channel) = remote_world.get(global_entity) else {
-                continue;
-            };
-
+        updatable_world.retain(|global_entity, component_kinds| {
+            if !global_world_manager.entity_is_replicating(global_entity) {
+                return false;
+            }
             let Ok(world_entity) = converter.global_entity_to_entity(global_entity) else {
-                panic!("World Channel: cannot convert global entity ({:?}) to world entity", global_entity);
+                panic!(
+                    "World Channel: cannot convert global entity ({:?}) to world entity",
+                    global_entity
+                )
             };
             if !world.has_entity(&world_entity) {
-                continue;
+                return false;
             }
-            for component_kind in host_entity_channel.component_kinds().iter() {
-                if !remote_entity_channel.has_component_kind(component_kind) {
-                    continue;
-                }
-                if self
-                    .diff_handler
-                    .diff_mask_is_clear(global_entity, component_kind)
-                {
-                    continue;
-                }
-                let entity_is_replicating =
-                    global_world_manager.entity_is_replicating(global_entity);
-                let world_has_component =
-                    world.has_component_of_kind(&world_entity, component_kind);
-                if entity_is_replicating && world_has_component {
-                    if !output.contains_key(global_entity) {
-                        output.insert(*global_entity, HashSet::new());
-                    }
-                    let send_component_set = output.get_mut(global_entity).unwrap();
-                    send_component_set.insert(*component_kind);
-                }
-            }
-        }
-        output
+
+            component_kinds.retain(|kind| {
+                world.has_component_of_kind(&world_entity, kind) && !self.diff_handler.diff_mask_is_clear(global_entity, kind)
+            });
+            !component_kinds.is_empty()
+        });
+        updatable_world
     }
 
     // Main

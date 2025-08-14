@@ -178,13 +178,16 @@ impl BaseConnection {
         read_world_events: bool,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
-        let mut reserver = self.world_manager.entity_map.global_entity_reserver(global_entity_manager, spawner);
-        
+        let (mut reserver, entity_waitlist) = self.world_manager.get_message_reader_helpers(
+            global_entity_manager,
+            spawner,
+        );
+
         // read messages
         self.message_manager.read_messages(
             channel_kinds,
             message_kinds,
-            self.world_manager.remote.entity_waitlist_mut(),
+            entity_waitlist,
             &mut reserver,
             reader,
         )?;
@@ -192,8 +195,7 @@ impl BaseConnection {
         // read world events
         if read_world_events {
             RemoteWorldReader::read_world_events(
-                &mut self.world_manager.entity_map,
-                &mut self.world_manager.remote,
+                &mut self.world_manager,
                 component_kinds,
                 client_tick,
                 reader,
@@ -204,14 +206,11 @@ impl BaseConnection {
     }
 
     pub fn remote_entities(&self) -> Vec<GlobalEntity> {
-        self.world_manager.entity_map.remote_entities()
+        self.world_manager.remote_entities()
     }
 
     pub fn process_received_commands(&mut self) {
-        self.world_manager.host.process_received_commands(
-            &mut self.world_manager.entity_map,
-            &mut self.world_manager.updater,
-        );
+        self.world_manager.process_received_commands();
     }
 
     pub fn take_update_events<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
@@ -220,9 +219,7 @@ impl BaseConnection {
         converter: &dyn EntityAndGlobalEntityConverter<E>,
         global_world_manager: &dyn GlobalWorldManagerType,
     ) -> HashMap<GlobalEntity, HashSet<ComponentKind>> {
-        let host_world = self.world_manager.host.get_host_world();
-        let remote_world = self.world_manager.host.get_remote_world();
-        self.world_manager.updater.take_outgoing_events(world, converter, global_world_manager, host_world, remote_world)
+        self.world_manager.take_update_events(world, converter, global_world_manager)
     }
 
     pub fn track_hosts_redundant_remote_entity(

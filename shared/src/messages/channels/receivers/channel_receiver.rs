@@ -1,3 +1,4 @@
+
 use naia_serde::{BitReader, SerdeErr};
 use naia_socket_shared::Instant;
 

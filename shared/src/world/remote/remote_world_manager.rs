@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     hash::Hash,
 };
 
@@ -65,6 +65,35 @@ impl RemoteWorldManager {
 
     pub fn get_remote_world(&self) -> &HashMap<RemoteEntity, EntityChannelReceiver> {
         self.receiver.get_world()
+    }
+
+    pub(crate) fn append_updatable_world(
+        &self,
+        local_converter: &dyn LocalEntityAndGlobalEntityConverter,
+        updatable_world: &mut HashMap<GlobalEntity, HashSet<ComponentKind>>,
+    ) {
+        let Some(host_world) = self.get_host_world() else {
+            return;
+        };
+
+        for (global_entity, host_channel) in host_world {
+            let Ok(remote_entity) = local_converter.global_entity_to_remote_entity(global_entity) else {
+                continue;
+            };
+            let Some(remote_channel) = self.get_remote_world().get(&remote_entity) else {
+                continue;
+            };
+            let host_component_kinds = host_channel.component_kinds();
+            let joined_component_kinds = remote_channel.component_kinds_intersection(host_component_kinds);
+            if joined_component_kinds.is_empty() {
+                continue;
+            }
+            if let Some(existing) = updatable_world.get_mut(global_entity) {
+                existing.extend(&joined_component_kinds);
+            } else {
+                updatable_world.insert(*global_entity, joined_component_kinds);
+            }
+        }
     }
 
     pub fn receive_message(&mut self, message_id: MessageIndex, message: EntityMessage<RemoteEntity>) {

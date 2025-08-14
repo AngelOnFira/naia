@@ -74,7 +74,7 @@
 //! entity had its own perfect *ordered* stream—while the network enjoys the
 //! performance of a single unordered reliable channel.
 
-use std::{hash::Hash, collections::HashMap};
+use std::{hash::Hash, collections::{HashMap, HashSet}};
 
 use crate::{sequence_less_than, world::{
     sync::{
@@ -146,6 +146,13 @@ impl EntityChannelReceiver {
 
     pub(crate) fn has_component_kind(&self, component_kind: &ComponentKind) -> bool {
         self.component_channels.contains_key(component_kind)
+    }
+
+    pub(crate) fn component_kinds_intersection(
+        &self,
+        other_component_kinds: &HashSet<ComponentKind>
+    ) -> HashSet<ComponentKind> {
+        intersection_keys(other_component_kinds, &self.component_channels)
     }
 
     fn process_messages(&mut self) {
@@ -242,4 +249,31 @@ impl EntityChannelReceiver {
         let (_, msg) = self.buffered_messages.pop_front().unwrap();
         self.outgoing_messages.push(msg);
     }
+}
+
+// This function computes the intersection of keys between a `HashSet` and a `HashMap`.
+use std::hash::BuildHasher;
+
+fn intersection_keys<K, V, SA, SB>(
+    a: &HashSet<K, SA>,
+    b: &HashMap<K, V, SB>,
+) -> HashSet<K, SA>
+where
+    K: Eq + Hash + Copy,
+    SA: BuildHasher + Clone,
+    SB: BuildHasher,
+{
+    let cap = a.len().min(b.len());
+    let mut out = HashSet::with_capacity_and_hasher(cap, a.hasher().clone());
+
+    if a.len() <= b.len() {
+        for &k in a {
+            if b.contains_key(&k) { out.insert(k); }
+        }
+    } else {
+        for &k in b.keys() {
+            if a.contains(&k) { out.insert(k); }
+        }
+    }
+    out
 }

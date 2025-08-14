@@ -1,6 +1,11 @@
 use log::warn;
 
-use crate::{messages::channels::receivers::indexed_message_reader::IndexedMessageReader, world::entity::local_entity::RemoteEntity, BitReader, ComponentKind, ComponentKinds, EntityMessage, EntityMessageType, EntityAuthStatus, HostEntity, LocalEntityAndGlobalEntityConverter, MessageIndex, Serde, SerdeErr, Tick, OwnedLocalEntity, RemoteWorldManager, LocalEntityMap};
+use crate::{
+    messages::channels::receivers::indexed_message_reader::IndexedMessageReader,
+    world::{world_manager::WorldManager, entity::local_entity::RemoteEntity}, 
+    BitReader, ComponentKind, ComponentKinds, EntityMessage, EntityMessageType, EntityAuthStatus, 
+    HostEntity, MessageIndex, Serde, SerdeErr, Tick, OwnedLocalEntity
+};
 
 pub struct RemoteWorldReader;
 
@@ -21,20 +26,18 @@ impl RemoteWorldReader {
     }
 
     pub fn read_world_events(
-        local_entity_map: &mut LocalEntityMap,
-        remote_world_manager: &mut RemoteWorldManager,
+        world_manager: &mut WorldManager,
         component_kinds: &ComponentKinds,
         tick: &Tick,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
         // read entity updates
-        Self::read_updates(local_entity_map, remote_world_manager, component_kinds, tick, reader)?;
+        Self::read_updates(world_manager, component_kinds, tick, reader)?;
 
         // read entity messages
         Self::read_messages(
-            local_entity_map.entity_converter(),
+            world_manager,
             component_kinds,
-            remote_world_manager,
             reader,
         )?;
 
@@ -43,9 +46,8 @@ impl RemoteWorldReader {
 
     /// Read incoming Entity messages.
     fn read_messages(
-        converter: &dyn LocalEntityAndGlobalEntityConverter,
+        world_manager: &mut WorldManager,
         component_kinds: &ComponentKinds,
-        remote_world_manager: &mut RemoteWorldManager,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
         let mut last_read_id: Option<MessageIndex> = None;
@@ -57,7 +59,7 @@ impl RemoteWorldReader {
                 break;
             }
 
-            Self::read_message(converter, component_kinds, remote_world_manager, reader, &mut last_read_id)?;
+            Self::read_message(world_manager, component_kinds, reader, &mut last_read_id)?;
         }
 
         Ok(())
@@ -69,9 +71,8 @@ impl RemoteWorldReader {
     /// We can use a UnorderedReliableReceiver buffer because the messages have already been
     /// ordered by the client's jitter buffer
     fn read_message(
-        converter: &dyn LocalEntityAndGlobalEntityConverter,
+        world_manager: &mut WorldManager,
         component_kinds: &ComponentKinds,
-        remote_world_manager: &mut RemoteWorldManager,
         reader: &mut BitReader,
         last_read_id: &mut Option<MessageIndex>,
     ) -> Result<(), SerdeErr> {
@@ -85,7 +86,7 @@ impl RemoteWorldReader {
                 // read entity
                 let remote_entity = RemoteEntity::de(reader)?;
 
-                remote_world_manager.receive_message(
+                world_manager.receive_message(
                     message_id,
                     EntityMessage::Spawn(remote_entity),
                 );
@@ -95,20 +96,21 @@ impl RemoteWorldReader {
                 // read all data
                 let remote_entity = RemoteEntity::de(reader)?;
 
-                remote_world_manager.receive_message(message_id, EntityMessage::Despawn(remote_entity));
+                world_manager.receive_message(message_id, EntityMessage::Despawn(remote_entity));
             }
             // Add Component to Entity
             EntityMessageType::InsertComponent => {
                 // read all data
                 let remote_entity = RemoteEntity::de(reader)?;
+                let converter = world_manager.entity_converter();
                 let new_component = component_kinds.read(reader, converter)?;
                 let new_component_kind = new_component.kind();
 
-                remote_world_manager.receive_message(
+                world_manager.receive_message(
                     message_id,
                     EntityMessage::InsertComponent(remote_entity, new_component_kind),
                 );
-                remote_world_manager.insert_received_component(
+                world_manager.insert_received_component(
                     &remote_entity,
                     &new_component_kind,
                     new_component,
@@ -120,7 +122,7 @@ impl RemoteWorldReader {
                 let remote_entity = RemoteEntity::de(reader)?;
                 let component_kind = ComponentKind::de(component_kinds, reader)?;
 
-                remote_world_manager.receive_message(
+                world_manager.receive_message(
                     message_id,
                     EntityMessage::RemoveComponent(remote_entity, component_kind),
                 );
@@ -131,25 +133,25 @@ impl RemoteWorldReader {
                 // read entity
                 let remote_entity = RemoteEntity::de(reader)?;
 
-                remote_world_manager.receive_message(message_id, EntityMessage::Publish(remote_entity));
+                world_manager.receive_message(message_id, EntityMessage::Publish(remote_entity));
             }
             EntityMessageType::Unpublish => {
                 // read entity
                 let remote_entity = RemoteEntity::de(reader)?;
 
-                remote_world_manager.receive_message(message_id, EntityMessage::Unpublish(remote_entity));
+                world_manager.receive_message(message_id, EntityMessage::Unpublish(remote_entity));
             }
             EntityMessageType::EnableDelegation => {
                 // read entity
                 let remote_entity = RemoteEntity::de(reader)?;
 
-                remote_world_manager.receive_message(message_id, EntityMessage::EnableDelegation(remote_entity));
+                world_manager.receive_message(message_id, EntityMessage::EnableDelegation(remote_entity));
             }
             EntityMessageType::EnableDelegationResponse => {
                 // read entity
                 let remote_entity = RemoteEntity::de(reader)?;
 
-                remote_world_manager.receive_message(message_id, EntityMessage::EnableDelegationResponse(remote_entity));
+                world_manager.receive_message(message_id, EntityMessage::EnableDelegationResponse(remote_entity));
             }
             EntityMessageType::MigrateResponse => {
                 // read entity
@@ -157,7 +159,7 @@ impl RemoteWorldReader {
                 // read new host entity value
                 let new_host_entity_value = u16::de(reader)?;
 
-                remote_world_manager.receive_message(
+                world_manager.receive_message(
                     message_id,
                     EntityMessage::MigrateResponse(
                         remote_entity,
@@ -171,7 +173,7 @@ impl RemoteWorldReader {
                 // read remote entity value
                 let remote_entity_value = u16::de(reader)?;
 
-                remote_world_manager.receive_message(
+                world_manager.receive_message(
                     message_id,
                     EntityMessage::RequestAuthority(
                         remote_entity,
@@ -183,13 +185,13 @@ impl RemoteWorldReader {
                 // read entity
                 let owned_entity = OwnedLocalEntity::de(reader)?;
 
-                remote_world_manager.receive_message(message_id, EntityMessage::ReleaseAuthority(owned_entity));
+                world_manager.receive_message(message_id, EntityMessage::ReleaseAuthority(owned_entity));
             }
             EntityMessageType::DisableDelegation => {
                 // read entity
                 let remote_entity = RemoteEntity::de(reader)?;
 
-                remote_world_manager.receive_message(message_id, EntityMessage::DisableDelegation(remote_entity));
+                world_manager.receive_message(message_id, EntityMessage::DisableDelegation(remote_entity));
             }
             EntityMessageType::SetAuthority => {
                 // read entity
@@ -197,13 +199,13 @@ impl RemoteWorldReader {
                 // read auth status
                 let auth_status = EntityAuthStatus::de(reader)?;
 
-                remote_world_manager.receive_message(
+                world_manager.receive_message(
                     message_id,
                     EntityMessage::SetAuthority(remote_entity, auth_status),
                 );
             }
             EntityMessageType::Noop => {
-                remote_world_manager.receive_message(message_id, EntityMessage::Noop);
+                world_manager.receive_message(message_id, EntityMessage::Noop);
             }
         }
 
@@ -212,8 +214,7 @@ impl RemoteWorldReader {
 
     /// Read component updates from raw bits
     fn read_updates(
-        local_entity_map: &LocalEntityMap,
-        remote_world_manager: &mut RemoteWorldManager,
+        world_manager: &mut WorldManager,
         component_kinds: &ComponentKinds,
         tick: &Tick,
         reader: &mut BitReader,
@@ -228,8 +229,7 @@ impl RemoteWorldReader {
             let remote_entity = RemoteEntity::de(reader)?;
 
             Self::read_update(
-                local_entity_map,
-                remote_world_manager,
+                world_manager,
                 component_kinds,
                 tick,
                 reader,
@@ -242,8 +242,7 @@ impl RemoteWorldReader {
 
     /// Read component updates from raw bits for a given entity
     fn read_update(
-        local_entity_map: &LocalEntityMap,
-        remote_world_manager: &mut RemoteWorldManager,
+        world_manager: &mut WorldManager,
         component_kinds: &ComponentKinds,
         tick: &Tick,
         reader: &mut BitReader,
@@ -259,10 +258,10 @@ impl RemoteWorldReader {
             let component_update = component_kinds.read_create_update(reader)?;
 
             // At this point, the WorldChannel/EntityReceiver should guarantee the Entity is in scope, correct?
-            if local_entity_map.contains_remote_entity(remote_entity) {
-                let global_entity = local_entity_map.global_entity_from_remote(remote_entity).unwrap();
+            if world_manager.contains_remote_entity(remote_entity) {
+                let global_entity = *world_manager.global_entity_from_remote(remote_entity).unwrap();
 
-                remote_world_manager.insert_received_update(*tick, global_entity, component_update);
+                world_manager.insert_received_update(*tick, &global_entity, component_update);
             } else {
                 warn!("read_update(): SKIPPED READ UPDATE!");
             }

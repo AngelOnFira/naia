@@ -1,4 +1,4 @@
-use std::{time::Duration, collections::{HashMap, VecDeque}};
+use std::{time::Duration, collections::{HashMap, HashSet, VecDeque}};
 
 use crate::{sequence_list::SequenceList, world::{
     entity::entity_message_sender::EntityMessageSender,
@@ -58,7 +58,7 @@ impl HostWorldManager {
         self.outgoing_commands.send_outgoing_command(command);
     }
 
-    pub fn host_has_entity(&self, global_entity: &GlobalEntity) -> bool {
+    pub(crate) fn host_has_entity(&self, global_entity: &GlobalEntity) -> bool {
         self.get_host_world().contains_key(global_entity)
     }
 
@@ -118,7 +118,7 @@ impl HostWorldManager {
         }
     }
 
-    pub fn record_command_written(
+    pub(crate) fn record_command_written(
         &mut self,
         packet_index: &PacketIndex,
         command_id: &CommandId,
@@ -171,11 +171,21 @@ impl HostWorldManager {
         self.delivered_commands.get_world()
     }
 
-    pub fn entity_release_authority(
-        &mut self,
-        global_entity: &GlobalEntity,
-    ) {
-        self.send_outgoing_command(EntityCommand::ReleaseAuthority(*global_entity));
+    pub(crate) fn get_updatable_world(&self) -> HashMap<GlobalEntity, HashSet<ComponentKind>> {
+        let mut output = HashMap::new();
+        for (global_entity, host_channel) in self.get_host_world() {
+            
+            let Some(remote_channel) = self.get_remote_world().get(global_entity) else {
+                continue;
+            };
+            let host_component_kinds = host_channel.component_kinds();
+            let joined_component_kinds = remote_channel.component_kinds_intersection(host_component_kinds);
+            if joined_component_kinds.is_empty() {
+                continue;
+            }
+            output.insert(*global_entity, joined_component_kinds);
+        }
+        output
     }
 
     pub(crate) fn process_received_commands(
