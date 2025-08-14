@@ -167,14 +167,12 @@ impl Connection {
         }
 
         // Receive World Events
-        let remote_events = self.base.world_manager.take_incoming_events();
         self.base.world_manager.process_world_events(
             global_entity_map,
             global_world_manager,
             &protocol.component_kinds,
             world,
             now,
-            remote_events,
         )
     }
 

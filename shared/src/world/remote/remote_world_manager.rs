@@ -100,10 +100,6 @@ impl RemoteWorldManager {
         self.receiver.buffer_message(message_id, message);
     }
 
-    pub fn take_incoming_events(&mut self) -> Vec<EntityMessage<RemoteEntity>> {
-        self.receiver.receive_messages()
-    }
-
     pub(crate) fn insert_received_component(
         &mut self,
         remote_entity: &RemoteEntity,
@@ -139,8 +135,9 @@ impl RemoteWorldManager {
         component_kinds: &ComponentKinds,
         world: &mut W,
         now: &Instant,
-        incoming_messages: Vec<EntityMessage<RemoteEntity>>,
     ) -> Vec<EntityEvent> {
+
+        let incoming_messages = self.receiver.receive_messages();
 
         self.process_updates(
             global_world_manager,

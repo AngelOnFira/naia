@@ -65,7 +65,7 @@ impl LocalWorldManager {
     pub(crate) fn global_entity_from_remote(&self, remote_entity: &RemoteEntity) -> Option<&GlobalEntity> {
         self.entity_map.global_entity_from_remote(remote_entity)
     }
-    
+
     pub fn has_both_host_and_remote_entity(&self, global_entity: &GlobalEntity) -> bool {
         self.entity_map.has_both_host_and_remote_entity(global_entity)
     }
@@ -73,7 +73,7 @@ impl LocalWorldManager {
     pub fn set_primary_to_host(&mut self, global_entity: &GlobalEntity) {
         self.entity_map.set_primary_to_host(global_entity);
     }
-    
+
     // Host-focused
 
     pub fn host_has_entity(&self, global_entity: &GlobalEntity) -> bool {
@@ -122,14 +122,11 @@ impl LocalWorldManager {
         self.host.remove_reserved_host_entity(global_entity)
     }
 
-    pub fn remote_despawn_entity(&mut self, global_entity: &GlobalEntity) {
-        self.host.remote_despawn_entity(global_entity);
-    }
-
     pub fn on_remote_despawn_entity(
         &mut self,
         global_entity: &GlobalEntity,
     ) {
+        self.host.remote_despawn_entity(global_entity);
         self.host.on_remote_despawn_entity(&mut self.entity_map, global_entity);
     }
 
@@ -176,10 +173,6 @@ impl LocalWorldManager {
         self.remote.insert_received_update(tick, global_entity, component_update);
     }
 
-    pub fn take_incoming_events(&mut self) -> Vec<EntityMessage<RemoteEntity>> {
-        self.remote.take_incoming_events()
-    }
-
     pub fn process_world_events<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
         &mut self,
         spawner: &mut dyn GlobalEntitySpawner<E>,
@@ -187,7 +180,6 @@ impl LocalWorldManager {
         component_kinds: &ComponentKinds,
         world: &mut W,
         now: &Instant,
-        incoming_messages: Vec<EntityMessage<RemoteEntity>>,
     ) -> Vec<EntityEvent> {
         self.remote.process_world_events(
             spawner,
@@ -196,7 +188,6 @@ impl LocalWorldManager {
             component_kinds,
             world,
             now,
-            incoming_messages,
         )
     }
 
@@ -287,6 +278,21 @@ impl LocalWorldManager {
         let entity_converter = self.entity_map.entity_converter();
         let entity_waitlist = self.remote.entity_waitlist_mut();
         (entity_converter, entity_waitlist)
+    }
+
+    pub fn track_hosts_redundant_remote_entity(
+        &mut self,
+        remote_entity: &RemoteEntity,
+        component_kinds: &Vec<ComponentKind>,
+    ) {
+        todo!();
+    }
+
+    pub fn untrack_hosts_redundant_remote_entity(
+        &mut self,
+        remote_entity: &RemoteEntity
+    ) {
+        todo!();
     }
 }
 

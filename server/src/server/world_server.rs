@@ -887,7 +887,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 .component_kinds(global_entity)
                 .unwrap();
             connection
-                .base
+                .base.world_manager
                 .track_hosts_redundant_remote_entity(remote_entity, &component_kinds);
         }
     }
@@ -907,7 +907,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             .set_primary_to_host(global_entity);
         connection
             .base
-            .untrack_hosts_redundant_remote_entity(&remote_entity);
+            .world_manager.untrack_hosts_redundant_remote_entity(&remote_entity);
     }
 
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
@@ -2195,10 +2195,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         // remove from host connection
                         let user = self.users.get(user_key).unwrap();
                         let connection = self.user_connections.get_mut(&user.address()).unwrap();
-                        connection
-                            .base
-                            .world_manager
-                            .remote_despawn_entity(&global_entity);
                         connection.base.world_manager.on_remote_despawn_entity(
                             &global_entity
                         );

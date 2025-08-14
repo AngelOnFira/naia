@@ -13,7 +13,7 @@ use crate::{messages::{
         host_world_writer::HostWorldWriter,
     },
     remote::remote_world_reader::RemoteWorldReader,
-}, AckManager, ComponentKind, ComponentKinds, ConnectionConfig, EntityAndGlobalEntityConverter, EntityCommand, GlobalEntity, GlobalEntitySpawner, MessageKinds, PacketNotifiable, PacketType, RemoteEntity, StandardHeader, Tick, Timer, WorldRefType};
+}, AckManager, ComponentKind, ComponentKinds, ConnectionConfig, EntityAndGlobalEntityConverter, EntityCommand, GlobalEntity, GlobalEntitySpawner, MessageKinds, PacketNotifiable, PacketType, StandardHeader, Tick, Timer, WorldRefType};
 
 /// Represents a connection to a remote host, and provides functionality to
 /// manage the connection and the communications to it
@@ -99,8 +99,7 @@ impl BaseConnection {
 
     pub fn collect_messages(&mut self, now: &Instant, rtt_millis: &f32) {
         self.world_manager.collect_messages(now, rtt_millis);
-        self.message_manager
-            .collect_outgoing_messages(now, rtt_millis);
+        self.message_manager.collect_outgoing_messages(now, rtt_millis);
     }
 
     fn write_messages(
@@ -203,20 +202,5 @@ impl BaseConnection {
         }
 
         Ok(())
-    }
-
-    pub fn track_hosts_redundant_remote_entity(
-        &mut self,
-        remote_entity: &RemoteEntity,
-        component_kinds: &Vec<ComponentKind>,
-    ) {
-        todo!();
-    }
-
-    pub fn untrack_hosts_redundant_remote_entity(
-        &mut self,
-        remote_entity: &RemoteEntity
-    ) {
-        todo!();
     }
 }

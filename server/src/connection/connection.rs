@@ -150,14 +150,12 @@ impl Connection {
 
         // Receive World Events
         if client_authoritative_entities {
-            let remote_events = self.base.world_manager.take_incoming_events();
             return self.base.world_manager.process_world_events(
                 global_entity_map,
                 global_world_manager,
                 component_kinds,
                 world,
                 now,
-                remote_events,
             );
         } else {
             return Vec::new();

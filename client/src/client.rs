@@ -1754,7 +1754,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             .component_kinds(&global_entity)
             .unwrap();
         connection
-            .base
+            .base.world_manager
             .track_hosts_redundant_remote_entity(&remote_entity, &component_kinds);
     }
 }
