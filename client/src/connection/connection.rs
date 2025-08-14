@@ -196,11 +196,9 @@ impl Connection {
             &self.time_manager.client_sending_tick,
             &self.time_manager.server_receivable_tick,
         );
-        let mut host_world_events = self.base.world_manager.take_outgoing_events(
+        let (mut host_world_events, mut update_events) = self.base.world_manager.take_outgoing_events(
             now,
             &rtt_millis,
-        );
-        let mut update_events = self.base.take_update_events(
             world,
             converter,
             global_world_manager,
@@ -328,6 +326,6 @@ impl Connection {
     }
 
     pub fn process_received_commands(&mut self) {
-        self.base.process_received_commands();
+        self.base.world_manager.process_received_commands();
     }
 }

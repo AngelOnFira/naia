@@ -1502,7 +1502,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             panic!("Client is already disconnected!");
         };
 
-        let remote_entities = connection.base.remote_entities();
+        let remote_entities = connection.base.world_manager.remote_entities();
         let entity_events = SharedGlobalWorldManager::despawn_all_entities(
             world,
             &self.global_entity_map,

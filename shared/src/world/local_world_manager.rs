@@ -54,7 +54,7 @@ impl LocalWorldManager {
         self.entity_map.contains_remote_entity(remote_entity)
     }
 
-    pub(crate) fn remote_entities(&self) -> Vec<GlobalEntity> {
+    pub fn remote_entities(&self) -> Vec<GlobalEntity> {
         self.entity_map.remote_entities()
     }
 
@@ -144,14 +144,6 @@ impl LocalWorldManager {
         message: EntityMessage<GlobalEntity>,
     ) {
         self.host.record_command_written(packet_index, command_id, message);
-    }
-
-    pub fn take_outgoing_events(
-        &mut self,
-        now: &Instant,
-        rtt_millis: &f32,
-    ) -> VecDeque<(CommandId, EntityCommand)> {
-        self.host.take_outgoing_events(now, rtt_millis)
     }
 
     pub fn send_outgoing_command(
@@ -246,6 +238,19 @@ impl LocalWorldManager {
             .handle_dropped_command_packets(now);
         self.updater
             .handle_dropped_update_packets(now, rtt_millis);
+    }
+
+    pub fn take_outgoing_events<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
+        &mut self,
+        now: &Instant,
+        rtt_millis: &f32,
+        world: &W,
+        converter: &dyn EntityAndGlobalEntityConverter<E>,
+        global_world_manager: &dyn GlobalWorldManagerType,
+    ) -> (VecDeque<(CommandId, EntityCommand)>, HashMap<GlobalEntity, HashSet<ComponentKind>>) {
+        let host_world_events = self.host.take_outgoing_events(now, rtt_millis);
+        let update_events = self.take_update_events(world, converter, global_world_manager);
+        (host_world_events, update_events)
     }
 
     pub fn process_received_commands(&mut self) {

@@ -1745,7 +1745,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             panic!("Attempting to despawn entities on a nonexistent connection");
         };
 
-        let remote_global_entities = connection.base.remote_entities();
+        let remote_global_entities = connection.base.world_manager.remote_entities();
         let entity_events = SharedGlobalWorldManager::despawn_all_entities(
             world,
             &self.global_entity_map,

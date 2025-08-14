@@ -205,23 +205,6 @@ impl BaseConnection {
         Ok(())
     }
 
-    pub fn remote_entities(&self) -> Vec<GlobalEntity> {
-        self.world_manager.remote_entities()
-    }
-
-    pub fn process_received_commands(&mut self) {
-        self.world_manager.process_received_commands();
-    }
-
-    pub fn take_update_events<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
-        &mut self,
-        world: &W,
-        converter: &dyn EntityAndGlobalEntityConverter<E>,
-        global_world_manager: &dyn GlobalWorldManagerType,
-    ) -> HashMap<GlobalEntity, HashSet<ComponentKind>> {
-        self.world_manager.take_update_events(world, converter, global_world_manager)
-    }
-
     pub fn track_hosts_redundant_remote_entity(
         &mut self,
         remote_entity: &RemoteEntity,
