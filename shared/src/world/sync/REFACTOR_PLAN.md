@@ -244,7 +244,7 @@ pub struct EntityMessageReceiver<E: Copy + Hash + Eq> {
 
 ---
 
-## 17 · Session Progress Snapshot — 2025-07-21
+## 17 · Session Progress Snapshot — 2025-01-28
 
 ### 17.1 Current Code State
 
@@ -254,51 +254,92 @@ pub struct EntityMessageReceiver<E: Copy + Hash + Eq> {
 * No `path.rs`, `stream.rs`, or `templates/` yet – only placeholders in the plan.
 * All unit tests in `sync/tests/engine.rs` **currently fail** (they compile though)
 
-### 17.2 Insights from the Tests
+### 17.2 Outstanding TODOs Analysis
 
-The invariants encoded in `tests/engine.rs` map directly to the requirements:
+**Comprehensive TODO audit completed** - discovered 12 scattered TODOs across the codebase that must be addressed as part of the refactor:
 
-1. `engine_basic` – Happy-path causal ordering on a single entity.
-2. `engine_invalidate_spawn_event` – Despawn arriving before Spawn must drop both messages for that path.
-3. `engine_invalidate_insert_event` – Insert that precedes its Spawn must be suppressed.
-4. `*_channels_do_not_block` – Streams are isolated by `Path` (entity vs component).
-5. `wrap_ordering_simple` – Pre-wrap high seq (≥65 534) followed by post-wrap 0 must deliver in causal order.
-6. `backlog_window_cap` – Enforces `max_in_flight` circular buffer drop‐policy.
-7. `guard_band_flush` – Near-wrap purge exactly as spec §5.5.
-8. `generation_gate_reuse` – Spawn/Despawn lifetime gate prevents old epoch packets.
-9. `backlog_drains_on_prereq_arrival` – Buffered events are released when prerequisite Spawn arrives.
-10. `component_remove_before_insert` – Remove that arrives before first Insert is discarded.
-11. `empty_drain_safe` – `drain()` must be idempotent & panic-free when empty.
+**Entity Channel Management (5 TODOs) - HIGHEST PRIORITY**
+* `shared/src/world/entity/entity_message_sender.rs:52-84` - Channel open/close operations
+  * ✅ Infrastructure layer - foundational for other systems
+  * ✅ Self-contained implementation scope
+  * ✅ Clear interface already defined in `EntityChannelSender`
 
-Use these as acceptance criteria while implementing each subsystem.
+**World Manager Operations (2 TODOs) - SECOND PRIORITY** 
+* `shared/src/world/local_world_manager.rs:288,295` - Redundant remote entity tracking
+  * Used during authority delegation handover process
+  * Pattern established in existing `add_redundant_remote_entity_to_host` function
 
-### 17.3 Minimal Implementation Roadmap (immediately actionable)
+**Message Processing (1 TODO) - THIRD PRIORITY**
+* `shared/src/world/sync/receiver_engine.rs:71` - Authority delegation message engine
+  * Requires separate engine for delegation response handling
+  * Builds on channel management infrastructure
 
-P ≈ 1 day:
+**Entity Tracking and Migration (4 TODOs) - FINAL PRIORITY**
+* `client/src/client.rs:1168,1185` - Client-side entity migration tracking
+* `server/src/server/world_server.rs:1578,2070` - Server-side entity migration tracking
+  * Complex integration points affecting authority delegation
+  * Depends on all previous implementations
 
-1. Implement `Stream` (`stream.rs`):  
-    ```rust
-    struct Stream {
-        last_seq: u16,
-        spawn_seq: u16,
-        backlog: VecDeque<(u16, EntityMessage<RemoteEntity>)>,
-        near_wrap: bool,
+### 17.3 Revised Implementation Roadmap (Priority-Based)
+
+**Phase 1: Entity Channel Management (Est: 1-2 days)**
+```rust
+// Implement in EntityChannelSender & SenderEngine
+impl EntityChannelSender {
+    pub fn open_entity_channel(&mut self) -> bool { /* track channel state */ }
+    pub fn close_entity_channel(&mut self) -> bool { /* cleanup state */ }
+    pub fn open_component_channel(&mut self, kind: ComponentKind) -> bool { /* ... */ }
+    pub fn close_component_channel(&mut self, kind: ComponentKind) -> bool { /* ... */ }
+}
+```
+
+**Phase 2: World Manager Operations (Est: 1 day)**
+```rust
+// Implement redundant entity tracking for authority handover
+impl LocalWorldManager {
+    pub fn track_hosts_redundant_remote_entity(&mut self, remote_entity: &RemoteEntity, component_kinds: &Vec<ComponentKind>) {
+        self.remote.track_redundant_entity(remote_entity, component_kinds);
     }
-    ```
-    Provide `push()` → `Option<EntityMessage>` and `drain_backlog()`.
-2. Flesh out `Engine::push`:
-    * Compute `Path` (enum) from message – **no separate `PathKey` needed**; just `#[derive(Hash)]` on `Path` and use it as the `HashMap` key.
-    * Use helpers already available in `wrapping_number.rs` for half-range comparisons (no new `ahead/not_ahead` helpers).
-    * Route to stream, apply §5 algorithm, push delivered events to `outgoing_events`.
-3. Update `Engine::drain` to call `drain_backlog` on all streams, then `mem::take`.
- 
- Implement strictly enough to satisfy `tests/engine.rs`; templates are not required yet because tests deal with raw `EntityMessage`s.
+    pub fn untrack_hosts_redundant_remote_entity(&mut self, remote_entity: &RemoteEntity) {
+        self.remote.untrack_redundant_entity(remote_entity);
+    }
+}
+```
 
-### 17.4 Next Steps (after tests pass)
+**Phase 3: Message Processing (Est: 1 day)**
+```rust
+// Extract authority delegation messages to separate engine
+if matches!(msg.get_type(), EntityMessageType::EnableDelegationResponse | /*...*/) {
+    self.auth_engine.accept_message(id, msg);
+    return;
+}
+```
 
-* Integrate `context` & template callbacks.  
-* Write collision test for `PathKey`.
-* Expand fuzz harness.
+**Phase 4: Entity Migration Integration (Est: 2-3 days)**
+* Client/server authority tracking integration
+* Complete migration handover logic
+* End-to-end authority delegation testing
+
+**Parallel Track: Core Sync Engine (Independent)**
+Following original roadmap from §17.3 - can proceed independently:
+1. Implement `Stream` (`stream.rs`)
+2. Flesh out `Engine::push` with path routing
+3. Satisfy `tests/engine.rs` test suite
+
+### 17.4 Next Immediate Steps
+
+1. **Start with Phase 1** - Entity Channel Management implementation provides immediate foundation
+2. **Validate with existing patterns** - Use `EntityChannelReceiver` as implementation reference
+3. **Test incrementally** - Each phase can be tested independently before proceeding
+4. **Coordinate with sync engine** - Channel management will integrate with new sync system
+
+### 17.5 Risk Assessment
+
+* **Low Risk**: Entity channel management (self-contained)
+* **Medium Risk**: World manager operations (clear patterns exist)  
+* **High Risk**: Entity migration TODOs (complex integration, affects core authority flow)
+
+**Recommendation**: Complete Phases 1-3 before tackling migration TODOs to establish stable foundation.
 
 ---
 
