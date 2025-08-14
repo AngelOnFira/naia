@@ -9,7 +9,7 @@ use log::info;
 use crate::{
     messages::channels::senders::indexed_message_writer::IndexedMessageWriter,
     world::{
-        world_manager::WorldManager,
+        local_world_manager::LocalWorldManager,
         host::host_world_manager::CommandId,
         entity::entity_converters::GlobalWorldManagerType,
     },
@@ -38,7 +38,7 @@ impl HostWorldWriter {
         world: &W,
         entity_converter: &dyn EntityAndGlobalEntityConverter<E>,
         global_world_manager: &dyn GlobalWorldManagerType,
-        world_manager: &mut WorldManager,
+        world_manager: &mut LocalWorldManager,
         has_written: &mut bool,
         world_events: &mut VecDeque<(CommandId, EntityCommand)>,
         update_events: &mut HashMap<GlobalEntity, HashSet<ComponentKind>>,
@@ -80,7 +80,7 @@ impl HostWorldWriter {
         world: &W,
         entity_converter: &dyn EntityAndGlobalEntityConverter<E>,
         global_world_manager: &dyn GlobalWorldManagerType,
-        world_manager: &mut WorldManager,
+        world_manager: &mut LocalWorldManager,
         has_written: &mut bool,
         next_send_commands: &mut VecDeque<(CommandId, EntityCommand)>,
     ) {
@@ -162,7 +162,7 @@ impl HostWorldWriter {
         world: &W,
         entity_converter: &dyn EntityAndGlobalEntityConverter<E>,
         global_world_manager: &dyn GlobalWorldManagerType,
-        world_manager: &mut WorldManager,
+        world_manager: &mut LocalWorldManager,
         packet_index: &PacketIndex,
         writer: &mut dyn BitWrite,
         last_written_id: &mut Option<CommandId>,
@@ -535,7 +535,7 @@ impl HostWorldWriter {
         world: &W,
         converter: &dyn EntityAndGlobalEntityConverter<E>,
         global_world_manager: &dyn GlobalWorldManagerType,
-        world_manager: &mut WorldManager,
+        world_manager: &mut LocalWorldManager,
         has_written: &mut bool,
         next_send_updates: &mut HashMap<GlobalEntity, HashSet<ComponentKind>>,
     ) {
@@ -601,7 +601,7 @@ impl HostWorldWriter {
         now: &Instant,
         world: &W,
         global_world_manager: &dyn GlobalWorldManagerType,
-        world_manager: &mut WorldManager,
+        world_manager: &mut LocalWorldManager,
         packet_index: &PacketIndex,
         writer: &mut BitWriter,
         global_entity: &GlobalEntity,

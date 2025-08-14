@@ -11,14 +11,14 @@ use crate::{types::{HostType, PacketIndex}, world::{
     remote::entity_waitlist::EntityWaitlist,
 }, ComponentKind, ComponentKinds, ComponentUpdate, DiffMask, EntityAndGlobalEntityConverter, EntityCommand, EntityConverterMut, EntityEvent, EntityMessage, GlobalEntity, GlobalEntitySpawner, HostEntity, InScopeEntities, LocalEntityAndGlobalEntityConverter, LocalEntityMap, MessageIndex, PacketNotifiable, RemoteEntity, RemoteWorldManager, Replicate, Tick, WorldMutType, WorldRefType};
 
-pub struct WorldManager {
+pub struct LocalWorldManager {
     entity_map: LocalEntityMap,
     host: HostWorldManager,
     remote: RemoteWorldManager,
     updater: EntityUpdateManager,
 }
 
-impl WorldManager {
+impl LocalWorldManager {
 
     pub fn entity_waitlist_mut(&mut self) -> &mut EntityWaitlist {
         self.remote.entity_waitlist_mut()
@@ -240,7 +240,7 @@ impl WorldManager {
     }
 }
 
-impl WorldManager {
+impl LocalWorldManager {
     pub fn new(
         address: &Option<SocketAddr>,
         host_type: HostType,
@@ -277,7 +277,7 @@ impl WorldManager {
     }
 }
 
-impl PacketNotifiable for WorldManager {
+impl PacketNotifiable for LocalWorldManager {
     fn notify_packet_delivered(&mut self, packet_index: PacketIndex) {
         self.host.notify_packet_delivered(packet_index);
         self.updater.notify_packet_delivered(packet_index);

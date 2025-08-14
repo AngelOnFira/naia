@@ -2,8 +2,8 @@ use log::warn;
 
 use crate::{
     messages::channels::receivers::indexed_message_reader::IndexedMessageReader,
-    world::{world_manager::WorldManager, entity::local_entity::RemoteEntity}, 
-    BitReader, ComponentKind, ComponentKinds, EntityMessage, EntityMessageType, EntityAuthStatus, 
+    world::{local_world_manager::LocalWorldManager, entity::local_entity::RemoteEntity},
+    BitReader, ComponentKind, ComponentKinds, EntityMessage, EntityMessageType, EntityAuthStatus,
     HostEntity, MessageIndex, Serde, SerdeErr, Tick, OwnedLocalEntity
 };
 
@@ -26,7 +26,7 @@ impl RemoteWorldReader {
     }
 
     pub fn read_world_events(
-        world_manager: &mut WorldManager,
+        world_manager: &mut LocalWorldManager,
         component_kinds: &ComponentKinds,
         tick: &Tick,
         reader: &mut BitReader,
@@ -46,7 +46,7 @@ impl RemoteWorldReader {
 
     /// Read incoming Entity messages.
     fn read_messages(
-        world_manager: &mut WorldManager,
+        world_manager: &mut LocalWorldManager,
         component_kinds: &ComponentKinds,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
@@ -71,7 +71,7 @@ impl RemoteWorldReader {
     /// We can use a UnorderedReliableReceiver buffer because the messages have already been
     /// ordered by the client's jitter buffer
     fn read_message(
-        world_manager: &mut WorldManager,
+        world_manager: &mut LocalWorldManager,
         component_kinds: &ComponentKinds,
         reader: &mut BitReader,
         last_read_id: &mut Option<MessageIndex>,
@@ -214,7 +214,7 @@ impl RemoteWorldReader {
 
     /// Read component updates from raw bits
     fn read_updates(
-        world_manager: &mut WorldManager,
+        world_manager: &mut LocalWorldManager,
         component_kinds: &ComponentKinds,
         tick: &Tick,
         reader: &mut BitReader,
@@ -242,7 +242,7 @@ impl RemoteWorldReader {
 
     /// Read component updates from raw bits for a given entity
     fn read_update(
-        world_manager: &mut WorldManager,
+        world_manager: &mut LocalWorldManager,
         component_kinds: &ComponentKinds,
         tick: &Tick,
         reader: &mut BitReader,

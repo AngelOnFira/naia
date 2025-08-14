@@ -6,7 +6,7 @@ use naia_socket_shared::Instant;
 use crate::{messages::{
     channels::channel_kinds::ChannelKinds, message_manager::MessageManager
 }, types::{HostType, PacketIndex}, world::{
-    world_manager::WorldManager,
+    local_world_manager::LocalWorldManager,
     entity::entity_converters::GlobalWorldManagerType,
     host::{
         host_world_manager::CommandId,
@@ -19,7 +19,7 @@ use crate::{messages::{
 /// manage the connection and the communications to it
 pub struct BaseConnection {
     pub message_manager: MessageManager,
-    pub world_manager: WorldManager,
+    pub world_manager: LocalWorldManager,
     ack_manager: AckManager,
     heartbeat_timer: Timer,
 }
@@ -36,7 +36,7 @@ impl BaseConnection {
     ) -> Self {
         Self {
             message_manager: MessageManager::new(host_type, channel_kinds),
-            world_manager: WorldManager::new(address, host_type, user_key, global_world_manager),
+            world_manager: LocalWorldManager::new(address, host_type, user_key, global_world_manager),
             ack_manager: AckManager::new(),
             heartbeat_timer: Timer::new(connection_config.heartbeat_interval),
         }
