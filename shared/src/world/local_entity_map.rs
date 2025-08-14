@@ -1,8 +1,15 @@
-use std::collections::HashMap;
+use std::{hash::Hash, collections::HashMap};
 
-use crate::{world::{
-    local_entity_record::LocalEntityRecord,
-    entity::local_entity::{HostEntity, OwnedLocalEntity, RemoteEntity}}, EntityDoesNotExistError, GlobalEntity, LocalEntityAndGlobalEntityConverter};
+use crate::{
+    world::{
+        local_entity_record::LocalEntityRecord,
+        entity::{
+            in_scope_entities::GlobalEntityReserver,
+            local_entity::{HostEntity, OwnedLocalEntity, RemoteEntity}
+        }
+    },
+    EntityDoesNotExistError, GlobalEntity, GlobalEntitySpawner, GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter
+};
 
 pub struct LocalEntityMap {
     global_to_local: HashMap<GlobalEntity, LocalEntityRecord>,
@@ -141,6 +148,15 @@ impl LocalEntityMap {
         record_opt
     }
 
+    pub(crate) fn remove_by_remote_entity(&mut self, remote_entity: &RemoteEntity) -> GlobalEntity {
+        let global_entity = self.remote_to_global.remove(remote_entity);
+        let Some(global_entity) = global_entity else {
+            panic!("Attempting to remove remote entity which does not exist: {:?}", remote_entity);
+        };
+        self.remove_by_global_entity(&global_entity);
+        global_entity
+    }
+
     pub fn set_primary_to_remote(
         &mut self,
         global_entity: &GlobalEntity,
@@ -189,5 +205,24 @@ impl LocalEntityMap {
 
     pub fn iter(&self) -> impl Iterator<Item = (&GlobalEntity, &LocalEntityRecord)> {
         self.global_to_local.iter()
+    }
+
+    pub(crate) fn remote_entities(&self) -> Vec<GlobalEntity> {
+        self.iter()
+            .filter(|(_, record)| record.is_only_remote())
+            .map(|(global_entity, _)| *global_entity)
+            .collect::<Vec<GlobalEntity>>()
+    }
+
+    pub fn entity_converter(&self) -> &dyn LocalEntityAndGlobalEntityConverter {
+        self
+    }
+
+    pub fn global_entity_reserver<'a, 'b, 'c, E: Copy + Eq + Hash + Send + Sync>(
+        &'c mut self,
+        global_entity_manager: &'a dyn GlobalWorldManagerType,
+        global_entity_spawner: &'b mut dyn GlobalEntitySpawner<E>
+    ) -> GlobalEntityReserver<'a, 'b, 'c, E> {
+        GlobalEntityReserver::new(global_entity_manager, global_entity_spawner, self)
     }
 }

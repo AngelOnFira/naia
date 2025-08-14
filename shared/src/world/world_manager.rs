@@ -2,21 +2,18 @@ use std::net::SocketAddr;
 
 use naia_socket_shared::Instant;
 
-use crate::{
-    types::{HostType, PacketIndex},
-    world::{
-        entity::entity_converters::GlobalWorldManagerType,
-        host::{
-            host_world_manager::HostWorldManager,
-            entity_update_manager::EntityUpdateManager
-        },
-        local_world_manager::LocalWorldManager,
+use crate::{types::{HostType, PacketIndex}, world::{
+    entity::entity_converters::GlobalWorldManagerType,
+    host::{
+        host_world_manager::HostWorldManager,
+        entity_update_manager::EntityUpdateManager
     },
-    EntityConverterMut, LocalEntityAndGlobalEntityConverter, PacketNotifiable, RemoteWorldManager
-};
+    host_entity_generator::HostEntityGenerator,
+}, EntityConverterMut, LocalEntityAndGlobalEntityConverter, LocalEntityMap, PacketNotifiable, RemoteWorldManager};
 
 pub struct WorldManager {
-    pub local: LocalWorldManager,
+    pub entity_map: LocalEntityMap,
+    pub local: HostEntityGenerator,
     pub host: HostWorldManager,
     pub remote: RemoteWorldManager,
     pub updater: EntityUpdateManager,
@@ -30,7 +27,8 @@ impl WorldManager {
         global_world_manager: &dyn GlobalWorldManagerType,
     ) -> Self {
         Self {
-            local: LocalWorldManager::new(user_key),
+            entity_map: LocalEntityMap::new(),
+            local: HostEntityGenerator::new(user_key),
             host: HostWorldManager::new(host_type),
             remote: RemoteWorldManager::new(host_type),
             updater: EntityUpdateManager::new(address, global_world_manager),
@@ -38,14 +36,14 @@ impl WorldManager {
     }
 
     pub(crate) fn entity_converter(&self) -> &dyn LocalEntityAndGlobalEntityConverter {
-        self.local.entity_converter()
+        self.entity_map.entity_converter()
     }
 
     pub(crate) fn entity_converter_mut<'a, 'b>(
         &'b mut self,
         global_world_manager: &'a dyn GlobalWorldManagerType
     ) -> EntityConverterMut<'a, 'b> {
-        EntityConverterMut::new(global_world_manager, &mut self.local)
+        EntityConverterMut::new(global_world_manager, &mut self.entity_map, &mut self.local)
     }
 
     pub fn collect_messages(&mut self, now: &Instant, rtt_millis: &f32) {

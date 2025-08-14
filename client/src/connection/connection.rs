@@ -140,7 +140,7 @@ impl Connection {
         let messages = self.base.message_manager.receive_messages(
             &protocol.message_kinds,
             now,
-            self.base.world_manager.local.entity_converter(),
+            self.base.world_manager.entity_map.entity_converter(),
             self.base.world_manager.remote.entity_waitlist_mut(),
         );
         for (channel_kind, messages) in messages {
@@ -171,7 +171,7 @@ impl Connection {
         self.base.world_manager.remote.process_world_events(
             global_entity_map,
             global_world_manager,
-            &mut self.base.world_manager.local,
+            &mut self.base.world_manager.entity_map,
             &protocol.component_kinds,
             world,
             now,
@@ -301,6 +301,7 @@ impl Connection {
         self.tick_buffer.write_messages(
             &protocol,
             global_world_manager,
+            &mut self.base.world_manager.entity_map,
             &mut self.base.world_manager.local,
             &mut writer,
             next_packet_index,

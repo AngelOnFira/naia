@@ -136,7 +136,7 @@ pub use world::{
         host_world_manager::HostWorldManager,
         mut_channel::{MutChannelType, MutReceiver},
     },
-    local_world_manager::LocalWorldManager,
+    host_entity_generator::HostEntityGenerator,
     remote::{
         entity_event::EntityEvent,
         remote_world_manager::RemoteWorldManager,

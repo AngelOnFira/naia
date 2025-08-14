@@ -9,14 +9,13 @@ use naia_socket_shared::Instant;
 
 use crate::{world::{
     entity::{local_entity::RemoteEntity, in_scope_entities::{InScopeEntities, InScopeEntitiesMut}},
-    local_world_manager::LocalWorldManager,
     remote::{
         remote_world_waitlist::RemoteWorldWaitlist,
         entity_event::EntityEvent,
         entity_waitlist::EntityWaitlist,
     },
     sync::{EntityChannelReceiver, EntityChannelSender, SenderEngine},
-}, ComponentKind, ComponentKinds, ComponentUpdate, EntityMessage, EntityAndGlobalEntityConverter, GlobalEntity, GlobalEntitySpawner, GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter, Replicate, Tick, WorldMutType, EntityMessageType, OwnedLocalEntity, HostEntity, EntityMessageReceiver, HostType, MessageIndex};
+}, ComponentKind, ComponentKinds, ComponentUpdate, EntityMessage, EntityAndGlobalEntityConverter, GlobalEntity, GlobalEntitySpawner, GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter, Replicate, Tick, WorldMutType, EntityMessageType, OwnedLocalEntity, HostEntity, EntityMessageReceiver, HostType, MessageIndex, LocalEntityMap};
 
 pub struct RemoteWorldManager {
     
@@ -78,20 +77,20 @@ impl RemoteWorldManager {
 
     pub(crate) fn insert_received_component(
         &mut self,
-        remote_entity: RemoteEntity,
-        component_kind: ComponentKind,
+        remote_entity: &RemoteEntity,
+        component_kind: &ComponentKind,
         component: Box<dyn Replicate>,
     ) {
-        self.incoming_components.insert((remote_entity, component_kind), component);
+        self.incoming_components.insert((*remote_entity, *component_kind), component);
     }
 
     pub(crate) fn insert_received_update(
         &mut self,
         tick: Tick,
-        global_entity: GlobalEntity,
+        global_entity: &GlobalEntity,
         component_update: ComponentUpdate
     ) {
-        self.incoming_updates.push((tick, global_entity, component_update));
+        self.incoming_updates.push((tick, *global_entity, component_update));
     }
 
     pub fn on_entity_channel_opened(
@@ -107,7 +106,7 @@ impl RemoteWorldManager {
         &mut self,
         spawner: &mut dyn GlobalEntitySpawner<E>,
         global_world_manager: &dyn GlobalWorldManagerType,
-        local_world_manager: &mut LocalWorldManager,
+        local_entity_map: &mut LocalEntityMap,
         component_kinds: &ComponentKinds,
         world: &mut W,
         now: &Instant,
@@ -116,7 +115,7 @@ impl RemoteWorldManager {
 
         self.process_updates(
             global_world_manager,
-            local_world_manager.entity_converter(),
+            local_entity_map.entity_converter(),
             spawner.to_converter(),
             component_kinds,
             world,
@@ -125,7 +124,7 @@ impl RemoteWorldManager {
         self.process_incoming_messages(
             spawner,
             global_world_manager,
-            local_world_manager,
+            local_entity_map,
             world,
             now,
             incoming_messages,
@@ -142,7 +141,7 @@ impl RemoteWorldManager {
         &mut self,
         spawner: &mut dyn GlobalEntitySpawner<E>,
         global_world_manager: &dyn GlobalWorldManagerType,
-        local_world_manager: &mut LocalWorldManager,
+        local_entity_map: &mut LocalEntityMap,
         world: &mut W,
         now: &Instant,
         incoming_messages: Vec<EntityMessage<RemoteEntity>>,
@@ -150,13 +149,13 @@ impl RemoteWorldManager {
         self.process_ready_messages(
             spawner,
             global_world_manager,
-            local_world_manager,
+            local_entity_map,
             world,
             incoming_messages,
         );
         let world_converter = spawner.to_converter();
         self.process_waitlist_messages(
-            local_world_manager.entity_converter(),
+            local_entity_map.entity_converter(),
             world_converter,
             world,
             now,
@@ -169,7 +168,7 @@ impl RemoteWorldManager {
         &mut self,
         spawner: &mut dyn GlobalEntitySpawner<E>,
         global_world_manager: &dyn GlobalWorldManagerType,
-        local_world_manager: &mut LocalWorldManager,
+        local_entity_map: &mut LocalEntityMap,
         world: &mut W,
         incoming_messages: Vec<EntityMessage<RemoteEntity>>,
     ) {
@@ -181,17 +180,17 @@ impl RemoteWorldManager {
                     // set up entity
                     let world_entity = world.spawn_entity();
                     let global_entity = spawner.spawn(world_entity, Some(remote_entity));
-                    if local_world_manager.has_remote_entity(&remote_entity) {
+                    if local_entity_map.contains_remote_entity(&remote_entity) {
                         // mapped remote entity already when reserving global entity
                     } else {
-                        local_world_manager.insert_remote_entity(&global_entity, remote_entity);
+                        local_entity_map.insert_with_remote_entity(global_entity, remote_entity);
                     }
 
                     self.incoming_events
                         .push(EntityEvent::Spawn(global_entity));
                 }
                 EntityMessage::Despawn(remote_entity) => {
-                    let global_entity = local_world_manager.remove_by_remote_entity(&remote_entity);
+                    let global_entity = local_entity_map.remove_by_remote_entity(&remote_entity);
                     let world_entity = spawner.global_entity_to_entity(&global_entity).unwrap();
 
                     // Generate event for each component, handing references off just in
@@ -200,7 +199,7 @@ impl RemoteWorldManager {
                         global_world_manager.component_kinds(&global_entity)
                     {
                         for component_kind in component_kinds {
-                            self.process_remove(world, global_entity, world_entity, component_kind);
+                            self.process_remove(world, &global_entity, &world_entity, &component_kind);
                         }
                     }
 
@@ -214,18 +213,17 @@ impl RemoteWorldManager {
                         .remove(&(remote_entity, component_kind))
                         .unwrap();
 
-                    if local_world_manager.has_remote_entity(&remote_entity) {
-                        let global_entity =
-                            local_world_manager.global_entity_from_remote(&remote_entity);
+                    if local_entity_map.contains_remote_entity(&remote_entity) {
+                        let global_entity = *local_entity_map.global_entity_from_remote(&remote_entity).unwrap();
                         let world_entity = spawner.global_entity_to_entity(&global_entity).unwrap();
 
-                        let mut reserver = local_world_manager.global_entity_reserver(global_world_manager, spawner);
+                        let mut reserver = local_entity_map.global_entity_reserver(global_world_manager, spawner);
                         
                         self.process_insert(
                             world,
                             &mut reserver,
-                            global_entity,
-                            world_entity,
+                            &global_entity,
+                            &world_entity,
                             component,
                             &component_kind,
                         );
@@ -235,10 +233,9 @@ impl RemoteWorldManager {
                     }
                 }
                 EntityMessage::RemoveComponent(remote_entity, component_kind) => {
-                    let global_entity =
-                        local_world_manager.global_entity_from_remote(&remote_entity);
-                    let world_entity = spawner.global_entity_to_entity(&global_entity).unwrap();
-                    self.process_remove(world, global_entity, world_entity, component_kind);
+                    let global_entity = local_entity_map.global_entity_from_remote(&remote_entity).unwrap();
+                    let world_entity = spawner.global_entity_to_entity(global_entity).unwrap();
+                    self.process_remove(world, global_entity, &world_entity, &component_kind);
                 }
                 EntityMessage::Noop => {
                     // do nothing
@@ -250,7 +247,7 @@ impl RemoteWorldManager {
                         EntityMessageType::MigrateResponse |
                         EntityMessageType::RequestAuthority => {
                             let msg = msg.to_host_message();
-                            msg.to_event(local_world_manager)
+                            msg.to_event(local_entity_map)
                         }
                         EntityMessageType::ReleaseAuthority => {
                             let EntityMessage::ReleaseAuthority(owned_entity) = msg else {
@@ -259,17 +256,17 @@ impl RemoteWorldManager {
                             match owned_entity {
                                 OwnedLocalEntity::Remote(remote_entity) => {
                                     let remote_entity = RemoteEntity::new(remote_entity);
-                                    let global_entity = local_world_manager.global_entity_from_remote(&remote_entity);
-                                    EntityEvent::ReleaseAuthority(global_entity)
+                                    let global_entity = local_entity_map.global_entity_from_remote(&remote_entity).unwrap();
+                                    EntityEvent::ReleaseAuthority(*global_entity)
                                 }
                                 OwnedLocalEntity::Host(host_entity) => {
                                     let host_entity = HostEntity::new(host_entity);
-                                    let global_entity = local_world_manager.global_entity_from_host(&host_entity);
-                                    EntityEvent::ReleaseAuthority(global_entity)
+                                    let global_entity = local_entity_map.global_entity_from_host(&host_entity).unwrap();
+                                    EntityEvent::ReleaseAuthority(*global_entity)
                                 }
                             }
                         }
-                        _ => msg.to_event(local_world_manager)
+                        _ => msg.to_event(local_entity_map)
                     };
                     self.incoming_events.push(event);
                 }
@@ -281,8 +278,8 @@ impl RemoteWorldManager {
         &mut self,
         world: &mut W,
         converter: &mut dyn InScopeEntitiesMut,
-        global_entity: GlobalEntity,
-        world_entity: E,
+        global_entity: &GlobalEntity,
+        world_entity: &E,
         component: Box<dyn Replicate>,
         component_kind: &ComponentKind,
     ) {
@@ -310,7 +307,7 @@ impl RemoteWorldManager {
             self.finish_insert(
                 world,
                 global_entity,
-                world_entity,
+                &world_entity,
                 component,
                 component_kind,
             );
@@ -320,8 +317,8 @@ impl RemoteWorldManager {
     fn finish_insert<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
         &mut self,
         world: &mut W,
-        global_entity: GlobalEntity,
-        world_entity: E,
+        global_entity: &GlobalEntity,
+        world_entity: &E,
         component: Box<dyn Replicate>,
         component_kind: &ComponentKind,
     ) {
@@ -334,15 +331,15 @@ impl RemoteWorldManager {
         world.insert_boxed_component(&world_entity, component);
 
         self.incoming_events
-            .push(EntityEvent::InsertComponent(global_entity, *component_kind));
+            .push(EntityEvent::InsertComponent(*global_entity, *component_kind));
     }
 
     fn process_remove<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
         &mut self,
         world: &mut W,
-        global_entity: GlobalEntity,
-        world_entity: E,
-        component_kind: ComponentKind,
+        global_entity: &GlobalEntity,
+        world_entity: &E,
+        component_kind: &ComponentKind,
     ) {
         if self.waitlist.process_remove(&global_entity, &component_kind) {
             return;
@@ -351,7 +348,7 @@ impl RemoteWorldManager {
         if let Some(component) = world.remove_component_of_kind(&world_entity, &component_kind) {
             // Send out event
             self.incoming_events
-                .push(EntityEvent::RemoveComponent(global_entity, component));
+                .push(EntityEvent::RemoveComponent(*global_entity, component));
         }
     }
 
@@ -368,8 +365,8 @@ impl RemoteWorldManager {
                 .unwrap();
             self.finish_insert(
                 world,
-                global_entity,
-                world_entity,
+                &global_entity,
+                &world_entity,
                 component,
                 &component_kind,
             );

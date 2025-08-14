@@ -4,7 +4,7 @@ use naia_socket_shared::Instant;
 
 use crate::{
     world::{host::host_world_manager::CommandId, sync::{EntityChannelSender, SenderEngine}},
-    ChannelSender, ComponentKind, EntityCommand, GlobalEntity, HostType, LocalWorldManager,
+    ChannelSender, ComponentKind, EntityCommand, GlobalEntity, HostType, HostEntityGenerator,
     ReliableSender
 };
 
@@ -46,7 +46,7 @@ impl EntityMessageSender {
 
     pub fn host_spawn_entity(
         &mut self,
-        local_world_manager: &mut LocalWorldManager,
+        host_entity_generator: &mut HostEntityGenerator,
         global_entity: &GlobalEntity,
     ) {
         todo!("open entity channel");

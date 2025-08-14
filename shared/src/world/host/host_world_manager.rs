@@ -1,15 +1,10 @@
 use std::{time::Duration, collections::{HashMap, VecDeque}};
 
-use crate::{
-    sequence_list::SequenceList,
-    world::{
-        entity::entity_message_sender::EntityMessageSender,
-        sync::{EntityChannelReceiver, EntityChannelSender},
-        host::entity_update_manager::EntityUpdateManager,
-    },
-    EntityMessage, EntityMessageReceiver, GlobalEntity, Instant, PacketIndex, HostType,
-    ComponentKind, LocalWorldManager, MessageIndex, EntityCommand, PacketNotifiable
-};
+use crate::{sequence_list::SequenceList, world::{
+    entity::entity_message_sender::EntityMessageSender,
+    sync::{EntityChannelReceiver, EntityChannelSender},
+    host::entity_update_manager::EntityUpdateManager,
+}, EntityMessage, EntityMessageReceiver, GlobalEntity, Instant, PacketIndex, HostType, ComponentKind, HostEntityGenerator, MessageIndex, EntityCommand, PacketNotifiable, LocalEntityMap};
 
 const COMMAND_RECORD_TTL: Duration = Duration::from_secs(60);
 const RESEND_COMMAND_RTT_FACTOR: f32 = 1.5;
@@ -67,7 +62,7 @@ impl HostWorldManager {
     // used when Entity first comes into Connection's scope
     pub fn host_init_entity(
         &mut self,
-        world_manager: &mut LocalWorldManager,
+        world_manager: &mut HostEntityGenerator,
         global_entity: &GlobalEntity,
         component_kinds: Vec<ComponentKind>,
     ) {
@@ -81,7 +76,7 @@ impl HostWorldManager {
 
     fn host_spawn_entity(
         &mut self,
-        local_world_manager: &mut LocalWorldManager,
+        local_world_manager: &mut HostEntityGenerator,
         global_entity: &GlobalEntity,
     ) {
         self.outgoing_commands.host_spawn_entity(local_world_manager, global_entity);
@@ -184,7 +179,8 @@ impl HostWorldManager {
 
     pub(crate) fn process_received_commands(
         &mut self,
-        local_world_manager: &mut LocalWorldManager,
+        local_entity_map: &mut LocalEntityMap,
+        host_entity_generator: &mut HostEntityGenerator,
         entity_update_manager: &mut EntityUpdateManager,
     ) {
         for command in self.delivered_commands.receive_messages() {
@@ -193,7 +189,7 @@ impl HostWorldManager {
                     self.on_remote_spawn_entity(&entity);
                 }
                 EntityMessage::Despawn(entity) => {
-                    self.on_remote_despawn_entity(local_world_manager, &entity);
+                    self.on_remote_despawn_entity(local_entity_map, host_entity_generator, &entity);
                 }
                 EntityMessage::InsertComponent(entity, component_kind) => {
                     self.on_remote_insert_component(entity_update_manager, &entity, &component_kind);
@@ -221,10 +217,11 @@ impl HostWorldManager {
 
     pub fn on_remote_despawn_entity(
         &mut self,
-        local_world_manager: &mut LocalWorldManager,
+        local_entity_map: &mut LocalEntityMap,
+        host_entity_generator: &mut HostEntityGenerator,
         global_entity: &GlobalEntity,
     ) {
-        local_world_manager.remove_by_global_entity(global_entity);
+        host_entity_generator.remove_by_global_entity(local_entity_map, global_entity);
     }
 
     fn on_remote_insert_component(

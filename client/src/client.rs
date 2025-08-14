@@ -339,6 +339,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         if let Some(connection) = &mut self.server_connection {
             let mut converter = EntityConverterMut::new(
                 &self.global_world_manager,
+                &mut connection.base.world_manager.entity_map,
                 &mut connection.base.world_manager.local,
             );
             let message = MessageContainer::from_write(message_box, &mut converter);
@@ -385,6 +386,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         };
         let mut converter = EntityConverterMut::new(
             &self.global_world_manager,
+            &mut connection.base.world_manager.entity_map,
             &mut connection.base.world_manager.local,
         );
 
@@ -431,6 +433,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         };
         let mut converter = EntityConverterMut::new(
             &self.global_world_manager,
+            &mut connection.base.world_manager.entity_map,
             &mut connection.base.world_manager.local,
         );
 
@@ -499,6 +502,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         if let Some(connection) = self.server_connection.as_mut() {
             let mut converter = EntityConverterMut::new(
                 &self.global_world_manager,
+                &mut connection.base.world_manager.entity_map,
                 &mut connection.base.world_manager.local,
             );
             let message = MessageContainer::from_write(message_box, &mut converter);
@@ -714,7 +718,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             let new_host_entity = connection
                 .base
                 .world_manager.local
-                .host_reserve_entity(&global_entity);
+                .host_reserve_entity(&mut connection.base.world_manager.entity_map, &global_entity);
 
             // 2. Send request to Server via EntityActionEvent system
             connection
@@ -1760,8 +1764,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         // Local World Manager now tracks the Entity by it's Remote Entity
         connection
             .base
-            .world_manager.local
-            .insert_remote_entity(&global_entity, remote_entity);
+            .world_manager.entity_map
+            .insert_with_remote_entity(global_entity, remote_entity);
 
         // Remote world reader needs to track remote entity too
         let component_kinds = self

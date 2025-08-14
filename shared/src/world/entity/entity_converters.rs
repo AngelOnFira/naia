@@ -13,7 +13,7 @@ use crate::{bigmap::BigMapKey, world::{
         local_entity::{HostEntity, OwnedLocalEntity, RemoteEntity},
     },
     host::mut_channel::MutChannelType,
-}, ComponentKind, ComponentKinds, GlobalDiffHandler, InScopeEntities, LocalWorldManager, PropertyMutator};
+}, ComponentKind, ComponentKinds, GlobalDiffHandler, InScopeEntities, HostEntityGenerator, PropertyMutator, LocalEntityMap};
 
 pub trait GlobalWorldManagerType : InScopeEntities {
     fn component_kinds(&self, entity: &GlobalEntity) -> Option<Vec<ComponentKind>>;
@@ -122,17 +122,20 @@ pub trait LocalEntityAndGlobalEntityConverterMut: LocalEntityAndGlobalEntityConv
 // Probably only should be used for writing messages
 pub struct EntityConverterMut<'a, 'b> {
     global_world_manager: &'a dyn GlobalWorldManagerType,
-    local_world_manager: &'b mut LocalWorldManager,
+    local_entity_map: &'b mut LocalEntityMap,
+    host_entity_generator: &'b mut HostEntityGenerator,
 }
 
 impl<'a, 'b> EntityConverterMut<'a, 'b> {
     pub fn new(
         global_world_manager: &'a dyn GlobalWorldManagerType,
-        local_world_manager: &'b mut LocalWorldManager,
+        local_entity_map: &'b mut LocalEntityMap,
+        host_entity_generator: &'b mut HostEntityGenerator,
     ) -> Self {
         Self {
             global_world_manager,
-            local_world_manager,
+            local_entity_map,
+            host_entity_generator,
         }
     }
 }
@@ -142,7 +145,7 @@ impl<'a, 'b> LocalEntityAndGlobalEntityConverter for EntityConverterMut<'a, 'b> 
         &self,
         global_entity: &GlobalEntity,
     ) -> Result<HostEntity, EntityDoesNotExistError> {
-        self.local_world_manager
+        self.local_entity_map
             .entity_converter()
             .global_entity_to_host_entity(global_entity)
     }
@@ -151,7 +154,7 @@ impl<'a, 'b> LocalEntityAndGlobalEntityConverter for EntityConverterMut<'a, 'b> 
         &self,
         global_entity: &GlobalEntity,
     ) -> Result<RemoteEntity, EntityDoesNotExistError> {
-        self.local_world_manager
+        self.local_entity_map
             .entity_converter()
             .global_entity_to_remote_entity(global_entity)
     }
@@ -160,7 +163,7 @@ impl<'a, 'b> LocalEntityAndGlobalEntityConverter for EntityConverterMut<'a, 'b> 
         &self,
         global_entity: &GlobalEntity,
     ) -> Result<OwnedLocalEntity, EntityDoesNotExistError> {
-        self.local_world_manager
+        self.local_entity_map
             .entity_converter()
             .global_entity_to_owned_entity(global_entity)
     }
@@ -169,7 +172,7 @@ impl<'a, 'b> LocalEntityAndGlobalEntityConverter for EntityConverterMut<'a, 'b> 
         &self,
         host_entity: &HostEntity,
     ) -> Result<GlobalEntity, EntityDoesNotExistError> {
-        self.local_world_manager
+        self.local_entity_map
             .entity_converter()
             .host_entity_to_global_entity(host_entity)
     }
@@ -178,7 +181,7 @@ impl<'a, 'b> LocalEntityAndGlobalEntityConverter for EntityConverterMut<'a, 'b> 
         &self,
         remote_entity: &RemoteEntity,
     ) -> Result<GlobalEntity, EntityDoesNotExistError> {
-        self.local_world_manager
+        self.local_entity_map
             .entity_converter()
             .remote_entity_to_global_entity(remote_entity)
     }
@@ -191,19 +194,19 @@ impl<'a, 'b> LocalEntityAndGlobalEntityConverterMut for EntityConverterMut<'a, '
     ) -> Result<OwnedLocalEntity, EntityDoesNotExistError> {
         if !self
             .global_world_manager
-            .entity_can_relate_to_user(global_entity, self.local_world_manager.get_user_key())
+            .entity_can_relate_to_user(global_entity, self.host_entity_generator.get_user_key())
         {
             return Err(EntityDoesNotExistError);
         }
         let result = self
-            .local_world_manager
+            .local_entity_map
             .entity_converter()
             .global_entity_to_owned_entity(global_entity);
         if result.is_ok() {
             return result;
         }
 
-        let host_entity = self.local_world_manager.host_reserve_entity(global_entity);
+        let host_entity = self.host_entity_generator.host_reserve_entity(self.local_entity_map, global_entity);
 
         warn!("get_or_reserve_entity(): entity is not owned by user, attempting to reserve. HostEntity: {:?}", host_entity);
         return Ok(host_entity.copy_to_owned());

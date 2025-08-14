@@ -346,6 +346,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         };
         let mut converter = EntityConverterMut::new(
             &self.global_world_manager,
+            &mut connection.base.world_manager.entity_map,
             &mut connection.base.world_manager.local,
         );
         let message = MessageContainer::from_write(message_box, &mut converter);
@@ -410,6 +411,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         };
         let mut converter = EntityConverterMut::new(
             &self.global_world_manager,
+            &mut connection.base.world_manager.entity_map,
             &mut connection.base.world_manager.local,
         );
 
@@ -458,6 +460,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         };
         let mut converter = EntityConverterMut::new(
             &self.global_world_manager,
+            &mut connection.base.world_manager.entity_map,
             &mut connection.base.world_manager.local,
         );
         let response = MessageContainer::from_write(response_box, &mut converter);
@@ -662,7 +665,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 // Clean up any remote entity that was mapped to the delegated host entity in this connection!
                 if connection
                     .base
-                    .world_manager.local
+                    .world_manager.entity_map
                     .has_both_host_and_remote_entity(global_entity)
                 {
                     Self::remove_redundant_remote_entity_from_host(connection, global_entity);
@@ -887,8 +890,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             // Local World Manager now tracks the Entity by it's Remote Entity
             connection
                 .base
-                .world_manager.local
-                .insert_remote_entity(global_entity, *remote_entity);
+                .world_manager.entity_map
+                .insert_with_remote_entity(*global_entity, *remote_entity);
 
             // Remote world reader needs to track remote entity too
             let component_kinds = self
@@ -906,13 +909,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         global_entity: &GlobalEntity,
     ) {
         let remote_entity = connection
-            .base.world_manager.local
+            .base.world_manager.entity_map
             .entity_converter()
             .global_entity_to_remote_entity(global_entity)
             .unwrap();
         connection
             .base
-            .world_manager.local
+            .world_manager.entity_map
             .set_primary_to_host(global_entity);
         connection
             .base
@@ -2209,6 +2212,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                             .world_manager.host
                             .remote_despawn_entity(&global_entity);
                         connection.base.world_manager.host.on_remote_despawn_entity(
+                            &mut connection.base.world_manager.entity_map,
                             &mut connection.base.world_manager.local,
                             &global_entity
                         );

@@ -178,7 +178,7 @@ impl BaseConnection {
         read_world_events: bool,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
-        let mut reserver = self.world_manager.local.global_entity_reserver(global_entity_manager, spawner);
+        let mut reserver = self.world_manager.entity_map.global_entity_reserver(global_entity_manager, spawner);
         
         // read messages
         self.message_manager.read_messages(
@@ -192,7 +192,7 @@ impl BaseConnection {
         // read world events
         if read_world_events {
             RemoteWorldReader::read_world_events(
-                &mut self.world_manager.local,
+                &mut self.world_manager.entity_map,
                 &mut self.world_manager.remote,
                 component_kinds,
                 client_tick,
@@ -204,11 +204,12 @@ impl BaseConnection {
     }
 
     pub fn remote_entities(&self) -> Vec<GlobalEntity> {
-        self.world_manager.local.remote_entities()
+        self.world_manager.entity_map.remote_entities()
     }
 
     pub fn process_received_commands(&mut self) {
         self.world_manager.host.process_received_commands(
+            &mut self.world_manager.entity_map,
             &mut self.world_manager.local,
             &mut self.world_manager.updater,
         );

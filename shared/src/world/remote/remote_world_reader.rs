@@ -1,13 +1,6 @@
 use log::warn;
 
-use crate::{
-    messages::channels::receivers::indexed_message_reader::IndexedMessageReader,
-    world::{entity::local_entity::RemoteEntity, local_world_manager::LocalWorldManager},
-    BitReader, ComponentKind, ComponentKinds, EntityMessage,
-    EntityMessageType, EntityAuthStatus, HostEntity, LocalEntityAndGlobalEntityConverter,
-    MessageIndex, Serde, SerdeErr, Tick, OwnedLocalEntity,
-    RemoteWorldManager
-};
+use crate::{messages::channels::receivers::indexed_message_reader::IndexedMessageReader, world::entity::local_entity::RemoteEntity, BitReader, ComponentKind, ComponentKinds, EntityMessage, EntityMessageType, EntityAuthStatus, HostEntity, LocalEntityAndGlobalEntityConverter, MessageIndex, Serde, SerdeErr, Tick, OwnedLocalEntity, RemoteWorldManager, LocalEntityMap};
 
 pub struct RemoteWorldReader;
 
@@ -28,18 +21,18 @@ impl RemoteWorldReader {
     }
 
     pub fn read_world_events(
-        local_world_manager: &mut LocalWorldManager,
+        local_entity_map: &mut LocalEntityMap,
         remote_world_manager: &mut RemoteWorldManager,
         component_kinds: &ComponentKinds,
         tick: &Tick,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
         // read entity updates
-        Self::read_updates(local_world_manager, remote_world_manager, component_kinds, tick, reader)?;
+        Self::read_updates(local_entity_map, remote_world_manager, component_kinds, tick, reader)?;
 
         // read entity messages
         Self::read_messages(
-            local_world_manager.entity_converter(),
+            local_entity_map.entity_converter(),
             component_kinds,
             remote_world_manager,
             reader,
@@ -116,8 +109,8 @@ impl RemoteWorldReader {
                     EntityMessage::InsertComponent(remote_entity, new_component_kind),
                 );
                 remote_world_manager.insert_received_component(
-                    remote_entity,
-                    new_component_kind,
+                    &remote_entity,
+                    &new_component_kind,
                     new_component,
                 );
             }
@@ -219,7 +212,7 @@ impl RemoteWorldReader {
 
     /// Read component updates from raw bits
     fn read_updates(
-        local_world_manager: &LocalWorldManager,
+        local_entity_map: &LocalEntityMap,
         remote_world_manager: &mut RemoteWorldManager,
         component_kinds: &ComponentKinds,
         tick: &Tick,
@@ -235,7 +228,7 @@ impl RemoteWorldReader {
             let remote_entity = RemoteEntity::de(reader)?;
 
             Self::read_update(
-                local_world_manager,
+                local_entity_map,
                 remote_world_manager,
                 component_kinds,
                 tick,
@@ -249,7 +242,7 @@ impl RemoteWorldReader {
 
     /// Read component updates from raw bits for a given entity
     fn read_update(
-        local_world_manager: &LocalWorldManager,
+        local_entity_map: &LocalEntityMap,
         remote_world_manager: &mut RemoteWorldManager,
         component_kinds: &ComponentKinds,
         tick: &Tick,
@@ -266,10 +259,10 @@ impl RemoteWorldReader {
             let component_update = component_kinds.read_create_update(reader)?;
 
             // At this point, the WorldChannel/EntityReceiver should guarantee the Entity is in scope, correct?
-            if local_world_manager.has_remote_entity(remote_entity) {
-                let world_entity = local_world_manager.global_entity_from_remote(remote_entity);
+            if local_entity_map.contains_remote_entity(remote_entity) {
+                let global_entity = local_entity_map.global_entity_from_remote(remote_entity).unwrap();
 
-                remote_world_manager.insert_received_update(*tick, world_entity, component_update);
+                remote_world_manager.insert_received_update(*tick, global_entity, component_update);
             } else {
                 warn!("read_update(): SKIPPED READ UPDATE!");
             }

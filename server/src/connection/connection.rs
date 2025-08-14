@@ -77,7 +77,7 @@ impl Connection {
             message_kinds,
             &server_tick,
             &client_tick,
-            self.base.world_manager.local.entity_converter(),
+            self.base.world_manager.entity_map.entity_converter(),
             reader,
         )?;
 
@@ -115,7 +115,7 @@ impl Connection {
         let messages = self.base.message_manager.receive_messages(
             message_kinds,
             now,
-            self.base.world_manager.local.entity_converter(),
+            self.base.world_manager.entity_map.entity_converter(),
             self.base.world_manager.remote.entity_waitlist_mut(),
         );
         for (channel_kind, messages) in messages {
@@ -153,7 +153,7 @@ impl Connection {
             return self.base.world_manager.remote.process_world_events(
                 global_entity_map,
                 global_world_manager,
-                &mut self.base.world_manager.local,
+                &mut self.base.world_manager.entity_map,
                 component_kinds,
                 world,
                 now,

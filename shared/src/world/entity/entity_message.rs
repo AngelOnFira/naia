@@ -1,4 +1,4 @@
-use crate::{EntityAuthStatus, HostEntity, RemoteEntity, world::component::component_kinds::ComponentKind, EntityMessageType, EntityEvent, LocalWorldManager, OwnedLocalEntity};
+use crate::{EntityAuthStatus, HostEntity, RemoteEntity, world::component::component_kinds::ComponentKind, EntityMessageType, EntityEvent, OwnedLocalEntity, LocalEntityMap};
 
 // Raw entity sync messages sent over the wire
 #[derive(PartialEq, Eq, Debug, Clone)]
@@ -130,9 +130,9 @@ impl EntityMessage<RemoteEntity> {
         }
     }
     
-    pub fn to_event(self, local_world_manager: &LocalWorldManager) -> EntityEvent {
+    pub fn to_event(self, local_entity_map: &LocalEntityMap) -> EntityEvent {
         let remote_entity = self.entity().unwrap();
-        let global_entity = local_world_manager.global_entity_from_remote(&remote_entity);
+        let global_entity = *(local_entity_map.global_entity_from_remote(&remote_entity).unwrap());
         match self {
             EntityMessage::Publish(_) => EntityEvent::Publish(global_entity),
             EntityMessage::Unpublish(_) => EntityEvent::Unpublish(global_entity),
@@ -151,9 +151,9 @@ impl EntityMessage<RemoteEntity> {
 }
 
 impl EntityMessage<HostEntity> {
-    pub fn to_event(self, local_world_manager: &LocalWorldManager) -> EntityEvent {
+    pub fn to_event(self, local_entity_map: &LocalEntityMap) -> EntityEvent {
         let host_entity = self.entity().unwrap();
-        let global_entity = local_world_manager.global_entity_from_host(&host_entity);
+        let global_entity = *(local_entity_map.global_entity_from_host(&host_entity).unwrap());
         match self {
             EntityMessage::Publish(_) => EntityEvent::Publish(global_entity),
             EntityMessage::Unpublish(_) => EntityEvent::Unpublish(global_entity),
