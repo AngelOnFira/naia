@@ -8,12 +8,10 @@ use crate::{types::{HostType, PacketIndex}, world::{
         host_world_manager::HostWorldManager,
         entity_update_manager::EntityUpdateManager
     },
-    host_entity_generator::HostEntityGenerator,
 }, EntityConverterMut, LocalEntityAndGlobalEntityConverter, LocalEntityMap, PacketNotifiable, RemoteWorldManager};
 
 pub struct WorldManager {
     pub entity_map: LocalEntityMap,
-    pub local: HostEntityGenerator,
     pub host: HostWorldManager,
     pub remote: RemoteWorldManager,
     pub updater: EntityUpdateManager,
@@ -28,8 +26,7 @@ impl WorldManager {
     ) -> Self {
         Self {
             entity_map: LocalEntityMap::new(),
-            local: HostEntityGenerator::new(user_key),
-            host: HostWorldManager::new(host_type),
+            host: HostWorldManager::new(host_type, user_key),
             remote: RemoteWorldManager::new(host_type),
             updater: EntityUpdateManager::new(address, global_world_manager),
         }
@@ -43,7 +40,7 @@ impl WorldManager {
         &'b mut self,
         global_world_manager: &'a dyn GlobalWorldManagerType
     ) -> EntityConverterMut<'a, 'b> {
-        EntityConverterMut::new(global_world_manager, &mut self.entity_map, &mut self.local)
+        EntityConverterMut::new(global_world_manager, &mut self.entity_map, &mut self.host.entity_generator)
     }
 
     pub fn collect_messages(&mut self, now: &Instant, rtt_millis: &f32) {

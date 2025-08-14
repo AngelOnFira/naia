@@ -347,7 +347,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         let mut converter = EntityConverterMut::new(
             &self.global_world_manager,
             &mut connection.base.world_manager.entity_map,
-            &mut connection.base.world_manager.local,
+            &mut connection.base.world_manager.host.entity_generator,
         );
         let message = MessageContainer::from_write(message_box, &mut converter);
         connection.base.message_manager.send_message(
@@ -412,7 +412,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         let mut converter = EntityConverterMut::new(
             &self.global_world_manager,
             &mut connection.base.world_manager.entity_map,
-            &mut connection.base.world_manager.local,
+            &mut connection.base.world_manager.host.entity_generator,
         );
 
         let message = MessageContainer::from_write(request_box, &mut converter);
@@ -461,7 +461,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         let mut converter = EntityConverterMut::new(
             &self.global_world_manager,
             &mut connection.base.world_manager.entity_map,
-            &mut connection.base.world_manager.local,
+            &mut connection.base.world_manager.host.entity_generator,
         );
         let response = MessageContainer::from_write(response_box, &mut converter);
         connection.base.message_manager.send_response(
@@ -2213,7 +2213,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                             .remote_despawn_entity(&global_entity);
                         connection.base.world_manager.host.on_remote_despawn_entity(
                             &mut connection.base.world_manager.entity_map,
-                            &mut connection.base.world_manager.local,
                             &global_entity
                         );
 
@@ -2422,7 +2421,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                             .unwrap();
                         // add entity & components to the connections local scope
                         connection.base.world_manager.host.host_init_entity(
-                            &mut connection.base.world_manager.local,
                             global_entity,
                             component_kinds,
                         );

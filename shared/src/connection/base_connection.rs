@@ -210,7 +210,6 @@ impl BaseConnection {
     pub fn process_received_commands(&mut self) {
         self.world_manager.host.process_received_commands(
             &mut self.world_manager.entity_map,
-            &mut self.world_manager.local,
             &mut self.world_manager.updater,
         );
     }

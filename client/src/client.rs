@@ -340,7 +340,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             let mut converter = EntityConverterMut::new(
                 &self.global_world_manager,
                 &mut connection.base.world_manager.entity_map,
-                &mut connection.base.world_manager.local,
+                &mut connection.base.world_manager.host.entity_generator,
             );
             let message = MessageContainer::from_write(message_box, &mut converter);
             connection.base.message_manager.send_message(
@@ -387,7 +387,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         let mut converter = EntityConverterMut::new(
             &self.global_world_manager,
             &mut connection.base.world_manager.entity_map,
-            &mut connection.base.world_manager.local,
+            &mut connection.base.world_manager.host.entity_generator,
         );
 
         let request_id = connection.global_request_manager.create_request_id();
@@ -434,7 +434,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         let mut converter = EntityConverterMut::new(
             &self.global_world_manager,
             &mut connection.base.world_manager.entity_map,
-            &mut connection.base.world_manager.local,
+            &mut connection.base.world_manager.host.entity_generator,
         );
 
         let response = MessageContainer::from_write(response_box, &mut converter);
@@ -503,7 +503,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             let mut converter = EntityConverterMut::new(
                 &self.global_world_manager,
                 &mut connection.base.world_manager.entity_map,
-                &mut connection.base.world_manager.local,
+                &mut connection.base.world_manager.host.entity_generator,
             );
             let message = MessageContainer::from_write(message_box, &mut converter);
             connection
@@ -539,7 +539,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 .component_kinds(&global_entity)
                 .unwrap();
             connection.base.world_manager.host.host_init_entity(
-                &mut connection.base.world_manager.local,
                 &global_entity,
                 component_kinds,
             );
@@ -717,7 +716,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             };
             let new_host_entity = connection
                 .base
-                .world_manager.local
+                .world_manager.host.entity_generator
                 .host_reserve_entity(&mut connection.base.world_manager.entity_map, &global_entity);
 
             // 2. Send request to Server via EntityActionEvent system
@@ -1227,7 +1226,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 };
                 connection
                     .base
-                    .world_manager.local
+                    .world_manager.host.entity_generator
                     .remove_reserved_host_entity(global_entity);
             }
             (EntityAuthStatus::Available, EntityAuthStatus::Available) => {
