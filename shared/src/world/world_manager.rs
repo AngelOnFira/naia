@@ -229,14 +229,14 @@ impl WorldManager {
         &mut self,
         global_entity: &GlobalEntity,
     ) -> HostEntity {
-        self.host.entity_generator.host_reserve_entity(&mut self.entity_map, global_entity)
+        self.host.host_reserve_entity(&mut self.entity_map, global_entity)
     }
 
     pub fn remove_reserved_host_entity(
         &mut self,
         global_entity: &GlobalEntity,
     ) -> Option<HostEntity> {
-        self.host.entity_generator.remove_reserved_host_entity(global_entity)
+        self.host.remove_reserved_host_entity(global_entity)
     }
 }
 
@@ -263,7 +263,10 @@ impl WorldManager {
         &'b mut self,
         global_world_manager: &'a dyn GlobalWorldManagerType
     ) -> EntityConverterMut<'a, 'b> {
-        EntityConverterMut::new(global_world_manager, &mut self.entity_map, &mut self.host.entity_generator)
+        self.host.entity_converter_mut(
+            global_world_manager,
+            &mut self.entity_map,
+        )
     }
 
     pub fn collect_messages(&mut self, now: &Instant, rtt_millis: &f32) {

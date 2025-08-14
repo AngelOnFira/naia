@@ -4,7 +4,7 @@ use crate::{sequence_list::SequenceList, world::{
     entity::entity_message_sender::EntityMessageSender,
     sync::{EntityChannelReceiver, EntityChannelSender},
     host::entity_update_manager::EntityUpdateManager,
-}, EntityMessage, EntityMessageReceiver, GlobalEntity, Instant, PacketIndex, HostType, ComponentKind, HostEntityGenerator, MessageIndex, EntityCommand, PacketNotifiable, LocalEntityMap};
+}, EntityMessage, EntityMessageReceiver, GlobalEntity, Instant, PacketIndex, HostType, ComponentKind, HostEntityGenerator, MessageIndex, EntityCommand, PacketNotifiable, LocalEntityMap, HostEntity, EntityConverterMut, GlobalWorldManagerType};
 
 const COMMAND_RECORD_TTL: Duration = Duration::from_secs(60);
 const RESEND_COMMAND_RTT_FACTOR: f32 = 1.5;
@@ -17,7 +17,7 @@ pub type CommandId = MessageIndex;
 /// Will wait for acks from the client to know the state of the client's ECS world ("remote")
 pub struct HostWorldManager {
 
-    pub entity_generator: HostEntityGenerator,
+    entity_generator: HostEntityGenerator,
 
     // For Server, this contains the Entities that the Server has authority over, that it syncs to the Client
     // For Client, this contains the non-Delegated Entities that the Client has authority over, that it syncs to the Server
@@ -41,6 +41,14 @@ impl HostWorldManager {
         }
     }
 
+    pub(crate) fn entity_converter_mut<'a, 'b>(
+        &'b mut self,
+        global_world_manager: &'a dyn GlobalWorldManagerType,
+        entity_map: &'b mut LocalEntityMap,
+    ) -> EntityConverterMut<'a, 'b> {
+        EntityConverterMut::new(global_world_manager, entity_map, &mut self.entity_generator)
+    }
+
     // Collect
 
     pub fn take_outgoing_events(
@@ -56,6 +64,21 @@ impl HostWorldManager {
         command: EntityCommand,
     ) {
         self.outgoing_commands.send_outgoing_command(command);
+    }
+
+    pub(crate) fn host_reserve_entity(
+        &mut self,
+        entity_map: &mut LocalEntityMap,
+        global_entity: &GlobalEntity,
+    ) -> HostEntity {
+        self.entity_generator.host_reserve_entity(entity_map, global_entity)
+    }
+
+    pub(crate) fn remove_reserved_host_entity(
+        &mut self,
+        global_entity: &GlobalEntity,
+    ) -> Option<HostEntity> {
+        self.entity_generator.remove_reserved_host_entity(global_entity)
     }
 
     pub(crate) fn host_has_entity(&self, global_entity: &GlobalEntity) -> bool {
@@ -174,7 +197,7 @@ impl HostWorldManager {
     pub(crate) fn get_updatable_world(&self) -> HashMap<GlobalEntity, HashSet<ComponentKind>> {
         let mut output = HashMap::new();
         for (global_entity, host_channel) in self.get_host_world() {
-            
+
             let Some(remote_channel) = self.get_remote_world().get(global_entity) else {
                 continue;
             };
