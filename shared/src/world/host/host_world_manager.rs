@@ -1,10 +1,9 @@
 use std::{time::Duration, collections::{HashMap, HashSet, VecDeque}};
 
 use crate::{sequence_list::SequenceList, world::{
-    entity::entity_message_sender::EntityMessageSender,
-    sync::{EntityChannelReceiver, EntityChannelSender},
+    sync::{SenderEngine, EntityChannelReceiver, EntityChannelSender},
     host::entity_update_manager::EntityUpdateManager,
-}, EntityMessage, EntityMessageReceiver, GlobalEntity, Instant, PacketIndex, HostType, ComponentKind, HostEntityGenerator, MessageIndex, EntityCommand, PacketNotifiable, LocalEntityMap, HostEntity, EntityConverterMut, GlobalWorldManagerType};
+}, EntityMessage, EntityMessageReceiver, GlobalEntity, Instant, PacketIndex, HostType, ComponentKind, HostEntityGenerator, MessageIndex, EntityCommand, PacketNotifiable, LocalEntityMap, HostEntity, EntityConverterMut, GlobalWorldManagerType, ReliableSender, ChannelSender};
 
 const COMMAND_RECORD_TTL: Duration = Duration::from_secs(60);
 const RESEND_COMMAND_RTT_FACTOR: f32 = 1.5;
@@ -17,11 +16,15 @@ pub type CommandId = MessageIndex;
 /// Will wait for acks from the client to know the state of the client's ECS world ("remote")
 pub struct HostWorldManager {
 
+    // host entity generator
     entity_generator: HostEntityGenerator,
+
+    // sender
+    sender: ReliableSender<EntityCommand>,
 
     // For Server, this contains the Entities that the Server has authority over, that it syncs to the Client
     // For Client, this contains the non-Delegated Entities that the Client has authority over, that it syncs to the Server
-    outgoing_commands: EntityMessageSender,
+    host_engine: SenderEngine,
 
     // sent packets
     sent_command_packets: SequenceList<(Instant, Vec<(CommandId, EntityMessage<GlobalEntity>)>)>,
@@ -35,7 +38,8 @@ impl HostWorldManager {
     pub fn new(host_type: HostType, user_key: u64) -> Self {
         Self {
             entity_generator: HostEntityGenerator::new(user_key),
-            outgoing_commands: EntityMessageSender::new(host_type, RESEND_COMMAND_RTT_FACTOR),
+            sender: ReliableSender::new(RESEND_COMMAND_RTT_FACTOR),
+            host_engine: SenderEngine::new(host_type),
             sent_command_packets: SequenceList::new(),
             delivered_commands: EntityMessageReceiver::new(host_type.invert()),
         }
@@ -55,15 +59,25 @@ impl HostWorldManager {
         &mut self,
         now: &Instant,
         rtt_millis: &f32,
+        delegated_world_opt: Option<&mut SenderEngine>,
     ) -> VecDeque<(CommandId, EntityCommand)> {
-        self.outgoing_commands.collect_outgoing_commands(now, rtt_millis)
+        for outgoing_command in self.host_engine.take_outgoing_commands() {
+            self.sender.send_message(outgoing_command);
+        }
+        if let Some(delegated_world) = delegated_world_opt {
+            for outgoing_command in delegated_world.take_outgoing_commands() {
+                self.sender.send_message(outgoing_command);
+            }
+        }
+        self.sender.collect_messages(now, rtt_millis);
+        self.sender.take_next_messages()
     }
 
     pub fn send_outgoing_command(
         &mut self,
         command: EntityCommand,
     ) {
-        self.outgoing_commands.send_command(command);
+        self.host_engine.accept_command(command);
     }
 
     pub(crate) fn host_reserve_entity(
@@ -103,11 +117,11 @@ impl HostWorldManager {
         &mut self,
         global_entity: &GlobalEntity,
     ) {
-        self.outgoing_commands.send_command(EntityCommand::Spawn(*global_entity));
+        self.host_engine.accept_command(EntityCommand::Spawn(*global_entity));
     }
 
     pub fn host_despawn_entity(&mut self, global_entity: &GlobalEntity) {
-        self.outgoing_commands.send_command(EntityCommand::Despawn(*global_entity));
+        self.host_engine.accept_command(EntityCommand::Despawn(*global_entity));
     }
 
     pub fn host_insert_component(
@@ -115,7 +129,7 @@ impl HostWorldManager {
         global_entity: &GlobalEntity,
         component_kind: &ComponentKind,
     ) {
-        self.outgoing_commands.send_command(EntityCommand::InsertComponent(*global_entity, *component_kind));
+        self.host_engine.accept_command(EntityCommand::InsertComponent(*global_entity, *component_kind));
     }
 
     pub fn host_remove_component(
@@ -123,11 +137,11 @@ impl HostWorldManager {
         global_entity: &GlobalEntity,
         component_kind: &ComponentKind,
     ) {
-        self.outgoing_commands.send_command(EntityCommand::RemoveComponent(*global_entity, *component_kind));
+        self.host_engine.accept_command(EntityCommand::RemoveComponent(*global_entity, *component_kind));
     }
 
     pub fn remote_despawn_entity(&mut self, global_entity: &GlobalEntity) {
-        self.outgoing_commands.remote_despawn_entity(global_entity);
+        todo!("close entity channel?");
     }
 
     pub(crate) fn insert_sent_command_packet(&mut self, packet_index: &PacketIndex, now: Instant) {
@@ -169,25 +183,9 @@ impl HostWorldManager {
             }
         }
     }
-    
-    pub(crate) fn notify_packet_delivered(
-        &mut self,
-        packet_index: PacketIndex,
-    ) {
-        if let Some((_, command_list)) = self
-            .sent_command_packets
-            .remove_scan_from_front(&packet_index)
-        {
-            for (command_id, command) in command_list {
-                if self.outgoing_commands.deliver_message(&command_id).is_some() {
-                    self.delivered_commands.buffer_message(command_id, command);
-                }
-            }
-        }
-    }
 
     pub(crate) fn get_host_world(&self) -> &HashMap<GlobalEntity, EntityChannelSender> {
-        self.outgoing_commands.get_world()
+        self.host_engine.get_world()
     }
 
     pub(crate) fn get_remote_world(&self) -> &HashMap<GlobalEntity, EntityChannelReceiver> {
@@ -277,6 +275,15 @@ impl HostWorldManager {
 
 impl PacketNotifiable for HostWorldManager {
     fn notify_packet_delivered(&mut self, packet_index: PacketIndex) {
-        self.notify_packet_delivered(packet_index);
+        if let Some((_, command_list)) = self
+            .sent_command_packets
+            .remove_scan_from_front(&packet_index)
+        {
+            for (command_id, command) in command_list {
+                if self.sender.deliver_message(&command_id).is_some() {
+                    self.delivered_commands.buffer_message(command_id, command);
+                }
+            }
+        }
     }
 }

@@ -14,7 +14,7 @@ use crate::{world::{
         entity_event::EntityEvent,
         entity_waitlist::EntityWaitlist,
     },
-    sync::{EntityChannelReceiver, EntityChannelSender, SenderEngine},
+    sync::SenderEngine,
 }, ComponentKind, ComponentKinds, ComponentUpdate, EntityMessage, EntityAndGlobalEntityConverter, GlobalEntity, GlobalEntitySpawner, GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter, Replicate, Tick, WorldMutType, EntityMessageType, OwnedLocalEntity, HostEntity, EntityMessageReceiver, HostType, MessageIndex, LocalEntityMap};
 
 pub struct RemoteWorldManager {
@@ -23,8 +23,8 @@ pub struct RemoteWorldManager {
     // For Client, this contains the Entities that have been received from the Server, that the Server has authority over.
     receiver: EntityMessageReceiver<RemoteEntity>,
 
-    // For Server, this will be set to None, as the Server does not delegate authority to the Client.
-    // For Client, this contains the Delegated Entities that the Client now has authority over.
+    // For Server, this will be set to None, as the Client does not delegate authority to the Server.
+    // For Client, this contains the entities that the Server has delegated authority to the Client for.
     delegated_world_opt: Option<SenderEngine>,
     
     // incoming messages
@@ -59,12 +59,8 @@ impl RemoteWorldManager {
         self.waitlist.entity_waitlist_mut()
     }
 
-    pub fn get_host_world(&self) -> Option<&HashMap<GlobalEntity, EntityChannelSender>> {
-        self.delegated_world_opt.as_ref().map(|engine| engine.get_world())
-    }
-
-    pub fn get_remote_world(&self) -> &HashMap<RemoteEntity, EntityChannelReceiver> {
-        self.receiver.get_world()
+    pub fn delegated_world_mut(&mut self) -> Option<&mut SenderEngine> {
+        self.delegated_world_opt.as_mut()
     }
 
     pub(crate) fn append_updatable_world(
@@ -72,7 +68,7 @@ impl RemoteWorldManager {
         local_converter: &dyn LocalEntityAndGlobalEntityConverter,
         updatable_world: &mut HashMap<GlobalEntity, HashSet<ComponentKind>>,
     ) {
-        let Some(host_world) = self.get_host_world() else {
+        let Some(host_world) = self.delegated_world_opt.as_ref().map(|engine| engine.get_world()) else {
             return;
         };
 
@@ -80,7 +76,7 @@ impl RemoteWorldManager {
             let Ok(remote_entity) = local_converter.global_entity_to_remote_entity(global_entity) else {
                 continue;
             };
-            let Some(remote_channel) = self.get_remote_world().get(&remote_entity) else {
+            let Some(remote_channel) = self.receiver.get_world().get(&remote_entity) else {
                 continue;
             };
             let host_component_kinds = host_channel.component_kinds();
@@ -159,11 +155,7 @@ impl RemoteWorldManager {
         std::mem::take(&mut self.incoming_events)
     }
 
-    /// Process incoming Entity messages.
-    ///
-    /// * Emits client events corresponding to any [`EntityMessage`] received
-    /// Store
-    pub fn process_incoming_messages<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
+    fn process_incoming_messages<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
         &mut self,
         spawner: &mut dyn GlobalEntitySpawner<E>,
         global_world_manager: &dyn GlobalWorldManagerType,
@@ -399,11 +391,7 @@ impl RemoteWorldManager {
         }
     }
 
-    /// Process incoming Entity updates.
-    ///
-    /// * Emits client events corresponding to any [`EntityMessage`] received
-    /// Store
-    pub fn process_updates<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
+    fn process_updates<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
         &mut self,
         in_scope_entities: &dyn InScopeEntities,
         local_converter: &dyn LocalEntityAndGlobalEntityConverter,

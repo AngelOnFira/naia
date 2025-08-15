@@ -239,9 +239,14 @@ impl LocalWorldManager {
         converter: &dyn EntityAndGlobalEntityConverter<E>,
         global_world_manager: &dyn GlobalWorldManagerType,
     ) -> (VecDeque<(CommandId, EntityCommand)>, HashMap<GlobalEntity, HashSet<ComponentKind>>) {
-        let host_world_events = self.host.take_outgoing_events(now, rtt_millis);
+        let delegated_world_opt = self.remote.delegated_world_mut();
+        let world_commands = self.host.take_outgoing_events(
+            now,
+            rtt_millis,
+            delegated_world_opt,
+        );
         let update_events = self.take_update_events(world, converter, global_world_manager);
-        (host_world_events, update_events)
+        (world_commands, update_events)
     }
 
     pub fn process_received_commands(&mut self) {

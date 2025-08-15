@@ -12,14 +12,14 @@ pub enum EntityCommand {
     Publish(GlobalEntity),
     Unpublish(GlobalEntity),
     EnableDelegation(GlobalEntity),
-    DisableDelegation(GlobalEntity),
-    SetAuthority(GlobalEntity, EntityAuthStatus),
+    DisableDelegation(GlobalEntity), // only sent by server
+    SetAuthority(GlobalEntity, EntityAuthStatus), // only sent by server
 
     // These aren't commands, they are something else
-    RequestAuthority(GlobalEntity, RemoteEntity),
-    ReleaseAuthority(GlobalEntity),
-    EnableDelegationResponse(GlobalEntity),
-    MigrateResponse(GlobalEntity, HostEntity),
+    RequestAuthority(GlobalEntity, RemoteEntity), // only sent by client
+    ReleaseAuthority(GlobalEntity), // only sent by client
+    EnableDelegationResponse(GlobalEntity), // only sent by client
+    MigrateResponse(GlobalEntity, HostEntity), // only sent by server
 }
 
 impl EntityCommand {
@@ -40,7 +40,7 @@ impl EntityCommand {
             Self::MigrateResponse(entity, _) => *entity,
         }
     }
-    
+
     pub fn component_kind(&self) -> Option<ComponentKind> {
         match self {
             Self::InsertComponent(_, component_kind) => Some(*component_kind),
@@ -48,7 +48,7 @@ impl EntityCommand {
             _ => None,
         }
     }
-    
+
     pub fn get_type(&self) -> EntityMessageType {
         match self {
             Self::Spawn(_) => EntityMessageType::Spawn,

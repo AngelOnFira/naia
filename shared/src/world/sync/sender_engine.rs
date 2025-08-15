@@ -20,7 +20,7 @@ impl SenderEngine {
         }
     }
 
-    pub(crate) fn send_commands(&mut self) -> Vec<EntityCommand> {
+    pub(crate) fn take_outgoing_commands(&mut self) -> Vec<EntityCommand> {
         std::mem::take(&mut self.outgoing_commands)
     }
 
