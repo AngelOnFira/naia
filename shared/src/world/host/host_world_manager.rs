@@ -56,14 +56,14 @@ impl HostWorldManager {
         now: &Instant,
         rtt_millis: &f32,
     ) -> VecDeque<(CommandId, EntityCommand)> {
-        self.outgoing_commands.take_outgoing_commands(now, rtt_millis)
+        self.outgoing_commands.collect_outgoing_commands(now, rtt_millis)
     }
-    
+
     pub fn send_outgoing_command(
         &mut self,
         command: EntityCommand,
     ) {
-        self.outgoing_commands.send_outgoing_command(command);
+        self.outgoing_commands.send_command(command);
     }
 
     pub(crate) fn host_reserve_entity(
@@ -103,11 +103,11 @@ impl HostWorldManager {
         &mut self,
         global_entity: &GlobalEntity,
     ) {
-        self.outgoing_commands.host_spawn_entity(&mut self.entity_generator, global_entity);
+        self.outgoing_commands.send_command(EntityCommand::Spawn(*global_entity));
     }
 
     pub fn host_despawn_entity(&mut self, global_entity: &GlobalEntity) {
-        self.outgoing_commands.host_despawn_entity(global_entity);
+        self.outgoing_commands.send_command(EntityCommand::Despawn(*global_entity));
     }
 
     pub fn host_insert_component(
@@ -115,7 +115,7 @@ impl HostWorldManager {
         global_entity: &GlobalEntity,
         component_kind: &ComponentKind,
     ) {
-        self.outgoing_commands.host_insert_component(global_entity, component_kind);
+        self.outgoing_commands.send_command(EntityCommand::InsertComponent(*global_entity, *component_kind));
     }
 
     pub fn host_remove_component(
@@ -123,7 +123,7 @@ impl HostWorldManager {
         global_entity: &GlobalEntity,
         component_kind: &ComponentKind,
     ) {
-        self.outgoing_commands.host_remove_component(global_entity, component_kind);
+        self.outgoing_commands.send_command(EntityCommand::RemoveComponent(*global_entity, *component_kind));
     }
 
     pub fn remote_despawn_entity(&mut self, global_entity: &GlobalEntity) {

@@ -4,8 +4,8 @@ use naia_socket_shared::Instant;
 
 use crate::{
     world::{host::host_world_manager::CommandId, sync::{EntityChannelSender, SenderEngine}},
-    ChannelSender, ComponentKind, EntityCommand, GlobalEntity, HostType, HostEntityGenerator,
-    ReliableSender
+    ChannelSender, EntityCommand, GlobalEntity, HostType,
+    ReliableSender,
 };
 
 pub struct EntityMessageSender {
@@ -21,20 +21,23 @@ impl EntityMessageSender {
         }
     }
 
-    pub fn take_outgoing_commands(
+    /// Unified entry point for sending commands - mirrors EntityMessageReceiver.buffer_message()
+    /// Validates command through SenderEngine before forwarding to ReliableSender
+    pub fn send_command(&mut self, command: EntityCommand) {
+        self.engine.accept_command(command);
+    }
+
+    /// Process and collect outgoing commands - mirrors EntityMessageReceiver.receive_messages()
+    pub fn collect_outgoing_commands(
         &mut self,
         now: &Instant,
         rtt_millis: &f32,
     ) -> VecDeque<(CommandId, EntityCommand)> {
+        for outgoing_command in self.engine.send_commands() {
+            self.sender.send_message(outgoing_command);
+        }
         self.sender.collect_messages(now, rtt_millis);
         self.sender.take_next_messages()
-    }
-
-    pub fn send_outgoing_command(
-        &mut self,
-        command: EntityCommand,
-    ) {
-        self.sender.send_message(command);
     }
 
     pub fn deliver_message(
@@ -42,42 +45,6 @@ impl EntityMessageSender {
         command_id: &CommandId,
     ) -> Option<EntityCommand> {
         self.sender.deliver_message(command_id)
-    }
-
-    pub fn host_spawn_entity(
-        &mut self,
-        host_entity_generator: &mut HostEntityGenerator,
-        global_entity: &GlobalEntity,
-    ) {
-        todo!("open entity channel");
-
-        self.sender.send_message(EntityCommand::Spawn(*global_entity));
-    }
-
-    pub fn host_despawn_entity(&mut self, global_entity: &GlobalEntity) {
-        todo!("close entity channel");
-
-        self.sender.send_message(EntityCommand::Despawn(*global_entity));
-    }
-
-    pub fn host_insert_component(
-        &mut self,
-        global_entity: &GlobalEntity,
-        component_kind: &ComponentKind,
-    ) {
-        todo!("open component channel");
-
-        self.sender.send_message(EntityCommand::InsertComponent(*global_entity, *component_kind));
-    }
-
-    pub fn host_remove_component(
-        &mut self,
-        global_entity: &GlobalEntity,
-        component_kind: &ComponentKind,
-    ) {
-        todo!("close component channel");
-
-        self.sender.send_message(EntityCommand::RemoveComponent(*global_entity, *component_kind));
     }
 
     pub fn remote_despawn_entity(&mut self, global_entity: &GlobalEntity) {
