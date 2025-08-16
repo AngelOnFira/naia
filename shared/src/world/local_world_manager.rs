@@ -85,6 +85,10 @@ impl LocalWorldManager {
         global_entity: &GlobalEntity,
         component_kinds: Vec<ComponentKind>,
     ) {
+        if self.entity_map.global_entity_to_host_entity(global_entity).is_err() {
+            let host_entity = self.host.host_generate_entity();
+            self.entity_map.insert_with_host_entity(*global_entity, host_entity);
+        }
         self.host.host_init_entity(global_entity, component_kinds);
     }
 
@@ -119,7 +123,7 @@ impl LocalWorldManager {
         &mut self,
         global_entity: &GlobalEntity,
     ) -> Option<HostEntity> {
-        self.host.remove_reserved_host_entity(global_entity)
+        self.host.host_removed_reserved_entity(global_entity)
     }
 
     pub fn on_remote_despawn_entity(
@@ -143,7 +147,7 @@ impl LocalWorldManager {
         self.host.record_command_written(packet_index, command_id, message);
     }
 
-    pub fn send_outgoing_command(
+    pub fn host_send_outgoing_command(
         &mut self,
         command: EntityCommand,
     ) {
@@ -154,6 +158,13 @@ impl LocalWorldManager {
 
     pub fn entity_waitlist_mut(&mut self) -> &mut EntityWaitlist {
         self.remote.entity_waitlist_mut()
+    }
+
+    pub fn remove_send_outgoing_command(
+        &mut self,
+        command: EntityCommand,
+    ) {
+        self.remote.send_outgoing_command(command);
     }
 
     pub(crate) fn receive_message(&mut self, id: MessageIndex, msg: EntityMessage<RemoteEntity>) {

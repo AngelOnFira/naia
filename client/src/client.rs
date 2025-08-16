@@ -707,7 +707,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             connection
                 .base
                 .world_manager
-                .send_outgoing_command(EntityCommand::RequestAuthority(
+                .host_send_outgoing_command(EntityCommand::RequestAuthority(
                     None,
                     global_entity,
                     new_host_entity.to_remote(),
@@ -734,7 +734,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             };
             connection
                 .base
-                .world_manager.send_outgoing_command(EntityCommand::ReleaseAuthority(None, global_entity));
+                .world_manager.host_send_outgoing_command(EntityCommand::ReleaseAuthority(None, global_entity));
         }
     }
 
@@ -1023,7 +1023,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             connection
                 .base
                 .world_manager
-                .send_outgoing_command(EntityCommand::Publish(None, *global_entity));
+                .host_send_outgoing_command(EntityCommand::Publish(None, *global_entity));
         } else {
             if self
                 .global_world_manager
@@ -1050,7 +1050,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             connection
                 .base
                 .world_manager
-                .send_outgoing_command(EntityCommand::Unpublish(None, *global_entity));
+                .host_send_outgoing_command(EntityCommand::Unpublish(None, *global_entity));
         } else {
             if self
                 .global_world_manager
@@ -1083,7 +1083,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             connection
                 .base
                 .world_manager
-                .send_outgoing_command(EntityCommand::EnableDelegation(None, *global_entity));
+                .host_send_outgoing_command(EntityCommand::EnableDelegation(None, *global_entity));
         } else {
             self.entity_complete_delegation(world, global_entity, world_entity);
             for component_kind in world.component_kinds(world_entity) {
@@ -1674,7 +1674,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     connection
                         .base
                         .world_manager
-                        .send_outgoing_command(EntityCommand::EnableDelegationResponse(
+                        .host_send_outgoing_command(EntityCommand::EnableDelegationResponse(
                             None,
                             global_entity,
                         ));

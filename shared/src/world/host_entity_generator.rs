@@ -69,7 +69,7 @@ impl HostEntityGenerator {
         }
     }
 
-    pub fn remove_reserved_host_entity(
+    pub fn host_remove_reserved_entity(
         &mut self,
         global_entity: &GlobalEntity,
     ) -> Option<HostEntity> {

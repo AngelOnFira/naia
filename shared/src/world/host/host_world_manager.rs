@@ -81,6 +81,10 @@ impl HostWorldManager {
         self.host_engine.accept_command(command);
     }
 
+    pub(crate) fn host_generate_entity(&mut self) -> HostEntity {
+        self.entity_generator.generate_host_entity()
+    }
+    
     pub(crate) fn host_reserve_entity(
         &mut self,
         entity_map: &mut LocalEntityMap,
@@ -89,11 +93,11 @@ impl HostWorldManager {
         self.entity_generator.host_reserve_entity(entity_map, global_entity)
     }
 
-    pub(crate) fn remove_reserved_host_entity(
+    pub(crate) fn host_removed_reserved_entity(
         &mut self,
         global_entity: &GlobalEntity,
     ) -> Option<HostEntity> {
-        self.entity_generator.remove_reserved_host_entity(global_entity)
+        self.entity_generator.host_remove_reserved_entity(global_entity)
     }
 
     pub(crate) fn host_has_entity(&self, global_entity: &GlobalEntity) -> bool {

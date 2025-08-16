@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use log::info;
+
 use crate::{world::sync::{EntityChannelSender, config::EngineConfig}, GlobalEntity, HostType, EntityCommand, EntityMessageType};
 
 pub struct SenderEngine {
@@ -35,6 +37,8 @@ impl SenderEngine {
     pub(crate) fn accept_command(&mut self, command: EntityCommand) {
 
         let entity = command.entity();
+
+        info!("SenderEngine::accept_command(entity={:?}, command={:?})", entity, command.get_type());
 
         match command.get_type() {
             EntityMessageType::Spawn => {
@@ -73,11 +77,11 @@ impl SenderEngine {
         }
 
         let Some(entity_channel) = self.entity_channels.get_mut(&entity) else {
-            panic!("Cannot accept command for an entity that does not exist in the engine");
+            panic!("Cannot accept command for an entity that does not exist in the engine. Command: {:?}", command);
         };
 
         // if log {
-        //     info!("Engine::accept_command(entity={:?}, msgType={:?})", entity, msg.get_type());
+            info!("SenderEngine::accept_command(entity={:?}, command={:?})", entity, command.get_type());
         // }
 
         entity_channel.accept_message(command);
