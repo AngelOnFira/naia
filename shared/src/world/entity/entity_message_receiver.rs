@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt::Debug, hash::Hash};
 
-use crate::{messages::channels::receivers::reliable_receiver::ReliableReceiver, world::sync::{ReceiverEngine, EntityChannelReceiver}, EntityMessage, HostType, MessageIndex};
+use crate::{messages::channels::receivers::reliable_receiver::ReliableReceiver, world::sync::{ReceiverEngine, EntityChannelReceiver}, EntityMessage, MessageIndex};
 
 pub struct EntityMessageReceiver<E: Copy + Hash + Eq + Debug> {
     receiver: ReliableReceiver<EntityMessage<E>>,
@@ -8,10 +8,10 @@ pub struct EntityMessageReceiver<E: Copy + Hash + Eq + Debug> {
 }
 
 impl<E: Copy + Hash + Eq + Debug> EntityMessageReceiver<E> {
-    pub fn new(host_type: HostType) -> Self {
+    pub fn new() -> Self {
         Self {
             receiver: ReliableReceiver::new(),
-            engine: ReceiverEngine::new(host_type),
+            engine: ReceiverEngine::new(),
         }
     }
 

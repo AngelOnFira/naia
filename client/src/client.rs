@@ -6,7 +6,6 @@ use naia_shared::{
     BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter,
     EntityAuthStatus, EntityDoesNotExistError,
     EntityEvent, FakeEntityConverter, GameInstant, GlobalEntity, GlobalEntityMap,
-    EntityCommand,
     GlobalEntitySpawner, GlobalRequestId, GlobalResponseId, GlobalWorldManagerType, Instant,
     Message, MessageContainer, PacketType, Protocol, RemoteEntity, Replicate, ReplicatedComponent,
     Request, Response, ResponseReceiveKey, ResponseSendKey, Serde, SharedGlobalWorldManager,
@@ -694,24 +693,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             .global_world_manager
             .entity_request_authority(&global_entity);
         if success {
-            // Reserve Host Entity
+
+            // 2. Send request to Server via EntityActionEvent system
             let Some(connection) = &mut self.server_connection else {
                 return;
             };
-            let new_host_entity = connection
-                .base
-                .world_manager
-                .host_reserve_entity(&global_entity);
 
-            // 2. Send request to Server via EntityActionEvent system
             connection
                 .base
                 .world_manager
-                .host_send_outgoing_command(EntityCommand::RequestAuthority(
-                    None,
-                    global_entity,
-                    new_host_entity.to_remote(),
-                ));
+                .remote_send_request_auth(&global_entity);
         }
     }
 
@@ -734,7 +725,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             };
             connection
                 .base
-                .world_manager.host_send_outgoing_command(EntityCommand::ReleaseAuthority(None, global_entity));
+                .world_manager.remote_send_release_auth(&global_entity);
         }
     }
 
@@ -1023,7 +1014,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             connection
                 .base
                 .world_manager
-                .host_send_outgoing_command(EntityCommand::Publish(None, *global_entity));
+                .host_send_publish(global_entity);
         } else {
             if self
                 .global_world_manager
@@ -1050,7 +1041,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             connection
                 .base
                 .world_manager
-                .host_send_outgoing_command(EntityCommand::Unpublish(None, *global_entity));
+                .host_send_unpublish(global_entity);
         } else {
             if self
                 .global_world_manager
@@ -1083,7 +1074,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             connection
                 .base
                 .world_manager
-                .host_send_outgoing_command(EntityCommand::EnableDelegation(None, *global_entity));
+                .host_send_enable_delegation(global_entity);
         } else {
             self.entity_complete_delegation(world, global_entity, world_entity);
             for component_kind in world.component_kinds(world_entity) {
@@ -1674,10 +1665,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     connection
                         .base
                         .world_manager
-                        .host_send_outgoing_command(EntityCommand::EnableDelegationResponse(
-                            None,
-                            global_entity,
-                        ));
+                        .remote_send_enable_delegation_response(
+                            &global_entity,
+                        );
                 }
                 EntityEvent::EnableDelegationResponse(_) => {
                     panic!("Client should never receive an EnableDelegationEntityResponse event");

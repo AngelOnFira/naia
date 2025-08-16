@@ -15,7 +15,7 @@ use crate::{world::{
         entity_waitlist::EntityWaitlist,
     },
     sync::SenderEngine,
-}, ComponentKind, ComponentKinds, ComponentUpdate, EntityMessage, EntityAndGlobalEntityConverter, GlobalEntity, GlobalEntitySpawner, GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter, Replicate, Tick, WorldMutType, EntityMessageType, OwnedLocalEntity, HostEntity, EntityMessageReceiver, HostType, MessageIndex, LocalEntityMap};
+}, ComponentKind, ComponentKinds, ComponentUpdate, EntityMessage, EntityAndGlobalEntityConverter, GlobalEntity, GlobalEntitySpawner, GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter, Replicate, Tick, WorldMutType, EntityMessageType, OwnedLocalEntity, HostEntity, EntityMessageReceiver, HostType, MessageIndex, LocalEntityMap, EntityCommand};
 
 pub struct RemoteWorldManager {
     
@@ -42,7 +42,7 @@ impl RemoteWorldManager {
             None
         };
         Self {
-            receiver: EntityMessageReceiver::new(host_type),
+            receiver: EntityMessageReceiver::new(),
             incoming_components: HashMap::new(),
             incoming_updates: Vec::new(),
             incoming_events: Vec::new(),
@@ -90,6 +90,10 @@ impl RemoteWorldManager {
                 updatable_world.insert(*global_entity, joined_component_kinds);
             }
         }
+    }
+    
+    pub fn send_outgoing_command(&mut self, command: EntityCommand) {
+        todo!()
     }
 
     pub fn receive_message(&mut self, message_id: MessageIndex, message: EntityMessage<RemoteEntity>) {

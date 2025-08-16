@@ -9,7 +9,7 @@ use crate::{types::{HostType, PacketIndex}, world::{
         entity_update_manager::EntityUpdateManager
     },
     remote::entity_waitlist::EntityWaitlist,
-}, ComponentKind, ComponentKinds, ComponentUpdate, DiffMask, EntityAndGlobalEntityConverter, EntityCommand, EntityConverterMut, EntityEvent, EntityMessage, GlobalEntity, GlobalEntitySpawner, HostEntity, InScopeEntities, LocalEntityAndGlobalEntityConverter, LocalEntityMap, MessageIndex, PacketNotifiable, RemoteEntity, RemoteWorldManager, Replicate, Tick, WorldMutType, WorldRefType};
+}, ComponentKind, ComponentKinds, ComponentUpdate, DiffMask, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityCommand, EntityConverterMut, EntityEvent, EntityMessage, GlobalEntity, GlobalEntitySpawner, HostEntity, InScopeEntities, LocalEntityAndGlobalEntityConverter, LocalEntityMap, MessageIndex, PacketNotifiable, RemoteEntity, RemoteWorldManager, Replicate, Tick, WorldMutType, WorldRefType};
 
 pub struct LocalWorldManager {
     entity_map: LocalEntityMap,
@@ -146,11 +146,67 @@ impl LocalWorldManager {
     ) {
         self.host.record_command_written(packet_index, command_id, message);
     }
-
-    pub fn host_send_outgoing_command(
+    
+    pub fn host_send_publish(
         &mut self,
-        command: EntityCommand,
+        global_entity: &GlobalEntity,
     ) {
+        // TODO: ?
+        let command = EntityCommand::Publish(None, *global_entity);
+        self.host.send_outgoing_command(command);
+    }
+    
+    pub fn host_send_unpublish(
+        &mut self,
+        global_entity: &GlobalEntity,
+    ) {
+        // TODO: ?
+        let command = EntityCommand::Unpublish(None, *global_entity);
+        self.host.send_outgoing_command(command);
+    }
+    
+    pub fn host_send_enable_delegation(
+        &mut self,
+        global_entity: &GlobalEntity,
+    ) {
+        // TODO: ?
+        let command = EntityCommand::EnableDelegation(None, *global_entity);
+        self.host.send_outgoing_command(command);
+    }
+    
+    pub fn host_send_set_auth(
+        &mut self,
+        global_entity: &GlobalEntity,
+        auth_status: EntityAuthStatus,
+    ) {
+        // TODO: ?
+        let command = EntityCommand::SetAuthority(None, *global_entity, auth_status);
+        self.host.send_outgoing_command(command);
+    }
+    
+    pub fn host_send_disable_delegation(
+        &mut self,
+        global_entity: &GlobalEntity,
+    ) {
+        // TODO: ?
+        let command = EntityCommand::DisableDelegation(None, *global_entity);
+        self.host.send_outgoing_command(command);
+    }
+    
+    pub fn host_send_migrate_response(
+        &mut self,
+        global_entity: &GlobalEntity,
+    ) {
+        // TODO: ?
+        
+        // Add remote entity to Host World
+        let new_host_entity = todo!(); // connection.base.host_world_manager.track_remote_entity(
+        //     &mut connection.base.local_world_manager,
+        //     global_entity,
+        //     component_kinds,
+        // );
+        
+        let command = EntityCommand::MigrateResponse(None, *global_entity, new_host_entity);
         self.host.send_outgoing_command(command);
     }
 
@@ -160,10 +216,58 @@ impl LocalWorldManager {
         self.remote.entity_waitlist_mut()
     }
 
-    pub fn remove_send_outgoing_command(
+    pub fn remote_send_publish(
         &mut self,
-        command: EntityCommand,
+        global_entity: &GlobalEntity,
     ) {
+        // TODO: ?
+        let command = EntityCommand::Publish(None, *global_entity);
+        self.remote.send_outgoing_command(command);
+    }
+    
+    pub fn remote_send_unpublish(
+        &mut self,
+        global_entity: &GlobalEntity,
+    ) {
+        // TODO: ?
+        let command = EntityCommand::Unpublish(None, *global_entity);
+        self.remote.send_outgoing_command(command);
+    }
+    
+    pub fn remote_send_enable_delegation(
+        &mut self,
+        global_entity: &GlobalEntity,
+    ) {
+        // TODO: ?
+        let command = EntityCommand::EnableDelegation(None, *global_entity);
+        self.remote.send_outgoing_command(command);
+    }
+
+    pub fn remote_send_enable_delegation_response(
+        &mut self,
+        global_entity: &GlobalEntity,
+    ) {
+        // TODO: ?
+        let command = EntityCommand::EnableDelegationResponse(None, *global_entity);
+        self.remote.send_outgoing_command(command);
+    }
+
+    pub fn remote_send_request_auth(
+        &mut self,
+        global_entity: &GlobalEntity,
+    ) {
+        // TODO: ?
+        let new_host_entity = self.host_reserve_entity(&global_entity); // host entity? on remote? this is wrong
+        let command = EntityCommand::RequestAuthority(None, *global_entity, new_host_entity.to_remote());
+        self.remote.send_outgoing_command(command);
+    }
+    
+    pub fn remote_send_release_auth(
+        &mut self,
+        global_entity: &GlobalEntity,
+    ) {
+        // TODO: ?
+        let command = EntityCommand::ReleaseAuthority(None, *global_entity);
         self.remote.send_outgoing_command(command);
     }
 

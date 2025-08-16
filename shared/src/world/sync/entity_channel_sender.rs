@@ -3,7 +3,6 @@ use std::collections::HashSet;
 use crate::{world::sync::auth_channel_sender::AuthChannelSender, ComponentKind, EntityCommand, EntityMessageType, HostType};
 
 pub struct EntityChannelSender {
-    host_type: HostType,
     outgoing_commands: Vec<EntityCommand>,
     component_channels: HashSet<ComponentKind>,
     auth_channel: AuthChannelSender,
@@ -12,7 +11,6 @@ pub struct EntityChannelSender {
 impl EntityChannelSender {
     pub(crate) fn new(host_world: bool, host_type: HostType) -> Self {
         Self {
-            host_type,
             outgoing_commands: Vec::new(),
             component_channels: HashSet::new(),
             auth_channel: AuthChannelSender::new(host_world, host_type),

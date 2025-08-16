@@ -42,7 +42,7 @@ impl HostWorldManager {
             sender: ReliableSender::new(RESEND_COMMAND_RTT_FACTOR),
             host_engine: SenderEngine::new(true, host_type),
             sent_command_packets: SequenceList::new(),
-            delivered_commands: EntityMessageReceiver::new(host_type.invert()),
+            delivered_commands: EntityMessageReceiver::new(),
         }
     }
 

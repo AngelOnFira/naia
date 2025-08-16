@@ -9,7 +9,7 @@ use std::{
 
 use log::{info, warn};
 
-use naia_shared::{handshake::HandshakeHeader, BigMap, BitReader, BitWriter, Channel, ChannelKind, ChannelKinds, ComponentKind, ComponentKinds, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityCommand, EntityDoesNotExistError, GlobalEntity, GlobalEntityMap, GlobalEntitySpawner, GlobalRequestId, GlobalResponseId, GlobalWorldManagerType, Instant, Message, MessageContainer, MessageKinds, PacketType, Protocol, RemoteEntity, Replicate, ReplicatedComponent, Request, Response, ResponseReceiveKey, ResponseSendKey, Serde, SerdeErr, SharedGlobalWorldManager, StandardHeader, Tick, Timer, WorldMutType, WorldRefType, EntityEvent};
+use naia_shared::{handshake::HandshakeHeader, BigMap, BitReader, BitWriter, Channel, ChannelKind, ChannelKinds, ComponentKind, ComponentKinds, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityDoesNotExistError, GlobalEntity, GlobalEntityMap, GlobalEntitySpawner, GlobalRequestId, GlobalResponseId, GlobalWorldManagerType, Instant, Message, MessageContainer, MessageKinds, PacketType, Protocol, RemoteEntity, Replicate, ReplicatedComponent, Request, Response, ResponseReceiveKey, ResponseSendKey, Serde, SerdeErr, SharedGlobalWorldManager, StandardHeader, Tick, Timer, WorldMutType, WorldRefType, EntityEvent};
 
 use crate::{
     connection::{connection::Connection, io::Io, tick_buffer_messages::TickBufferMessages},
@@ -644,11 +644,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                     connection
                         .base
                         .world_manager
-                        .host_send_outgoing_command(EntityCommand::SetAuthority(
-                            None,
-                            *global_entity,
+                        .host_send_set_auth(
+                            global_entity,
                             EntityAuthStatus::Available,
-                        ));
+                        );
                 }
 
                 // Clean up any remote entity that was mapped to the delegated host entity in this connection!
@@ -813,11 +812,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         connection
                             .base
                             .world_manager
-                            .host_send_outgoing_command(EntityCommand::SetAuthority(
-                                None,
-                                global_entity,
+                            .host_send_set_auth(
+                                &global_entity,
                                 new_status,
-                            ));
+                            );
                     }
                 }
             }
@@ -848,11 +846,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         connection
                             .base
                             .world_manager
-                            .host_send_outgoing_command(EntityCommand::SetAuthority(
-                                None,
-                                *global_entity,
+                            .host_send_set_auth(
+                                global_entity,
                                 auth_status,
-                            ));
+                            );
                     }
                 }
             }
@@ -1412,7 +1409,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                     connection
                         .base
                         .world_manager
-                        .host_send_outgoing_command(EntityCommand::Publish(None, *global_entity));
+                        .remote_send_publish(global_entity);
                 }
             }
         }
@@ -1448,7 +1445,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                     connection
                         .base
                         .world_manager
-                        .host_send_outgoing_command(EntityCommand::Unpublish(None, *global_entity));
+                        .remote_send_unpublish(global_entity);
                 }
             }
         }
@@ -1485,10 +1482,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                             "Sending EnableDelegation command for entity: {:?} for user: {:?}",
                             global_entity, user.address()
                         );
-                        connection
-                            .base
-                            .world_manager
-                            .host_send_outgoing_command(EntityCommand::EnableDelegation(None, *global_entity));
+                        if client_origin.is_some() {
+                            connection
+                                .base
+                                .world_manager
+                                .remote_send_enable_delegation(global_entity);
+                        } else {
+                            connection
+                                .base
+                                .world_manager
+                                .host_send_enable_delegation(global_entity);
+                        }
                     }
                 }
             }
@@ -1577,22 +1581,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             .component_kinds(global_entity)
             .unwrap();
 
-        // Add remote entity to Host World
-        let new_host_entity = todo!(); // connection.base.host_world_manager.track_remote_entity(
-        //     &mut connection.base.local_world_manager,
-        //     global_entity,
-        //     component_kinds,
-        // );
-
         // Send EntityMigrateResponse action through EntityActionEvent system
         connection
             .base
             .world_manager
-            .host_send_outgoing_command(EntityCommand::MigrateResponse(
-                None,
-                *global_entity,
-                new_host_entity,
-            ));
+            .host_send_migrate_response(global_entity);
 
         self.global_world_manager
             .entity_enable_delegation(&global_entity);
@@ -1636,7 +1629,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         connection
                             .base
                             .world_manager
-                            .host_send_outgoing_command(EntityCommand::DisableDelegation(None, *global_entity));
+                            .host_send_disable_delegation(global_entity);
                     }
                 }
             }
@@ -2420,7 +2413,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         connection
                             .base
                             .world_manager
-                            .host_send_outgoing_command(EntityCommand::EnableDelegation(None, *global_entity));
+                            .host_send_enable_delegation(global_entity);
                     } else if currently_in_scope {
                         // remove entity from the connections local scope
                         connection

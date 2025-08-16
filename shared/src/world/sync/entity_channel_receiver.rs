@@ -82,7 +82,7 @@ use crate::{sequence_less_than, world::{
         component_channel_receiver::ComponentChannelReceiver,
     },
     entity::ordered_ids::OrderedIds
-}, ComponentKind, EntityMessage, EntityMessageType, HostType, MessageIndex};
+}, ComponentKind, EntityMessage, EntityMessageType, MessageIndex};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum EntityChannelState {
@@ -91,7 +91,6 @@ pub(crate) enum EntityChannelState {
 }
 
 pub struct EntityChannelReceiver {
-    host_type: HostType,
     component_channels: HashMap<ComponentKind, ComponentChannelReceiver>,
     outgoing_messages: Vec<EntityMessage<()>>,
     state: EntityChannelState,
@@ -101,9 +100,8 @@ pub struct EntityChannelReceiver {
 }
 
 impl EntityChannelReceiver {
-    pub(crate) fn new(host_type: HostType) -> Self {
+    pub(crate) fn new() -> Self {
         Self {
-            host_type,
             component_channels: HashMap::new(),
             outgoing_messages: Vec::new(),
             state: EntityChannelState::Despawned,

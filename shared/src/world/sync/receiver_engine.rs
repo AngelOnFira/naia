@@ -31,10 +31,9 @@
 
 use std::{fmt::Debug, hash::Hash, collections::HashMap};
 
-use crate::{world::{sync::{entity_channel_receiver::EntityChannelReceiver, config::EngineConfig}, entity::entity_message::EntityMessage}, EntityMessageType, HostType, MessageIndex};
+use crate::{world::{sync::{entity_channel_receiver::EntityChannelReceiver, config::EngineConfig}, entity::entity_message::EntityMessage}, EntityMessageType, MessageIndex};
 
 pub struct ReceiverEngine<E: Copy + Hash + Eq + Debug> {
-    host_type: HostType,
     pub config: EngineConfig,
     outgoing_events: Vec<EntityMessage<E>>,
     entity_channels: HashMap<E, EntityChannelReceiver>,
@@ -42,9 +41,8 @@ pub struct ReceiverEngine<E: Copy + Hash + Eq + Debug> {
 
 impl<E: Copy + Hash + Eq + Debug> ReceiverEngine<E> {
 
-    pub(crate) fn new(host_type: HostType) -> Self {
+    pub(crate) fn new() -> Self {
         Self {
-            host_type,
             config: EngineConfig::default(),
             outgoing_events: Vec::new(),
             entity_channels: HashMap::new(),
@@ -82,7 +80,7 @@ impl<E: Copy + Hash + Eq + Debug> ReceiverEngine<E> {
         // If the entity channel does not exist, create it
         let entity_channel = self.entity_channels
             .entry(entity)
-            .or_insert_with(|| { EntityChannelReceiver::new(self.host_type) });
+            .or_insert_with(|| { EntityChannelReceiver::new() });
 
         // if log {
         //     info!("Engine::accept_message(id={}, entity={:?}, msgType={:?})", id, entity, msg.get_type());
