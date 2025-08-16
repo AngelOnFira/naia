@@ -37,7 +37,7 @@ pub struct RemoteWorldManager {
 impl RemoteWorldManager {
     pub fn new(host_type: HostType) -> Self {
         let delegated_world_opt = if host_type == HostType::Client {
-            Some(SenderEngine::new(host_type))
+            Some(SenderEngine::new(false, host_type))
         } else {
             None
         };
@@ -268,7 +268,7 @@ impl RemoteWorldManager {
                             msg.to_event(local_entity_map)
                         }
                         EntityMessageType::ReleaseAuthority => {
-                            let EntityMessage::ReleaseAuthority(owned_entity) = msg else {
+                            let EntityMessage::ReleaseAuthority(_sub_id, owned_entity) = msg else {
                                 panic!("");
                             };
                             match owned_entity {

@@ -177,13 +177,7 @@ impl EntityChannelReceiver {
 
                     // Drain the auth channel and append the messages to the outgoing events
                     self.auth_channel.buffer_pop_front_until_and_including(id);
-
-                    // If HostType == Client, spawned entities are published by default
-                    if self.host_type == HostType::Client {
-                        self.auth_channel.set_published();
-                    } else {
-                        self.auth_channel.set_unpublished();
-                    }
+                    self.auth_channel.reset_next_subcommand_id();
 
                     self.auth_channel.process_messages(self.state);
                     self.auth_channel.drain_messages_into(&mut self.outgoing_messages);

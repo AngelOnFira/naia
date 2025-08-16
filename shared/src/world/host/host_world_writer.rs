@@ -299,9 +299,16 @@ impl HostWorldWriter {
                 }
             }
             // Former SystemChannel messages - now serialized as EntityCommandEvents
-            EntityCommand::Publish(global_entity) => {
+            EntityCommand::Publish(sub_id_opt, global_entity) => {
+                let Some(sub_id) = sub_id_opt else {
+                    panic!("Publish command must have a CommandId");
+                };
+
                 EntityMessageType::Publish.ser(writer);
 
+                // write subcommand id
+                sub_id.ser(writer);
+
                 // write net entity
                 world_manager
                     .entity_converter()
@@ -314,13 +321,20 @@ impl HostWorldWriter {
                     world_manager.record_command_written(
                         packet_index,
                         command_id,
-                        EntityMessage::Publish(*global_entity),
+                        EntityMessage::Publish(*sub_id, *global_entity),
                     );
                 }
             }
-            EntityCommand::Unpublish(global_entity) => {
+            EntityCommand::Unpublish(sub_id_opt, global_entity) => {
+                let Some(sub_id) = sub_id_opt else {
+                    panic!("Unpublish command must have a CommandId");
+                };
+
                 EntityMessageType::Unpublish.ser(writer);
 
+                // write subcommand id
+                sub_id.ser(writer);
+
                 // write net entity
                 world_manager
                     .entity_converter()
@@ -333,13 +347,20 @@ impl HostWorldWriter {
                     world_manager.record_command_written(
                         packet_index,
                         command_id,
-                        EntityMessage::Unpublish(*global_entity),
+                        EntityMessage::Unpublish(*sub_id, *global_entity),
                     );
                 }
             }
-            EntityCommand::EnableDelegation(global_entity) => {
+            EntityCommand::EnableDelegation(sub_id_opt, global_entity) => {
+                let Some(sub_id) = sub_id_opt else {
+                    panic!("EnableDelegation command must have a CommandId");
+                };
+
                 EntityMessageType::EnableDelegation.ser(writer);
 
+                // write subcommand id
+                sub_id.ser(writer);
+
                 // write net entity
                 world_manager
                     .entity_converter()
@@ -352,13 +373,20 @@ impl HostWorldWriter {
                     world_manager.record_command_written(
                         packet_index,
                         command_id,
-                        EntityMessage::EnableDelegation(*global_entity),
+                        EntityMessage::EnableDelegation(*sub_id, *global_entity),
                     );
                 }
             }
-            EntityCommand::DisableDelegation(global_entity) => {
+            EntityCommand::DisableDelegation(sub_id_opt, global_entity) => {
+                let Some(sub_id) = sub_id_opt else {
+                    panic!("DisableDelegation command must have a CommandId");
+                };
+
                 EntityMessageType::DisableDelegation.ser(writer);
 
+                // write subcommand id
+                sub_id.ser(writer);
+
                 // write net entity
                 world_manager
                     .entity_converter()
@@ -371,12 +399,19 @@ impl HostWorldWriter {
                     world_manager.record_command_written(
                         packet_index,
                         command_id,
-                        EntityMessage::DisableDelegation(*global_entity),
+                        EntityMessage::DisableDelegation(*sub_id, *global_entity),
                     );
                 }
             }
-            EntityCommand::SetAuthority(global_entity, auth_status) => {
+            EntityCommand::SetAuthority(sub_id_opt, global_entity, auth_status) => {
+                let Some(sub_id) = sub_id_opt else {
+                    panic!("SetAuthority command must have a CommandId");
+                };
+
                 EntityMessageType::SetAuthority.ser(writer);
+
+                // write subcommand id
+                sub_id.ser(writer);
 
                 // write net entity
                 world_manager
@@ -393,14 +428,21 @@ impl HostWorldWriter {
                     world_manager.record_command_written(
                         packet_index,
                         command_id,
-                        EntityMessage::SetAuthority(*global_entity, *auth_status),
+                        EntityMessage::SetAuthority(*sub_id, *global_entity, *auth_status),
                     );
                 }
             }
             
             // below are response-type commands
-            EntityCommand::EnableDelegationResponse(global_entity) => {
+            EntityCommand::EnableDelegationResponse(sub_id_opt, global_entity) => {
+                let Some(sub_id) = sub_id_opt else {
+                    panic!("EnableDelegationResponse command must have a CommandId");
+                };
+
                 EntityMessageType::EnableDelegationResponse.ser(writer);
+
+                // write subcommand id
+                sub_id.ser(writer);
 
                 // write net entity
                 world_manager
@@ -414,12 +456,19 @@ impl HostWorldWriter {
                     world_manager.record_command_written(
                         packet_index,
                         command_id,
-                        EntityMessage::EnableDelegationResponse(*global_entity),
+                        EntityMessage::EnableDelegationResponse(*sub_id, *global_entity),
                     );
                 }
             }
-            EntityCommand::MigrateResponse(global_entity, new_host_entity_value) => {
+            EntityCommand::MigrateResponse(sub_id_opt, global_entity, new_host_entity_value) => {
+                let Some(sub_id) = sub_id_opt else {
+                    panic!("MigrateResponse command must have a CommandId");
+                };
+
                 EntityMessageType::MigrateResponse.ser(writer);
+
+                // write subcommand id
+                sub_id.ser(writer);
 
                 // write net entity
                 world_manager
@@ -436,12 +485,19 @@ impl HostWorldWriter {
                     world_manager.record_command_written(
                         packet_index,
                         command_id,
-                        EntityMessage::MigrateResponse(*global_entity, *new_host_entity_value),
+                        EntityMessage::MigrateResponse(*sub_id, *global_entity, *new_host_entity_value),
                     );
                 }
             }
-            EntityCommand::RequestAuthority(global_entity, host_entity) => {
+            EntityCommand::RequestAuthority(sub_id_opt, global_entity, host_entity) => {
+                let Some(sub_id) = sub_id_opt else {
+                    panic!("RequestAuthority command must have a CommandId");
+                };
+
                 EntityMessageType::RequestAuthority.ser(writer);
+
+                // write subcommand id
+                sub_id.ser(writer);
 
                 // write net entity
                 world_manager
@@ -458,12 +514,19 @@ impl HostWorldWriter {
                     world_manager.record_command_written(
                         packet_index,
                         command_id,
-                        EntityMessage::RequestAuthority(*global_entity, *host_entity),
+                        EntityMessage::RequestAuthority(*sub_id, *global_entity, *host_entity),
                     );
                 }
             }
-            EntityCommand::ReleaseAuthority(global_entity) => {
+            EntityCommand::ReleaseAuthority(sub_id_opt, global_entity) => {
+                let Some(sub_id) = sub_id_opt else {
+                    panic!("ReleaseAuthority command must have a CommandId");
+                };
+
                 EntityMessageType::ReleaseAuthority.ser(writer);
+
+                // write subcommand id
+                sub_id.ser(writer);
 
                 // get owned entity
                 let owned_entity = world_manager
@@ -479,7 +542,7 @@ impl HostWorldWriter {
                     world_manager.record_command_written(
                         packet_index,
                         command_id,
-                        EntityMessage::ReleaseAuthority(owned_entity),
+                        EntityMessage::ReleaseAuthority(*sub_id, owned_entity),
                     );
                 }
             }
@@ -506,15 +569,15 @@ impl HostWorldWriter {
                     "Packet Write Error: Blocking overflow detected! Component Insertion message of type `{component_name}` requires {bits_needed} bits, but packet only has {bits_free} bits available! This condition should never be reached, as large Messages should be Fragmented in the Reliable channel"
                 )
             }
-            EntityCommand::Publish(_)
-            | EntityCommand::Unpublish(_)
-            | EntityCommand::EnableDelegation(_)
-            | EntityCommand::EnableDelegationResponse(_)
-            | EntityCommand::DisableDelegation(_)
-            | EntityCommand::RequestAuthority(_, _)
-            | EntityCommand::ReleaseAuthority(_)
-            | EntityCommand::SetAuthority(_, _)
-            | EntityCommand::MigrateResponse(_, _) => {
+            EntityCommand::Publish(_, _)
+            | EntityCommand::Unpublish(_, _)
+            | EntityCommand::EnableDelegation(_, _)
+            | EntityCommand::EnableDelegationResponse(_, _)
+            | EntityCommand::DisableDelegation(_, _)
+            | EntityCommand::RequestAuthority(_, _, _)
+            | EntityCommand::ReleaseAuthority(_, _)
+            | EntityCommand::SetAuthority(_, _, _)
+            | EntityCommand::MigrateResponse(_, _, _) => {
                 panic!(
                     "Packet Write Error: Blocking overflow detected! Authority/delegation command requires {bits_needed} bits, but packet only has {bits_free} bits available! These messages should be small and not cause overflow."
                 )

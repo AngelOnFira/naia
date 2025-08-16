@@ -3,12 +3,13 @@ use std::{time::Duration, collections::{HashMap, HashSet, VecDeque}};
 use crate::{sequence_list::SequenceList, world::{
     sync::{SenderEngine, EntityChannelReceiver, EntityChannelSender},
     host::entity_update_manager::EntityUpdateManager,
-}, EntityMessage, EntityMessageReceiver, GlobalEntity, Instant, PacketIndex, HostType, ComponentKind, HostEntityGenerator, MessageIndex, EntityCommand, PacketNotifiable, LocalEntityMap, HostEntity, EntityConverterMut, GlobalWorldManagerType, ReliableSender, ChannelSender};
+}, EntityMessage, EntityMessageReceiver, GlobalEntity, Instant, PacketIndex, HostType, ComponentKind, HostEntityGenerator, MessageIndex, EntityCommand, PacketNotifiable, LocalEntityMap, HostEntity, EntityConverterMut, GlobalWorldManagerType, ReliableSender, ChannelSender, ShortMessageIndex};
 
 const COMMAND_RECORD_TTL: Duration = Duration::from_secs(60);
 const RESEND_COMMAND_RTT_FACTOR: f32 = 1.5;
 
 pub type CommandId = MessageIndex;
+pub type SubCommandId = ShortMessageIndex;
 
 /// Channel to perform ECS replication between server and client
 /// Only handles entity commands (Spawn/despawn entity and insert/remove components)
@@ -39,7 +40,7 @@ impl HostWorldManager {
         Self {
             entity_generator: HostEntityGenerator::new(user_key),
             sender: ReliableSender::new(RESEND_COMMAND_RTT_FACTOR),
-            host_engine: SenderEngine::new(host_type),
+            host_engine: SenderEngine::new(true, host_type),
             sent_command_packets: SequenceList::new(),
             delivered_commands: EntityMessageReceiver::new(host_type.invert()),
         }

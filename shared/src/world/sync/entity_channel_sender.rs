@@ -10,12 +10,12 @@ pub struct EntityChannelSender {
 }
 
 impl EntityChannelSender {
-    pub(crate) fn new(host_type: HostType) -> Self {
+    pub(crate) fn new(host_world: bool, host_type: HostType) -> Self {
         Self {
             host_type,
             outgoing_commands: Vec::new(),
             component_channels: HashSet::new(),
-            auth_channel: AuthChannelSender::new(),
+            auth_channel: AuthChannelSender::new(host_world, host_type),
         }
     }
 

@@ -1,4 +1,4 @@
-use crate::{ComponentKind, EntityAuthStatus, EntityMessageType, GlobalEntity, HostEntity, RemoteEntity};
+use crate::{world::host::host_world_manager::SubCommandId, ComponentKind, EntityAuthStatus, EntityMessageType, GlobalEntity, HostEntity, RemoteEntity};
 
 // command to sync entities from host -> remote
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -9,17 +9,17 @@ pub enum EntityCommand {
     RemoveComponent(GlobalEntity, ComponentKind),
     
     // Former SystemChannel messages
-    Publish(GlobalEntity),
-    Unpublish(GlobalEntity),
-    EnableDelegation(GlobalEntity),
-    DisableDelegation(GlobalEntity), // only sent by server
-    SetAuthority(GlobalEntity, EntityAuthStatus), // only sent by server
+    Publish(Option<SubCommandId>, GlobalEntity),
+    Unpublish(Option<SubCommandId>, GlobalEntity),
+    EnableDelegation(Option<SubCommandId>, GlobalEntity),
+    DisableDelegation(Option<SubCommandId>, GlobalEntity), // only sent by server
+    SetAuthority(Option<SubCommandId>, GlobalEntity, EntityAuthStatus), // only sent by server
 
     // These aren't commands, they are something else
-    RequestAuthority(GlobalEntity, RemoteEntity), // only sent by client
-    ReleaseAuthority(GlobalEntity), // only sent by client
-    EnableDelegationResponse(GlobalEntity), // only sent by client
-    MigrateResponse(GlobalEntity, HostEntity), // only sent by server
+    RequestAuthority(Option<SubCommandId>, GlobalEntity, RemoteEntity), // only sent by client
+    ReleaseAuthority(Option<SubCommandId>, GlobalEntity), // only sent by client
+    EnableDelegationResponse(Option<SubCommandId>, GlobalEntity), // only sent by client
+    MigrateResponse(Option<SubCommandId>, GlobalEntity, HostEntity), // only sent by server
 }
 
 impl EntityCommand {
@@ -29,15 +29,15 @@ impl EntityCommand {
             Self::Despawn(entity) => *entity,
             Self::InsertComponent(entity, _) => *entity,
             Self::RemoveComponent(entity, _) => *entity,
-            Self::Publish(entity) => *entity,
-            Self::Unpublish(entity) => *entity,
-            Self::EnableDelegation(entity) => *entity,
-            Self::DisableDelegation(entity) => *entity,
-            Self::SetAuthority(entity, _) => *entity,
-            Self::RequestAuthority(entity, _) => *entity,
-            Self::ReleaseAuthority(entity) => *entity,
-            Self::EnableDelegationResponse(entity) => *entity,
-            Self::MigrateResponse(entity, _) => *entity,
+            Self::Publish(_, entity) => *entity,
+            Self::Unpublish(_, entity) => *entity,
+            Self::EnableDelegation(_, entity) => *entity,
+            Self::DisableDelegation(_, entity) => *entity,
+            Self::SetAuthority(_, entity, _) => *entity,
+            Self::RequestAuthority(_, entity, _) => *entity,
+            Self::ReleaseAuthority(_, entity) => *entity,
+            Self::EnableDelegationResponse(_, entity) => *entity,
+            Self::MigrateResponse(_, entity, _) => *entity,
         }
     }
 
@@ -55,15 +55,34 @@ impl EntityCommand {
             Self::Despawn(_) => EntityMessageType::Despawn,
             Self::InsertComponent(_, _) => EntityMessageType::InsertComponent,
             Self::RemoveComponent(_, _) => EntityMessageType::RemoveComponent,
-            Self::Publish(_) => EntityMessageType::Publish,
-            Self::Unpublish(_) => EntityMessageType::Unpublish,
-            Self::EnableDelegation(_) => EntityMessageType::EnableDelegation,
-            Self::DisableDelegation(_) => EntityMessageType::DisableDelegation,
-            Self::SetAuthority(_, _) => EntityMessageType::SetAuthority,
-            Self::RequestAuthority(_, _) => EntityMessageType::RequestAuthority,
-            Self::ReleaseAuthority(_) => EntityMessageType::ReleaseAuthority,
-            Self::EnableDelegationResponse(_) => EntityMessageType::EnableDelegationResponse,
-            Self::MigrateResponse(_, _) => EntityMessageType::MigrateResponse,
+            Self::Publish(_, _) => EntityMessageType::Publish,
+            Self::Unpublish(_, _) => EntityMessageType::Unpublish,
+            Self::EnableDelegation(_, _) => EntityMessageType::EnableDelegation,
+            Self::DisableDelegation(_, _) => EntityMessageType::DisableDelegation,
+            Self::SetAuthority(_, _, _) => EntityMessageType::SetAuthority,
+            Self::RequestAuthority(_, _, _) => EntityMessageType::RequestAuthority,
+            Self::ReleaseAuthority(_, _) => EntityMessageType::ReleaseAuthority,
+            Self::EnableDelegationResponse(_, _) => EntityMessageType::EnableDelegationResponse,
+            Self::MigrateResponse(_, _, _) => EntityMessageType::MigrateResponse,
+        }
+    }
+
+    pub(crate) fn set_subcommand_id(&mut self, id: SubCommandId) {
+        match self {
+            Self::Spawn(_) | Self::Despawn(_) | Self::InsertComponent(_, _) | Self::RemoveComponent(_, _) => {
+                panic!("Cannot set subcommand ID for a command that does not have one");
+            }
+            Self::Publish(sub_id, _) | 
+            Self::Unpublish(sub_id, _) |
+            Self::EnableDelegation(sub_id, _) | 
+            Self::DisableDelegation(sub_id, _) |
+            Self::SetAuthority(sub_id, _, _) | 
+            Self::RequestAuthority(sub_id, _, _) | 
+            Self::ReleaseAuthority(sub_id, _) |
+            Self::EnableDelegationResponse(sub_id, _) | 
+            Self::MigrateResponse(sub_id, _, _) => {
+                *sub_id = Some(id);
+            }
         }
     }
 }

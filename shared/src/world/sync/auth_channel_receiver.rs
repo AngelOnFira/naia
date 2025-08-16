@@ -47,17 +47,10 @@
 //! the canonical state graph above; thus consumers can apply events in
 //! arrival order without additional checks.
 
-use crate::{world::{entity::ordered_ids::OrderedIds, sync::entity_channel_receiver::EntityChannelState}, EntityMessage, MessageIndex};
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum EntityAuthChannelState {
-    Unpublished,
-    Published,
-    Delegated,
-}
+use crate::{world::{host::host_world_manager::SubCommandId, entity::ordered_ids::OrderedIds, sync::entity_channel_receiver::EntityChannelState}, EntityMessage, MessageIndex};
 
 pub(crate) struct AuthChannelReceiver {
-    state: EntityAuthChannelState,
+    next_subcommand_id: SubCommandId,
     buffered_messages: OrderedIds<EntityMessage<()>>,
     outgoing_messages: Vec<EntityMessage<()>>,
 }
@@ -65,7 +58,7 @@ pub(crate) struct AuthChannelReceiver {
 impl AuthChannelReceiver {
     pub(crate) fn new() -> Self {
         Self {
-            state: EntityAuthChannelState::Unpublished,
+            next_subcommand_id: 0,
             buffered_messages: OrderedIds::new(),
             outgoing_messages: Vec::new(),
         }
@@ -76,12 +69,8 @@ impl AuthChannelReceiver {
         *self = Self::new();
     }
 
-    pub(crate) fn set_unpublished(&mut self) {
-        self.state = EntityAuthChannelState::Unpublished;
-    }
-
-    pub(crate) fn set_published(&mut self) {
-        self.state = EntityAuthChannelState::Published;
+    pub(crate) fn reset_next_subcommand_id(&mut self) {
+        self.next_subcommand_id = 0;
     }
 
     pub(crate) fn drain_messages_into(
@@ -122,60 +111,18 @@ impl AuthChannelReceiver {
             let Some((_, msg)) = self.buffered_messages.peek_front() else {
                 break;
             };
-
-            match msg {
-                EntityMessage::Publish(_) => {
-                    if self.state != EntityAuthChannelState::Unpublished {
-                        break;
-                    }
-
-                    self.state = EntityAuthChannelState::Published;
-
-                    self.pop_front_into_outgoing();
-                }
-                EntityMessage::Unpublish(_) => {
-                    if self.state != EntityAuthChannelState::Published {
-                        break;
-                    }
-
-                    self.state = EntityAuthChannelState::Unpublished;
-
-                    self.pop_front_into_outgoing();
-                }
-                EntityMessage::EnableDelegation(_) => {
-                    if self.state != EntityAuthChannelState::Published {
-                        break;
-                    }
-
-                    self.state = EntityAuthChannelState::Delegated;
-
-                    self.pop_front_into_outgoing();
-                }
-                EntityMessage::DisableDelegation(_) => {
-                    if self.state != EntityAuthChannelState::Delegated {
-                        break;
-                    }
-
-                    self.state = EntityAuthChannelState::Published;
-
-                    self.pop_front_into_outgoing();
-                }
-                EntityMessage::SetAuthority(_, _) => {
-                    if self.state != EntityAuthChannelState::Delegated {
-                        break;
-                    }
-
-                    self.pop_front_into_outgoing();
-                }
-                _ => {
-                    panic!("Unexpected message type in AuthChannel: {:?}", msg);
-                }
+            
+            let Some(subcommand_id) = msg.subcommand_id() else {
+                panic!("Expected a subcommand ID in the message: {:?}", msg);
+            };
+            
+            if subcommand_id != self.next_subcommand_id {
+                // If the subcommand ID does not match the next expected ID, we stop processing
+                break;
             }
-        }
-    }
 
-    fn pop_front_into_outgoing(&mut self) {
-        let (_, msg) = self.buffered_messages.pop_front().unwrap();
-        self.outgoing_messages.push(msg);
+            let (_, msg) = self.buffered_messages.pop_front().unwrap();
+            self.outgoing_messages.push(msg);
+        }
     }
 }

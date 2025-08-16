@@ -2,7 +2,7 @@ use log::warn;
 
 use crate::{
     messages::channels::receivers::indexed_message_reader::IndexedMessageReader,
-    world::{local_world_manager::LocalWorldManager, entity::local_entity::RemoteEntity},
+    world::{host::host_world_manager::SubCommandId, local_world_manager::LocalWorldManager, entity::local_entity::RemoteEntity},
     BitReader, ComponentKind, ComponentKinds, EntityMessage, EntityMessageType, EntityAuthStatus,
     HostEntity, MessageIndex, Serde, SerdeErr, Tick, OwnedLocalEntity
 };
@@ -130,30 +130,49 @@ impl RemoteWorldReader {
             // Former SystemChannel messages - now handled as EntityMessages
             // These generate EntityResponseEvent directly instead of going through EntityMessage
             EntityMessageType::Publish => {
+
+                // read subcommand id
+                let sub_command_id = SubCommandId::de(reader)?;
+
                 // read entity
                 let remote_entity = RemoteEntity::de(reader)?;
 
-                world_manager.receive_message(message_id, EntityMessage::Publish(remote_entity));
+                world_manager.receive_message(message_id, EntityMessage::Publish(sub_command_id, remote_entity));
             }
             EntityMessageType::Unpublish => {
+
+                // read subcommand id
+                let sub_command_id = SubCommandId::de(reader)?;
+
                 // read entity
                 let remote_entity = RemoteEntity::de(reader)?;
 
-                world_manager.receive_message(message_id, EntityMessage::Unpublish(remote_entity));
+                world_manager.receive_message(message_id, EntityMessage::Unpublish(sub_command_id, remote_entity));
             }
             EntityMessageType::EnableDelegation => {
+
+                // read subcommand id
+                let sub_command_id = SubCommandId::de(reader)?;
+
                 // read entity
                 let remote_entity = RemoteEntity::de(reader)?;
 
-                world_manager.receive_message(message_id, EntityMessage::EnableDelegation(remote_entity));
+                world_manager.receive_message(message_id, EntityMessage::EnableDelegation(sub_command_id, remote_entity));
             }
             EntityMessageType::EnableDelegationResponse => {
+
+                // read subcommand id
+                let sub_command_id = SubCommandId::de(reader)?;
+
                 // read entity
                 let remote_entity = RemoteEntity::de(reader)?;
 
-                world_manager.receive_message(message_id, EntityMessage::EnableDelegationResponse(remote_entity));
+                world_manager.receive_message(message_id, EntityMessage::EnableDelegationResponse(sub_command_id, remote_entity));
             }
             EntityMessageType::MigrateResponse => {
+
+                // read subcommand id
+                let sub_command_id = SubCommandId::de(reader)?;
                 // read entity
                 let remote_entity = RemoteEntity::de(reader)?;
                 // read new host entity value
@@ -162,12 +181,16 @@ impl RemoteWorldReader {
                 world_manager.receive_message(
                     message_id,
                     EntityMessage::MigrateResponse(
+                        sub_command_id,
                         remote_entity,
                         HostEntity::new(new_host_entity_value),
                     ),
                 );
             }
             EntityMessageType::RequestAuthority => {
+
+                // read subcommand id
+                let sub_command_id = SubCommandId::de(reader)?;
                 // read entity
                 let remote_entity = RemoteEntity::de(reader)?;
                 // read remote entity value
@@ -176,32 +199,46 @@ impl RemoteWorldReader {
                 world_manager.receive_message(
                     message_id,
                     EntityMessage::RequestAuthority(
+                        sub_command_id,
                         remote_entity,
                         RemoteEntity::new(remote_entity_value),
                     ),
                 );
             }
             EntityMessageType::ReleaseAuthority => {
+
+                // read subcommand id
+                let sub_command_id = SubCommandId::de(reader)?;
+
                 // read entity
                 let owned_entity = OwnedLocalEntity::de(reader)?;
 
-                world_manager.receive_message(message_id, EntityMessage::ReleaseAuthority(owned_entity));
+                world_manager.receive_message(message_id, EntityMessage::ReleaseAuthority(sub_command_id, owned_entity));
             }
             EntityMessageType::DisableDelegation => {
+
+                // read subcommand id
+                let sub_command_id = SubCommandId::de(reader)?;
+
                 // read entity
                 let remote_entity = RemoteEntity::de(reader)?;
 
-                world_manager.receive_message(message_id, EntityMessage::DisableDelegation(remote_entity));
+                world_manager.receive_message(message_id, EntityMessage::DisableDelegation(sub_command_id, remote_entity));
             }
             EntityMessageType::SetAuthority => {
+
+                // read subcommand id
+                let sub_command_id = SubCommandId::de(reader)?;
+
                 // read entity
                 let remote_entity = RemoteEntity::de(reader)?;
+
                 // read auth status
                 let auth_status = EntityAuthStatus::de(reader)?;
 
                 world_manager.receive_message(
                     message_id,
-                    EntityMessage::SetAuthority(remote_entity, auth_status),
+                    EntityMessage::SetAuthority(sub_command_id, remote_entity, auth_status),
                 );
             }
             EntityMessageType::Noop => {

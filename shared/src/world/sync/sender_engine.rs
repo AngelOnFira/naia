@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use crate::{world::sync::{EntityChannelSender, config::EngineConfig}, GlobalEntity, HostType, EntityCommand, EntityMessageType};
 
 pub struct SenderEngine {
+    host_world: bool,
     host_type: HostType,
     pub config: EngineConfig,
     entity_channels: HashMap<GlobalEntity, EntityChannelSender>,
@@ -11,8 +12,9 @@ pub struct SenderEngine {
 
 impl SenderEngine {
 
-    pub(crate) fn new(host_type: HostType) -> Self {
+    pub(crate) fn new(host_world: bool, host_type: HostType) -> Self {
         Self {
+            host_world,
             host_type,
             config: EngineConfig::default(),
             outgoing_commands: Vec::new(),
@@ -33,7 +35,7 @@ impl SenderEngine {
     pub(crate) fn accept_command(&mut self, command: EntityCommand) {
 
         let entity = command.entity();
-        
+
         match command.get_type() {
             EntityMessageType::Spawn => {
                 if self.entity_channels.contains_key(&entity) {
@@ -41,8 +43,8 @@ impl SenderEngine {
                 }
                 // If the entity channel does not exist, create it
                 self.entity_channels
-                    .insert(entity, EntityChannelSender::new(self.host_type));
-                
+                    .insert(entity, EntityChannelSender::new(self.host_world, self.host_type));
+
                 self.outgoing_commands.push(command);
                 return;
             }
@@ -69,7 +71,7 @@ impl SenderEngine {
             }
             _ => {}
         }
-        
+
         let Some(entity_channel) = self.entity_channels.get_mut(&entity) else {
             panic!("Cannot accept command for an entity that does not exist in the engine");
         };

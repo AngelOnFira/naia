@@ -1,4 +1,4 @@
-use crate::{EntityAuthStatus, EntityCommand, EntityMessageType};
+use crate::{world::host::host_world_manager::SubCommandId, EntityAuthStatus, EntityCommand, EntityMessageType, HostType};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum EntityAuthChannelState {
@@ -9,20 +9,30 @@ enum EntityAuthChannelState {
 
 pub(crate) struct AuthChannelSender {
     state: EntityAuthChannelState,
+    next_subcommand_id: SubCommandId,
     outgoing_commands: Vec<EntityCommand>,
 }
 
 impl AuthChannelSender {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(host_world: bool, host_type: HostType) -> Self {
+        
+        let state = match (host_world, host_type) {
+            (true, HostType::Client) => EntityAuthChannelState::Unpublished,
+            (false, HostType::Client) => EntityAuthChannelState::Delegated,
+            (true, HostType::Server) => EntityAuthChannelState::Published,
+            (false, HostType::Server) => panic!("Impossible"),
+        };
+        
         Self {
-            state: EntityAuthChannelState::Unpublished,
+            state,
+            next_subcommand_id: 0,
             outgoing_commands: Vec::new(),
         }
     }
 
     pub(crate) fn accept_message(
         &mut self,
-        command: EntityCommand,
+        mut command: EntityCommand,
     ) {
         match command.get_type() {
             EntityMessageType::Publish => {
@@ -54,7 +64,7 @@ impl AuthChannelSender {
                     panic!("Cannot set authority on an entity that is not delegated");
                 }
 
-                let EntityCommand::SetAuthority(_, status) = command else {
+                let EntityCommand::SetAuthority(_, _entity, status) = command else {
                     panic!("Expected SetAuthority command");
                 };
 
@@ -80,6 +90,9 @@ impl AuthChannelSender {
                 panic!("Unsupported command type for AuthChannelSender");
             }
         }
+        
+        command.set_subcommand_id(self.next_subcommand_id);
+        self.next_subcommand_id = self.next_subcommand_id.wrapping_add(1);
 
         self.outgoing_commands.push(command);
     }
