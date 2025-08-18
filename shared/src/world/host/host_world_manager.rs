@@ -1,9 +1,11 @@
 use std::{time::Duration, collections::{HashMap, HashSet, VecDeque}};
 
 use crate::{sequence_list::SequenceList, world::{
-    sync::{SenderEngine, EntityChannelReceiver, EntityChannelSender},
+    sync::{HostEngine, EntityChannelReceiver, EntityChannelSender},
     host::entity_update_manager::EntityUpdateManager,
 }, EntityMessage, EntityMessageReceiver, GlobalEntity, Instant, PacketIndex, HostType, ComponentKind, HostEntityGenerator, MessageIndex, EntityCommand, PacketNotifiable, LocalEntityMap, HostEntity, EntityConverterMut, GlobalWorldManagerType, ReliableSender, ChannelSender, ShortMessageIndex};
+use crate::messages::channels::receivers::reliable_receiver::ReliableReceiver;
+use crate::world::sync::RemoteEngine;
 
 const COMMAND_RECORD_TTL: Duration = Duration::from_secs(60);
 const RESEND_COMMAND_RTT_FACTOR: f32 = 1.5;
@@ -25,14 +27,15 @@ pub struct HostWorldManager {
 
     // For Server, this contains the Entities that the Server has authority over, that it syncs to the Client
     // For Client, this contains the non-Delegated Entities that the Client has authority over, that it syncs to the Server
-    host_engine: SenderEngine,
+    host_engine: HostEngine,
 
     // sent packets
     sent_command_packets: SequenceList<(Instant, Vec<(CommandId, EntityMessage<GlobalEntity>)>)>,
 
     // For Server, this contains the Entities that the Server has authority over, that have been delivered to the Client
     // For Client, this contains the non-Delegated Entities that the Client has authority over, that have been delivered to the Server
-    delivered_commands: EntityMessageReceiver<GlobalEntity>,
+    delivered_receiver: ReliableReceiver<EntityMessage<GlobalEntity>>,
+    delivered_engine: RemoteEngine<GlobalEntity>,
 }
 
 impl HostWorldManager {
@@ -40,9 +43,10 @@ impl HostWorldManager {
         Self {
             entity_generator: HostEntityGenerator::new(user_key),
             sender: ReliableSender::new(RESEND_COMMAND_RTT_FACTOR),
-            host_engine: SenderEngine::new(true, host_type),
+            host_engine: HostEngine::new(host_type),
             sent_command_packets: SequenceList::new(),
-            delivered_commands: EntityMessageReceiver::new(),
+            delivered_receiver: ReliableReceiver::new(),
+            delivered_engine: RemoteEngine::new(host_type.invert()),
         }
     }
 
@@ -60,21 +64,15 @@ impl HostWorldManager {
         &mut self,
         now: &Instant,
         rtt_millis: &f32,
-        delegated_world_opt: Option<&mut SenderEngine>,
     ) -> VecDeque<(CommandId, EntityCommand)> {
         for outgoing_command in self.host_engine.take_outgoing_commands() {
             self.sender.send_message(outgoing_command);
-        }
-        if let Some(delegated_world) = delegated_world_opt {
-            for outgoing_command in delegated_world.take_outgoing_commands() {
-                self.sender.send_message(outgoing_command);
-            }
         }
         self.sender.collect_messages(now, rtt_millis);
         self.sender.take_next_messages()
     }
 
-    pub fn send_outgoing_command(
+    pub fn send_command(
         &mut self,
         command: EntityCommand,
     ) {
@@ -194,7 +192,7 @@ impl HostWorldManager {
     }
 
     pub(crate) fn get_remote_world(&self) -> &HashMap<GlobalEntity, EntityChannelReceiver> {
-        self.delivered_commands.get_world()
+        self.delivered_engine.get_world()
     }
 
     pub(crate) fn get_updatable_world(&self) -> HashMap<GlobalEntity, HashSet<ComponentKind>> {
@@ -219,7 +217,7 @@ impl HostWorldManager {
         local_entity_map: &mut LocalEntityMap,
         entity_update_manager: &mut EntityUpdateManager,
     ) {
-        for command in self.delivered_commands.receive_messages() {
+        for command in EntityMessageReceiver::receive_messages(&mut self.delivered_receiver, &mut self.delivered_engine) {
             match command {
                 EntityMessage::Spawn(entity) => {
                     self.on_remote_spawn_entity(&entity);
@@ -286,7 +284,7 @@ impl PacketNotifiable for HostWorldManager {
         {
             for (command_id, command) in command_list {
                 if self.sender.deliver_message(&command_id).is_some() {
-                    self.delivered_commands.buffer_message(command_id, command);
+                    EntityMessageReceiver::buffer_message(&mut self.delivered_receiver, command_id, command);
                 }
             }
         }

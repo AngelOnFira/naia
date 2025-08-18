@@ -27,7 +27,7 @@ impl LocalWorldManager {
         global_world_manager: &dyn GlobalWorldManagerType,
     ) -> Self {
         Self {
-            entity_map: LocalEntityMap::new(),
+            entity_map: LocalEntityMap::new(host_type),
             host: HostWorldManager::new(host_type, user_key),
             remote: RemoteWorldManager::new(host_type),
             updater: EntityUpdateManager::new(address, global_world_manager),
@@ -70,8 +70,8 @@ impl LocalWorldManager {
         self.entity_map.has_both_host_and_remote_entity(global_entity)
     }
 
-    pub fn set_primary_to_host(&mut self, global_entity: &GlobalEntity) {
-        self.entity_map.set_primary_to_host(global_entity);
+    pub fn set_host_owned(&mut self, global_entity: &GlobalEntity) {
+        self.entity_map.set_host_owned(global_entity);
     }
 
     // Host-focused
@@ -96,20 +96,32 @@ impl LocalWorldManager {
         self.host.host_despawn_entity(global_entity)
     }
 
-    pub fn host_insert_component(
+    // should be remote? or maybe not, this is after migration? only server sends this
+    pub fn host_send_migrate_response(
         &mut self,
         global_entity: &GlobalEntity,
-        component_kind: &ComponentKind,
     ) {
-        self.host.host_insert_component(global_entity, component_kind);
+        // TODO: ?
+
+        // Add remote entity to Host World
+        let new_host_entity = todo!(); // connection.base.host_world_manager.track_remote_entity(
+        //     &mut connection.base.local_world_manager,
+        //     global_entity,
+        //     component_kinds,
+        // );
+
+        let command = EntityCommand::MigrateResponse(None, *global_entity, new_host_entity);
+        self.host.send_command(command);
     }
 
-    pub fn host_remove_component(
+    pub fn host_send_set_auth(
         &mut self,
         global_entity: &GlobalEntity,
-        component_kind: &ComponentKind,
+        auth_status: EntityAuthStatus,
     ) {
-        self.host.host_remove_component(global_entity, component_kind);
+        // TODO: ?
+        let command = EntityCommand::SetAuthority(None, *global_entity, auth_status);
+        self.host.send_command(command);
     }
 
     pub fn host_reserve_entity(
@@ -146,129 +158,37 @@ impl LocalWorldManager {
     ) {
         self.host.record_command_written(packet_index, command_id, message);
     }
-    
-    pub fn host_send_publish(
-        &mut self,
-        global_entity: &GlobalEntity,
-    ) {
-        // TODO: ?
-        let command = EntityCommand::Publish(None, *global_entity);
-        self.host.send_outgoing_command(command);
-    }
-    
-    pub fn host_send_unpublish(
-        &mut self,
-        global_entity: &GlobalEntity,
-    ) {
-        // TODO: ?
-        let command = EntityCommand::Unpublish(None, *global_entity);
-        self.host.send_outgoing_command(command);
-    }
-    
-    pub fn host_send_enable_delegation(
-        &mut self,
-        global_entity: &GlobalEntity,
-    ) {
-        // TODO: ?
-        let command = EntityCommand::EnableDelegation(None, *global_entity);
-        self.host.send_outgoing_command(command);
-    }
-    
-    pub fn host_send_set_auth(
-        &mut self,
-        global_entity: &GlobalEntity,
-        auth_status: EntityAuthStatus,
-    ) {
-        // TODO: ?
-        let command = EntityCommand::SetAuthority(None, *global_entity, auth_status);
-        self.host.send_outgoing_command(command);
-    }
-    
-    pub fn host_send_disable_delegation(
-        &mut self,
-        global_entity: &GlobalEntity,
-    ) {
-        // TODO: ?
-        let command = EntityCommand::DisableDelegation(None, *global_entity);
-        self.host.send_outgoing_command(command);
-    }
-    
-    pub fn host_send_migrate_response(
-        &mut self,
-        global_entity: &GlobalEntity,
-    ) {
-        // TODO: ?
-        
-        // Add remote entity to Host World
-        let new_host_entity = todo!(); // connection.base.host_world_manager.track_remote_entity(
-        //     &mut connection.base.local_world_manager,
-        //     global_entity,
-        //     component_kinds,
-        // );
-        
-        let command = EntityCommand::MigrateResponse(None, *global_entity, new_host_entity);
-        self.host.send_outgoing_command(command);
-    }
 
     // Remote-focused
 
-    pub fn entity_waitlist_mut(&mut self) -> &mut EntityWaitlist {
-        self.remote.entity_waitlist_mut()
-    }
-
-    pub fn remote_send_publish(
+    // only client sends this, after receiving enabledelegation message from server
+    pub fn send_enable_delegation_response(
         &mut self,
         global_entity: &GlobalEntity,
     ) {
-        // TODO: ?
-        let command = EntityCommand::Publish(None, *global_entity);
-        self.remote.send_outgoing_command(command);
-    }
-    
-    pub fn remote_send_unpublish(
-        &mut self,
-        global_entity: &GlobalEntity,
-    ) {
-        // TODO: ?
-        let command = EntityCommand::Unpublish(None, *global_entity);
-        self.remote.send_outgoing_command(command);
-    }
-    
-    pub fn remote_send_enable_delegation(
-        &mut self,
-        global_entity: &GlobalEntity,
-    ) {
-        // TODO: ?
-        let command = EntityCommand::EnableDelegation(None, *global_entity);
-        self.remote.send_outgoing_command(command);
-    }
-
-    pub fn remote_send_enable_delegation_response(
-        &mut self,
-        global_entity: &GlobalEntity,
-    ) {
-        // TODO: ?
         let command = EntityCommand::EnableDelegationResponse(None, *global_entity);
-        self.remote.send_outgoing_command(command);
+        self.remote.send_command(self.entity_map.entity_converter(), command);
     }
 
     pub fn remote_send_request_auth(
         &mut self,
         global_entity: &GlobalEntity,
     ) {
-        // TODO: ?
         let new_host_entity = self.host_reserve_entity(&global_entity); // host entity? on remote? this is wrong
         let command = EntityCommand::RequestAuthority(None, *global_entity, new_host_entity.to_remote());
-        self.remote.send_outgoing_command(command);
+        self.remote.send_command(self.entity_map.entity_converter(), command);
     }
-    
+
     pub fn remote_send_release_auth(
         &mut self,
         global_entity: &GlobalEntity,
     ) {
-        // TODO: ?
         let command = EntityCommand::ReleaseAuthority(None, *global_entity);
-        self.remote.send_outgoing_command(command);
+        self.remote.send_command(self.entity_map.entity_converter(), command);
+    }
+
+    pub fn entity_waitlist_mut(&mut self) -> &mut EntityWaitlist {
+        self.remote.entity_waitlist_mut()
     }
 
     pub(crate) fn receive_message(&mut self, id: MessageIndex, msg: EntityMessage<RemoteEntity>) {
@@ -337,6 +257,127 @@ impl LocalWorldManager {
         );
     }
 
+    // Joint router
+
+    // todo: should work on delegated client-owned entities too
+    pub fn host_insert_component(
+        &mut self,
+        global_entity: &GlobalEntity,
+        component_kind: &ComponentKind,
+    ) {
+        self.host.host_insert_component(global_entity, component_kind);
+    }
+
+    // todo: should work on delegated client-owned entities too
+    pub fn host_remove_component(
+        &mut self,
+        global_entity: &GlobalEntity,
+        component_kind: &ComponentKind,
+    ) {
+        self.host.host_remove_component(global_entity, component_kind);
+    }
+
+    pub fn send_publish(
+        &mut self,
+        host_type: HostType,
+        global_entity: &GlobalEntity,
+    ) {
+        let Ok(local_entity) = self.entity_map.global_entity_to_owned_entity(global_entity) else {
+            panic!("Attempting to publish entity which does not exist in local entity map! {:?}", global_entity);
+        };
+        let host_owned = match (host_type, local_entity.is_host()) {
+            (HostType::Server, true) => panic!("Server-owned Entities are published by default, invalid!"),
+            (HostType::Client, false) => panic!("Server-owned Entities are published by default, invalid!"),
+            (HostType::Server, false) => false, // todo!("server is attempting to publish a client-owned non-public remote entity"),
+            (HostType::Client, true) => true, // todo!("client is attempting to publish a client-owned host entity"),
+        };
+
+        let command = EntityCommand::Publish(None, *global_entity);
+        if host_owned {
+            self.host.send_command(command);
+        } else {
+            self.remote.send_command(self.entity_map.entity_converter(), command);
+        }
+    }
+
+    pub fn send_unpublish(
+        &mut self,
+        host_type: HostType,
+        global_entity: &GlobalEntity,
+    ) {
+        let Ok(local_entity) = self.entity_map.global_entity_to_owned_entity(global_entity) else {
+            panic!("Attempting to publish entity which does not exist in local entity map! {:?}", global_entity);
+        };
+        let host_owned = match (host_type, local_entity.is_host()) {
+            (HostType::Server, true) => panic!("Server-owned Entities cannot be unpublished!"),
+            (HostType::Client, false) => panic!("Server-owned Entities cannot be unpublished!"),
+            (HostType::Server, false) => false, // todo!("server is attempting to unpublish a client-owned public entity"),
+            (HostType::Client, true) => true, // todo!("client is attempting to unpublish a client-owned public entity"),
+        };
+        let command = EntityCommand::Unpublish(None, *global_entity);
+        if host_owned {
+            self.host.send_command(command);
+        } else {
+            self.remote.send_command(self.entity_map.entity_converter(), command);
+        }
+    }
+
+    pub fn send_enable_delegation(
+        &mut self,
+        host_type: HostType,
+        origin_is_owning_client: bool,
+        global_entity: &GlobalEntity,
+    ) {
+        let is_delegated = self.entity_map.global_entity_is_delegated(global_entity);
+        if is_delegated {
+            panic!("Entity {:?} is already delegated!", global_entity);
+        }
+        let Ok(local_entity) = self.entity_map.global_entity_to_owned_entity(global_entity) else {
+            panic!("Attempting to enable delegation for entity which does not exist in local entity map! {:?}", global_entity);
+        };
+        let host_owned = match (host_type, local_entity.is_host(), origin_is_owning_client) {
+            (HostType::Server, false, true) => panic!("Client cannot originate enable delegation for ANOTHER client-owned entity!"),
+            (HostType::Client, _, false) => panic!("Client must be the owning client to enable delegation!"),
+            (HostType::Client, false, true) => panic!("Client cannot enable delegation for a Server-owned entity"),
+
+            (HostType::Server, true, true) => true,    // todo!("server is proxying client-originating enable delegation message to client (entity should be host-owned here)"),
+            (HostType::Server, true, false) => true,   // todo!("server is enabling delegation for a server-owned entity (host owned)"),
+            (HostType::Client, true, true) => true,    // todo!("client is attempting to enable delegation for a client-owned entity (host owned)"),
+            (HostType::Server, false, false) => false, // todo!("server is attempting to delegate a (hopefully published) client-owned entity (remote-owned entity"),
+        };
+
+        let command = EntityCommand::EnableDelegation(None, *global_entity);
+        if host_owned {
+            self.host.send_command(command);
+        } else {
+            self.remote.send_command(self.entity_map.entity_converter(), command);
+        }
+    }
+
+    pub fn send_disable_delegation(
+        &mut self,
+        global_entity: &GlobalEntity,
+    ) {
+        // only server should ever be able to call this, on host-owned (server-owned) entities
+        let command = EntityCommand::DisableDelegation(None, *global_entity);
+        self.host.send_command(command);
+    }
+
+    pub fn track_hosts_redundant_remote_entity(
+        &mut self,
+        remote_entity: &RemoteEntity,
+        component_kinds: &Vec<ComponentKind>,
+    ) {
+        todo!();
+    }
+
+    pub fn untrack_hosts_redundant_remote_entity(
+        &mut self,
+        remote_entity: &RemoteEntity
+    ) {
+        todo!();
+    }
+
     // Joint
 
     pub fn collect_messages(&mut self, now: &Instant, rtt_millis: &f32) {
@@ -354,11 +395,9 @@ impl LocalWorldManager {
         converter: &dyn EntityAndGlobalEntityConverter<E>,
         global_world_manager: &dyn GlobalWorldManagerType,
     ) -> (VecDeque<(CommandId, EntityCommand)>, HashMap<GlobalEntity, HashSet<ComponentKind>>) {
-        let delegated_world_opt = self.remote.delegated_world_mut();
         let world_commands = self.host.take_outgoing_events(
             now,
             rtt_millis,
-            delegated_world_opt,
         );
         let update_events = self.take_update_events(world, converter, global_world_manager);
         (world_commands, update_events)
@@ -398,21 +437,6 @@ impl LocalWorldManager {
         let entity_converter = self.entity_map.entity_converter();
         let entity_waitlist = self.remote.entity_waitlist_mut();
         (entity_converter, entity_waitlist)
-    }
-
-    pub fn track_hosts_redundant_remote_entity(
-        &mut self,
-        remote_entity: &RemoteEntity,
-        component_kinds: &Vec<ComponentKind>,
-    ) {
-        todo!();
-    }
-
-    pub fn untrack_hosts_redundant_remote_entity(
-        &mut self,
-        remote_entity: &RemoteEntity
-    ) {
-        todo!();
     }
 }
 

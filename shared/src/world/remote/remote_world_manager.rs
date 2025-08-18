@@ -7,47 +7,53 @@ use log::warn;
 
 use naia_socket_shared::Instant;
 
-use crate::{world::{
+use crate::{messages::channels::receivers::reliable_receiver::ReliableReceiver, world::{
     entity::{local_entity::RemoteEntity, in_scope_entities::{InScopeEntities, InScopeEntitiesMut}},
     remote::{
         remote_world_waitlist::RemoteWorldWaitlist,
         entity_event::EntityEvent,
         entity_waitlist::EntityWaitlist,
     },
-    sync::SenderEngine,
+    sync::RemoteEngine,
 }, ComponentKind, ComponentKinds, ComponentUpdate, EntityMessage, EntityAndGlobalEntityConverter, GlobalEntity, GlobalEntitySpawner, GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter, Replicate, Tick, WorldMutType, EntityMessageType, OwnedLocalEntity, HostEntity, EntityMessageReceiver, HostType, MessageIndex, LocalEntityMap, EntityCommand};
 
 pub struct RemoteWorldManager {
+
+    // receiver
+    receiver: ReliableReceiver<EntityMessage<RemoteEntity>>,
     
     // For Server, this contains the Entities that have been received from the Client, that the Client has authority over.
     // For Client, this contains the Entities that have been received from the Server, that the Server has authority over.
-    receiver: EntityMessageReceiver<RemoteEntity>,
+    remote_engine: RemoteEngine<RemoteEntity>,
 
-    // For Server, this will be set to None, as the Client does not delegate authority to the Server.
-    // For Client, this contains the entities that the Server has delegated authority to the Client for.
-    delegated_world_opt: Option<SenderEngine>,
+    // For Server, this is None
+    // For Client, it reflects the delegated RemoteEntities it has authority over
+    delegated_world_opt: Option<HashSet<RemoteEntity>>,
     
     // incoming messages
     incoming_components: HashMap<(RemoteEntity, ComponentKind), Box<dyn Replicate>>,
     incoming_updates: Vec<(Tick, GlobalEntity, ComponentUpdate)>,
     incoming_events: Vec<EntityEvent>,
     waitlist: RemoteWorldWaitlist,
+
+    // outgoing messages
 }
 
 impl RemoteWorldManager {
     pub fn new(host_type: HostType) -> Self {
         let delegated_world_opt = if host_type == HostType::Client {
-            Some(SenderEngine::new(false, host_type))
+            Some(HashSet::new())
         } else {
             None
         };
         Self {
-            receiver: EntityMessageReceiver::new(),
+            receiver: ReliableReceiver::new(),
+            remote_engine: RemoteEngine::new(host_type),
+            delegated_world_opt,
             incoming_components: HashMap::new(),
             incoming_updates: Vec::new(),
             incoming_events: Vec::new(),
             waitlist: RemoteWorldWaitlist::new(),
-            delegated_world_opt,
         }
     }
 
@@ -59,41 +65,28 @@ impl RemoteWorldManager {
         self.waitlist.entity_waitlist_mut()
     }
 
-    pub fn delegated_world_mut(&mut self) -> Option<&mut SenderEngine> {
-        self.delegated_world_opt.as_mut()
-    }
-
     pub(crate) fn append_updatable_world(
         &self,
         local_converter: &dyn LocalEntityAndGlobalEntityConverter,
         updatable_world: &mut HashMap<GlobalEntity, HashSet<ComponentKind>>,
     ) {
-        let Some(host_world) = self.delegated_world_opt.as_ref().map(|engine| engine.get_world()) else {
+        let Some(host_world) = self.delegated_world_opt.as_ref() else {
             return;
         };
 
-        for (global_entity, host_channel) in host_world {
-            let Ok(remote_entity) = local_converter.global_entity_to_remote_entity(global_entity) else {
+        for remote_entity in host_world {
+            let Some(remote_channel) = self.remote_engine.get_world().get(&remote_entity) else {
                 continue;
             };
-            let Some(remote_channel) = self.receiver.get_world().get(&remote_entity) else {
-                continue;
-            };
-            let host_component_kinds = host_channel.component_kinds();
-            let joined_component_kinds = remote_channel.component_kinds_intersection(host_component_kinds);
-            if joined_component_kinds.is_empty() {
-                continue;
-            }
-            if let Some(existing) = updatable_world.get_mut(global_entity) {
-                existing.extend(&joined_component_kinds);
+            let global_entity = local_converter.remote_entity_to_global_entity(remote_entity)
+                .expect("Remote entity should have a global entity");
+            let remote_component_kinds = remote_channel.component_kinds();
+            if let Some(existing) = updatable_world.get_mut(&global_entity) {
+                existing.extend(&remote_component_kinds);
             } else {
-                updatable_world.insert(*global_entity, joined_component_kinds);
+                updatable_world.insert(global_entity, remote_component_kinds);
             }
         }
-    }
-    
-    pub fn send_outgoing_command(&mut self, command: EntityCommand) {
-        todo!()
     }
 
     pub fn receive_message(&mut self, message_id: MessageIndex, message: EntityMessage<RemoteEntity>) {
@@ -118,6 +111,16 @@ impl RemoteWorldManager {
         self.incoming_updates.push((tick, *global_entity, component_update));
     }
 
+    pub(crate) fn send_command(
+        &mut self,
+        converter: &dyn LocalEntityAndGlobalEntityConverter,
+        command: EntityCommand
+    ) {
+        let global_entity = command.entity();
+        let remote_entity = converter.global_entity_to_remote_entity(&global_entity).unwrap();
+        self.remote_engine.send_command(remote_entity, command);
+    }
+
     pub fn on_entity_channel_opened(
         &mut self,
         in_scope_entities: &dyn InScopeEntities,
@@ -137,7 +140,10 @@ impl RemoteWorldManager {
         now: &Instant,
     ) -> Vec<EntityEvent> {
 
-        let incoming_messages = self.receiver.receive_messages();
+        let incoming_messages = EntityMessageReceiver::receive_messages(
+            &mut self.receiver,
+            &mut self.remote_engine
+        );
 
         self.process_updates(
             global_world_manager,

@@ -2,15 +2,7 @@ use std::{any::Any, collections::VecDeque, hash::Hash, net::SocketAddr, time::Du
 
 use log::{info, warn};
 
-use naia_shared::{
-    BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter,
-    EntityAuthStatus, EntityDoesNotExistError,
-    EntityEvent, FakeEntityConverter, GameInstant, GlobalEntity, GlobalEntityMap,
-    GlobalEntitySpawner, GlobalRequestId, GlobalResponseId, GlobalWorldManagerType, Instant,
-    Message, MessageContainer, PacketType, Protocol, RemoteEntity, Replicate, ReplicatedComponent,
-    Request, Response, ResponseReceiveKey, ResponseSendKey, Serde, SharedGlobalWorldManager,
-    SocketConfig, StandardHeader, Tick, WorldMutType, WorldRefType,
-};
+use naia_shared::{BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityDoesNotExistError, EntityEvent, FakeEntityConverter, GameInstant, GlobalEntity, GlobalEntityMap, GlobalEntitySpawner, GlobalRequestId, GlobalResponseId, GlobalWorldManagerType, HostType, Instant, Message, MessageContainer, PacketType, Protocol, RemoteEntity, Replicate, ReplicatedComponent, Request, Response, ResponseReceiveKey, ResponseSendKey, Serde, SharedGlobalWorldManager, SocketConfig, StandardHeader, Tick, WorldMutType, WorldRefType};
 
 use super::{client_config::ClientConfig, error::NaiaClientError, world_events::WorldEvents};
 use crate::{
@@ -1014,7 +1006,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             connection
                 .base
                 .world_manager
-                .host_send_publish(global_entity);
+                .send_publish(HostType::Client, global_entity);
         } else {
             if self
                 .global_world_manager
@@ -1041,7 +1033,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             connection
                 .base
                 .world_manager
-                .host_send_unpublish(global_entity);
+                .send_unpublish(HostType::Client, global_entity);
         } else {
             if self
                 .global_world_manager
@@ -1074,7 +1066,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             connection
                 .base
                 .world_manager
-                .host_send_enable_delegation(global_entity);
+                .send_enable_delegation(HostType::Client, true, global_entity);
         } else {
             self.entity_complete_delegation(world, global_entity, world_entity);
             for component_kind in world.component_kinds(world_entity) {
@@ -1665,7 +1657,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     connection
                         .base
                         .world_manager
-                        .remote_send_enable_delegation_response(
+                        .send_enable_delegation_response(
                             &global_entity,
                         );
                 }

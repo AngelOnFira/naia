@@ -9,11 +9,24 @@ pub enum OwnedLocalEntity {
 }
 
 impl OwnedLocalEntity {
-    fn is_host(&self) -> bool {
+    
+    pub fn new_host(id: HostEntity) -> Self {
+        Self::Host(id.value())
+    }
+
+    pub fn new_remote(id: RemoteEntity) -> Self {
+        Self::Remote(id.value())
+    }
+
+    pub fn is_host(&self) -> bool {
         match self {
             Self::Host(_) => true,
             Self::Remote(_) => false,
         }
+    }
+
+    pub fn is_remote(&self) -> bool {
+        !self.is_host()
     }
 
     fn value(&self) -> u16 {
@@ -67,6 +80,20 @@ impl OwnedLocalEntity {
             OwnedLocalEntity::Host(host_entity) => OwnedLocalEntity::Remote(*host_entity),
             OwnedLocalEntity::Remote(remote_entity) => OwnedLocalEntity::Host(*remote_entity),
         }
+    }
+    
+    pub fn host(&self) -> HostEntity {
+        if !self.is_host() {
+            panic!("Expected OwnedLocalEntity::Host, found OwnedLocalEntity::Remote");
+        }
+        HostEntity::new(self.value())
+    }
+    
+    pub fn remote(&self) -> RemoteEntity {
+        if !self.is_remote() {
+            panic!("Expected OwnedLocalEntity::Remote, found OwnedLocalEntity::Host");
+        }
+        RemoteEntity::new(self.value())
     }
 }
 

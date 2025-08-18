@@ -1,19 +1,19 @@
 use std::collections::HashSet;
 
-use crate::{world::sync::auth_channel_sender::AuthChannelSender, ComponentKind, EntityCommand, EntityMessageType, HostType};
+use crate::{world::sync::auth_channel::AuthChannel, ComponentKind, EntityCommand, EntityMessageType, HostType};
 
 pub struct EntityChannelSender {
     outgoing_commands: Vec<EntityCommand>,
     component_channels: HashSet<ComponentKind>,
-    auth_channel: AuthChannelSender,
+    auth_channel: AuthChannel,
 }
 
 impl EntityChannelSender {
-    pub(crate) fn new(host_world: bool, host_type: HostType) -> Self {
+    pub(crate) fn new(host_type: HostType) -> Self {
         Self {
             outgoing_commands: Vec::new(),
             component_channels: HashSet::new(),
-            auth_channel: AuthChannelSender::new(host_world, host_type),
+            auth_channel: AuthChannel::new(host_type),
         }
     }
 
@@ -56,8 +56,9 @@ impl EntityChannelSender {
             EntityMessageType::Publish | EntityMessageType::Unpublish |
             EntityMessageType::EnableDelegation | EntityMessageType::DisableDelegation |
             EntityMessageType::SetAuthority => {
-                self.auth_channel.accept_message(command);
-                self.auth_channel.drain_messages_into(&mut self.outgoing_commands);
+                self.auth_channel.accept_command(&command);
+                self.auth_channel.send_command(command);
+                self.auth_channel.sender_drain_messages_into(&mut self.outgoing_commands);
                 return;
             }
         }

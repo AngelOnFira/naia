@@ -43,7 +43,7 @@ pub(crate) struct ComponentChannelReceiver {
     last_epoch_id: Option<MessageIndex>,
     /// Small ring of *pending* insert (`true`) / remove (`false`) flags keyed by their sequence IDs.
     buffered_messages: OrderedIds<bool>,
-    outgoing_messages: VecDeque<EntityMessageType>,
+    incoming_messages: VecDeque<EntityMessageType>,
 }
 
 impl ComponentChannelReceiver {
@@ -52,7 +52,7 @@ impl ComponentChannelReceiver {
             inserted: false,
             last_epoch_id: None,
             buffered_messages: OrderedIds::new(),
-            outgoing_messages: VecDeque::new(),
+            incoming_messages: VecDeque::new(),
         }
     }
 
@@ -63,7 +63,7 @@ impl ComponentChannelReceiver {
     ) {
         // Drain the component channel and append the messages to the outgoing events
         let mut received_messages = Vec::new();
-        for msg_type in std::mem::take(&mut self.outgoing_messages) {
+        for msg_type in std::mem::take(&mut self.incoming_messages) {
             received_messages.push(msg_type.with_component_kind(&component_kind));
         }
         outgoing_messages.append(&mut received_messages);
@@ -129,9 +129,9 @@ impl ComponentChannelReceiver {
 
             let (_, insert) = self.buffered_messages.pop_front().unwrap();
             if insert {
-                self.outgoing_messages.push_back(EntityMessageType::InsertComponent);
+                self.incoming_messages.push_back(EntityMessageType::InsertComponent);
             } else {
-                self.outgoing_messages.push_back(EntityMessageType::RemoveComponent);
+                self.incoming_messages.push_back(EntityMessageType::RemoveComponent);
             }
         }
     }

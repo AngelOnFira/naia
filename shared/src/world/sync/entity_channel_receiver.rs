@@ -77,12 +77,10 @@
 use std::{hash::Hash, collections::{HashMap, HashSet}};
 
 use crate::{sequence_less_than, world::{
-    sync::{
-        auth_channel_receiver::AuthChannelReceiver,
-        component_channel_receiver::ComponentChannelReceiver,
-    },
+    sync::component_channel_receiver::ComponentChannelReceiver,
     entity::ordered_ids::OrderedIds
-}, ComponentKind, EntityMessage, EntityMessageType, MessageIndex};
+}, ComponentKind, EntityMessage, EntityMessageType, HostType, MessageIndex};
+use crate::EntityCommand;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum EntityChannelState {
@@ -91,21 +89,23 @@ pub(crate) enum EntityChannelState {
 }
 
 pub struct EntityChannelReceiver {
-    component_channels: HashMap<ComponentKind, ComponentChannelReceiver>,
-    outgoing_messages: Vec<EntityMessage<()>>,
     state: EntityChannelState,
-    auth_channel: AuthChannelReceiver,
-    buffered_messages: OrderedIds<EntityMessage<()>>,
+    component_channels: HashMap<ComponentKind, ComponentChannelReceiver>,
     last_epoch_id: Option<MessageIndex>,
+
+    buffered_messages: OrderedIds<EntityMessage<()>>,
+    incoming_messages: Vec<EntityMessage<()>>,
+
+    auth_channel: AuthChannel,
 }
 
 impl EntityChannelReceiver {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(host_type: HostType) -> Self {
         Self {
             component_channels: HashMap::new(),
-            outgoing_messages: Vec::new(),
+            incoming_messages: Vec::new(),
             state: EntityChannelState::Despawned,
-            auth_channel: AuthChannelReceiver::new(),
+            auth_channel: AuthChannel::new(host_type),
             buffered_messages: OrderedIds::new(),
             last_epoch_id: None,
         }
@@ -133,10 +133,17 @@ impl EntityChannelReceiver {
         self.process_messages();
     }
 
+    pub(crate) fn send_command(
+        &mut self,
+        command: EntityCommand,
+    ) {
+        self.auth_channel.send_command(command);
+    }
+
     pub(crate) fn drain_messages_into<E: Copy + Hash + Eq>(&mut self, entity: E, outgoing_events: &mut Vec<EntityMessage<E>>) {
         // Drain the entity channel and append the messages to the outgoing events
         let mut received_messages = Vec::new();
-        for rmsg in std::mem::take(&mut self.outgoing_messages) {
+        for rmsg in std::mem::take(&mut self.incoming_messages) {
             received_messages.push(rmsg.with_entity(entity));
         }
         outgoing_events.append(&mut received_messages);
@@ -144,6 +151,10 @@ impl EntityChannelReceiver {
 
     pub(crate) fn has_component_kind(&self, component_kind: &ComponentKind) -> bool {
         self.component_channels.contains_key(component_kind)
+    }
+
+    pub(crate) fn component_kinds(&self) -> HashSet<ComponentKind> {
+        self.component_channels.keys().cloned().collect()
     }
 
     pub(crate) fn component_kinds_intersection(
@@ -174,11 +185,11 @@ impl EntityChannelReceiver {
                     self.pop_front_into_outgoing();
 
                     // Drain the auth channel and append the messages to the outgoing events
-                    self.auth_channel.buffer_pop_front_until_and_including(id);
-                    self.auth_channel.reset_next_subcommand_id();
+                    self.auth_channel.receiver_buffer_pop_front_until_and_including(id);
+                    self.auth_channel.receiver_reset_next_subcommand_id();
 
-                    self.auth_channel.process_messages(self.state);
-                    self.auth_channel.drain_messages_into(&mut self.outgoing_messages);
+                    self.auth_channel.receiver_process_messages(self.state);
+                    self.auth_channel.receiver_drain_messages_into(&mut self.incoming_messages);
 
                     // Pop buffered messages from the component channels until and excluding the spawn id
                     // Then process the messages in the component channels
@@ -186,7 +197,7 @@ impl EntityChannelReceiver {
                     for (component_kind, component_channel) in self.component_channels.iter_mut() {
                         component_channel.buffer_pop_front_until_and_excluding(id);
                         component_channel.process_messages(self.state);
-                        component_channel.drain_messages_into(component_kind, &mut self.outgoing_messages);
+                        component_channel.drain_messages_into(component_kind, &mut self.incoming_messages);
                     }
                 }
                 EntityMessageType::Despawn => {
@@ -197,7 +208,7 @@ impl EntityChannelReceiver {
                     self.state = EntityChannelState::Despawned;
                     self.last_epoch_id = Some(id);
 
-                    self.auth_channel.reset();
+                    self.auth_channel.receiver_reset();
                     self.component_channels.clear();
 
                     self.pop_front_into_outgoing();
@@ -215,7 +226,7 @@ impl EntityChannelReceiver {
                         .or_insert_with(ComponentChannelReceiver::new);
 
                     component_channel.accept_message(self.state, id, msg);
-                    component_channel.drain_messages_into(&component_kind, &mut self.outgoing_messages);
+                    component_channel.drain_messages_into(&component_kind, &mut self.incoming_messages);
                 }
                 EntityMessageType::Publish | EntityMessageType::Unpublish |
                 EntityMessageType::EnableDelegation | EntityMessageType::DisableDelegation |
@@ -224,8 +235,8 @@ impl EntityChannelReceiver {
                     
                     // info!("EntityChannel::accept_message(id={}, msgType={:?})", id, msg.get_type());
 
-                    self.auth_channel.accept_message(self.state, id, msg);
-                    self.auth_channel.drain_messages_into(&mut self.outgoing_messages);
+                    self.auth_channel.receiver_accept_message(self.state, id, msg);
+                    self.auth_channel.receiver_drain_messages_into(&mut self.incoming_messages);
                 }
                 EntityMessageType::Noop => {
                     // Drop it
@@ -239,12 +250,14 @@ impl EntityChannelReceiver {
 
     fn pop_front_into_outgoing(&mut self) {
         let (_, msg) = self.buffered_messages.pop_front().unwrap();
-        self.outgoing_messages.push(msg);
+        self.incoming_messages.push(msg);
     }
 }
 
 // This function computes the intersection of keys between a `HashSet` and a `HashMap`.
 use std::hash::BuildHasher;
+
+use crate::world::sync::auth_channel::AuthChannel;
 
 fn intersection_keys<K, V, SA, SB>(
     a: &HashSet<K, SA>,

@@ -31,20 +31,23 @@
 
 use std::{fmt::Debug, hash::Hash, collections::HashMap};
 
-use crate::{world::{sync::{entity_channel_receiver::EntityChannelReceiver, config::EngineConfig}, entity::entity_message::EntityMessage}, EntityMessageType, MessageIndex};
+use crate::{world::{sync::{entity_channel_receiver::EntityChannelReceiver, config::EngineConfig}, entity::entity_message::EntityMessage}, EntityMessageType, HostType, MessageIndex};
+use crate::EntityCommand;
 
-pub struct ReceiverEngine<E: Copy + Hash + Eq + Debug> {
+pub struct RemoteEngine<E: Copy + Hash + Eq + Debug> {
+    host_type: HostType,
     pub config: EngineConfig,
-    outgoing_events: Vec<EntityMessage<E>>,
+    incoming_events: Vec<EntityMessage<E>>,
     entity_channels: HashMap<E, EntityChannelReceiver>,
 }
 
-impl<E: Copy + Hash + Eq + Debug> ReceiverEngine<E> {
+impl<E: Copy + Hash + Eq + Debug> RemoteEngine<E> {
 
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(host_type: HostType) -> Self {
         Self {
+            host_type,
             config: EngineConfig::default(),
-            outgoing_events: Vec::new(),
+            incoming_events: Vec::new(),
             entity_channels: HashMap::new(),
         }
     }
@@ -65,7 +68,7 @@ impl<E: Copy + Hash + Eq + Debug> ReceiverEngine<E> {
             EntityMessageType::RequestAuthority | 
             EntityMessageType::ReleaseAuthority | 
             EntityMessageType::MigrateResponse => {
-                self.outgoing_events.push(msg);
+                self.incoming_events.push(msg);
                 todo!(); // we should handle these in a different engine
                 return;
             }
@@ -80,7 +83,7 @@ impl<E: Copy + Hash + Eq + Debug> ReceiverEngine<E> {
         // If the entity channel does not exist, create it
         let entity_channel = self.entity_channels
             .entry(entity)
-            .or_insert_with(|| { EntityChannelReceiver::new() });
+            .or_insert_with(|| { EntityChannelReceiver::new(self.host_type) });
 
         // if log {
         //     info!("Engine::accept_message(id={}, entity={:?}, msgType={:?})", id, entity, msg.get_type());
@@ -88,14 +91,24 @@ impl<E: Copy + Hash + Eq + Debug> ReceiverEngine<E> {
 
         entity_channel.accept_message(id, msg.strip_entity());
 
-        entity_channel.drain_messages_into(entity, &mut self.outgoing_events);
+        entity_channel.drain_messages_into(entity, &mut self.incoming_events);
+    }
+    
+    ///
+    pub fn send_command(&mut self, entity: E, command: EntityCommand) {
+        if !self.entity_channels.contains_key(&entity) {
+            panic!("Cannot send a command to an entity that does not exist in the engine: {:?}", entity);
+        }
+        
+        let entity_channel = self.entity_channels.get_mut(&entity).unwrap();
+        entity_channel.send_command(command);
     }
 
     /// Atomically swaps out `outgoing_events`, giving the caller a Vec that
     /// *is already topologically ordered across entities*; apply each event
     /// in sequence and discard.
     pub fn receive_messages(&mut self) -> Vec<EntityMessage<E>> {
-        std::mem::take(&mut self.outgoing_events)
+        std::mem::take(&mut self.incoming_events)
     }
 
     pub(crate) fn get_world(&self) -> &HashMap<E, EntityChannelReceiver> {

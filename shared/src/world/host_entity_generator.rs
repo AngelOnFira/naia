@@ -103,8 +103,10 @@ impl HostEntityGenerator {
         let record = entity_map
             .remove_by_global_entity(global_entity)
             .expect("Attempting to despawn entity which does not exist!");
-        let host_entity = record.host().unwrap();
-        self.recycle_host_entity(host_entity);
+        if record.is_host_owned() {
+            let host_entity = record.host_entity();
+            self.recycle_host_entity(host_entity);
+        }
     }
 
     pub fn remove_by_remote_entity(
@@ -118,7 +120,8 @@ impl HostEntityGenerator {
         let record = entity_map
             .remove_by_global_entity(&global_entity)
             .expect("Attempting to despawn entity which does not exist!");
-        if let Some(host_entity) = record.host() {
+        if record.is_host_owned() {
+            let host_entity = record.host_entity();
             self.recycle_host_entity(host_entity);
         }
         global_entity

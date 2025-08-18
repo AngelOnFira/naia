@@ -1,17 +1,15 @@
 use std::{hash::Hash, collections::HashMap};
 
-use crate::{
-    world::{
-        local_entity_record::LocalEntityRecord,
-        entity::{
-            in_scope_entities::GlobalEntityReserver,
-            local_entity::{HostEntity, OwnedLocalEntity, RemoteEntity}
-        }
-    },
-    EntityDoesNotExistError, GlobalEntity, GlobalEntitySpawner, GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter
-};
+use crate::{world::{
+    local_entity_record::LocalEntityRecord,
+    entity::{
+        in_scope_entities::GlobalEntityReserver,
+        local_entity::{HostEntity, OwnedLocalEntity, RemoteEntity}
+    }
+}, EntityDoesNotExistError, GlobalEntity, GlobalEntitySpawner, GlobalWorldManagerType, HostType, LocalEntityAndGlobalEntityConverter};
 
 pub struct LocalEntityMap {
+    host_type: HostType,
     global_to_local: HashMap<GlobalEntity, LocalEntityRecord>,
     host_to_global: HashMap<HostEntity, GlobalEntity>,
     remote_to_global: HashMap<RemoteEntity, GlobalEntity>,
@@ -23,8 +21,8 @@ impl LocalEntityAndGlobalEntityConverter for LocalEntityMap {
         global_entity: &GlobalEntity,
     ) -> Result<HostEntity, EntityDoesNotExistError> {
         if let Some(record) = self.global_to_local.get(global_entity) {
-            if let Some(host) = record.host() {
-                return Ok(host);
+            if record.is_host_owned() {
+                return Ok(record.host_entity());
             }
         }
         Err(EntityDoesNotExistError)
@@ -35,8 +33,8 @@ impl LocalEntityAndGlobalEntityConverter for LocalEntityMap {
         global_entity: &GlobalEntity,
     ) -> Result<RemoteEntity, EntityDoesNotExistError> {
         if let Some(record) = self.global_to_local.get(global_entity) {
-            if let Some(remote) = record.remote() {
-                return Ok(remote);
+            if record.is_remote_owned() {
+                return Ok(record.remote_entity());
             }
         }
         Err(EntityDoesNotExistError)
@@ -47,11 +45,7 @@ impl LocalEntityAndGlobalEntityConverter for LocalEntityMap {
         global_entity: &GlobalEntity,
     ) -> Result<OwnedLocalEntity, EntityDoesNotExistError> {
         if let Some(record) = self.global_to_local.get(global_entity) {
-            if let Some(remote) = record.remote() {
-                return Ok(OwnedLocalEntity::Remote(remote.value()));
-            } else if let Some(host) = record.host() {
-                return Ok(OwnedLocalEntity::Host(host.value()));
-            }
+            return Ok(record.owned_entity());
         }
         Err(EntityDoesNotExistError)
     }
@@ -78,8 +72,9 @@ impl LocalEntityAndGlobalEntityConverter for LocalEntityMap {
 }
 
 impl LocalEntityMap {
-    pub fn new() -> Self {
+    pub fn new(host_type: HostType) -> Self {
         Self {
+            host_type,
             global_to_local: HashMap::new(),
             host_to_global: HashMap::new(),
             remote_to_global: HashMap::new(),
@@ -93,7 +88,7 @@ impl LocalEntityMap {
                 old_host_entity_opt = Some(old_host_entity);
             }
         } else {
-            self.global_to_local.insert(global_entity, LocalEntityRecord::new_with_host(host_entity));
+            self.global_to_local.insert(global_entity, LocalEntityRecord::new_host_owned_entity(host_entity));
         }
         self.host_to_global.insert(host_entity, global_entity);
         old_host_entity_opt
@@ -121,7 +116,7 @@ impl LocalEntityMap {
             record.set_remote(remote);
         } else {
             self.global_to_local
-                .insert(global_entity, LocalEntityRecord::new_with_remote(remote));
+                .insert(global_entity, LocalEntityRecord::new_remote_owned_entity(remote));
         }
         self.remote_to_global.insert(remote, global_entity);
     }
@@ -138,11 +133,12 @@ impl LocalEntityMap {
         // info!("Removing global entity: {:?}", global_entity);
         let record_opt = self.global_to_local.remove(global_entity);
         if let Some(record) = &record_opt {
-            if let Some(host) = record.host() {
-                self.host_to_global.remove(&host);
-            }
-            if let Some(remote) = record.remote() {
-                self.remote_to_global.remove(&remote);
+            if record.is_host_owned() {
+                let host_entity = record.host_entity();
+                self.host_to_global.remove(&host_entity);
+            } else {
+                let remote_entity = record.remote_entity();
+                self.remote_to_global.remove(&remote_entity);
             }
         }
         record_opt
@@ -157,38 +153,41 @@ impl LocalEntityMap {
         global_entity
     }
 
-    pub fn set_primary_to_remote(
+    pub fn set_remote_owned(
         &mut self,
         global_entity: &GlobalEntity,
     ) {
-        let Some(record) = self.global_to_local.get_mut(global_entity) else {
-            panic!("no record exists for entity");
-        };
-        if record.host().is_some() && record.remote().is_some() {
-            record.set_primary_to_remote();
-        } else {
-            panic!("record does not have dual host and remote entity");
-        }
+        todo!();
+        // let Some(record) = self.global_to_local.get_mut(global_entity) else {
+        //     panic!("no record exists for entity");
+        // };
+        // if record.host_entity().is_some() && record.remote_entity().is_some() {
+        //     record.set_remote_owned();
+        // } else {
+        //     panic!("record does not have dual host and remote entity");
+        // }
     }
 
-    pub fn set_primary_to_host(&mut self, global_entity: &GlobalEntity) {
-        let Some(record) = self.global_to_local.get_mut(global_entity) else {
-            panic!("no record exists for entity");
-        };
-        if record.host().is_some() && record.remote().is_some() {
-            record.set_primary_to_host();
-        } else {
-            panic!("record does not have dual host and remote entity");
-        }
+    pub fn set_host_owned(&mut self, global_entity: &GlobalEntity) {
+        todo!();
+        // let Some(record) = self.global_to_local.get_mut(global_entity) else {
+        //     panic!("no record exists for entity");
+        // };
+        // if record.host_entity().is_some() && record.remote_entity().is_some() {
+        //     record.set_host_owned();
+        // } else {
+        //     panic!("record does not have dual host and remote entity");
+        // }
     }
 
     pub fn has_both_host_and_remote_entity(&self, global_entity: &GlobalEntity) -> bool {
-        if let Some(record) = self.global_to_local.get(global_entity) {
-            if record.host().is_some() && record.remote().is_some() {
-                return true;
-            }
-        }
-        return false;
+        todo!()
+        // if let Some(record) = self.global_to_local.get(global_entity) {
+        //     if record.host_entity().is_some() && record.remote_entity().is_some() {
+        //         return true;
+        //     }
+        // }
+        // return false;
     }
 
     pub fn contains_global_entity(&self, global_entity: &GlobalEntity) -> bool {
@@ -212,6 +211,13 @@ impl LocalEntityMap {
             .filter(|(_, record)| record.is_only_remote())
             .map(|(global_entity, _)| *global_entity)
             .collect::<Vec<GlobalEntity>>()
+    }
+
+    pub(crate) fn global_entity_is_delegated(&self, global_entity: &GlobalEntity) -> bool {
+        if let Some(record) = self.global_to_local.get(global_entity) {
+            return record.is_delegated();
+        }
+        false
     }
 
     pub fn entity_converter(&self) -> &dyn LocalEntityAndGlobalEntityConverter {

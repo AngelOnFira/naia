@@ -52,7 +52,7 @@ use crate::{world::{host::host_world_manager::SubCommandId, entity::ordered_ids:
 pub(crate) struct AuthChannelReceiver {
     next_subcommand_id: SubCommandId,
     buffered_messages: OrderedIds<EntityMessage<()>>,
-    outgoing_messages: Vec<EntityMessage<()>>,
+    incoming_messages: Vec<EntityMessage<()>>,
 }
 
 impl AuthChannelReceiver {
@@ -60,7 +60,7 @@ impl AuthChannelReceiver {
         Self {
             next_subcommand_id: 0,
             buffered_messages: OrderedIds::new(),
-            outgoing_messages: Vec::new(),
+            incoming_messages: Vec::new(),
         }
     }
 
@@ -78,7 +78,7 @@ impl AuthChannelReceiver {
         outgoing_messages: &mut Vec<EntityMessage<()>>,
     ) {
         // Drain the auth channel and append the messages to the outgoing events
-        outgoing_messages.append(&mut self.outgoing_messages);
+        outgoing_messages.append(&mut self.incoming_messages);
     }
     
     pub(crate) fn buffer_pop_front_until_and_including(&mut self, id: MessageIndex) {
@@ -122,7 +122,7 @@ impl AuthChannelReceiver {
             }
 
             let (_, msg) = self.buffered_messages.pop_front().unwrap();
-            self.outgoing_messages.push(msg);
+            self.incoming_messages.push(msg);
         }
     }
 }
