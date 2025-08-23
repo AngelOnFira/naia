@@ -167,7 +167,7 @@ impl Connection {
         }
 
         // Receive World Events
-        self.base.world_manager.process_world_events(
+        self.base.world_manager.take_incoming_events(
             global_entity_map,
             global_world_manager,
             &protocol.component_kinds,
@@ -324,6 +324,6 @@ impl Connection {
     }
 
     pub fn process_received_commands(&mut self) {
-        self.base.world_manager.process_received_commands();
+        self.base.world_manager.process_delivered_commands();
     }
 }

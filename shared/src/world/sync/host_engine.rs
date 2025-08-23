@@ -2,12 +2,14 @@ use std::collections::HashMap;
 
 use log::info;
 
-use crate::{world::sync::{EntityChannelSender, config::EngineConfig}, GlobalEntity, HostType, EntityCommand, EntityMessageType};
+use crate::{world::sync::{EntityChannelSender, config::EngineConfig}, HostType, EntityCommand, EntityMessageType, EntityMessage, HostEntity, MessageIndex, LocalEntityAndGlobalEntityConverter};
 
 pub struct HostEngine {
     host_type: HostType,
     pub config: EngineConfig,
-    entity_channels: HashMap<GlobalEntity, EntityChannelSender>,
+    entity_channels: HashMap<HostEntity, EntityChannelSender>,
+
+    incoming_events: Vec<EntityMessage<HostEntity>>,
     outgoing_commands: Vec<EntityCommand>,
 }
 
@@ -17,55 +19,83 @@ impl HostEngine {
         Self {
             host_type,
             config: EngineConfig::default(),
-            outgoing_commands: Vec::new(),
             entity_channels: HashMap::new(),
+
+            incoming_events: Vec::new(),
+            outgoing_commands: Vec::new(),
         }
+    }
+
+    pub(crate) fn take_incoming_events(&mut self) -> Vec<EntityMessage<HostEntity>> {
+        std::mem::take(&mut self.incoming_events)
     }
 
     pub(crate) fn take_outgoing_commands(&mut self) -> Vec<EntityCommand> {
         std::mem::take(&mut self.outgoing_commands)
     }
 
-    pub(crate) fn get_world(&self) -> &HashMap<GlobalEntity, EntityChannelSender> {
+    pub(crate) fn get_world(&self) -> &HashMap<HostEntity, EntityChannelSender> {
         &self.entity_channels
+    }
+
+    pub fn receive_message(
+        &mut self,
+        id: MessageIndex,
+        msg: EntityMessage<HostEntity>,
+    ) {
+        match msg.get_type() {
+            EntityMessageType::Spawn | EntityMessageType::Despawn | EntityMessageType::InsertComponent | EntityMessageType::RemoveComponent => {
+                panic!("Host should not receive messages of this type");
+            } 
+            EntityMessageType::Noop => {
+                return;
+            }
+            _ => {}
+        }
+
+        let host_entity = msg.entity().unwrap();
+
+        // If the entity channel does not exist, create it
+        let Some(entity_channel) = self.entity_channels.get_mut(&host_entity) else {
+            panic!("Cannot accept message for an entity that does not exist in the engine. Message: {:?}", msg);
+        };
+
+        // if log {
+        //     info!("Engine::accept_message(id={}, entity={:?}, msgType={:?})", id, entity, msg.get_type());
+        // }
+
+        entity_channel.receive_message(id, msg.strip_entity());
+        entity_channel.drain_incoming_messages_into(host_entity, &mut self.incoming_events);
     }
 
     /// Main entry point - validates command and returns it if valid
     /// This mirrors ReceiverEngine.accept_message() but for outgoing commands
-    pub(crate) fn accept_command(&mut self, command: EntityCommand) {
+    pub(crate) fn send_command(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter, command: EntityCommand) {
 
-        let entity = command.entity();
+        let global_entity = command.entity();
+        let host_entity = converter.global_entity_to_host_entity(&global_entity).unwrap();
 
-        info!("SenderEngine::accept_command(entity={:?}, command={:?})", entity, command.get_type());
+        info!("SenderEngine::accept_command(entity={:?}, command={:?})", global_entity, command.get_type());
 
         match command.get_type() {
             EntityMessageType::Spawn => {
-                if self.entity_channels.contains_key(&entity) {
+                if self.entity_channels.contains_key(&host_entity) {
                     panic!("Cannot spawn an entity that already exists in the engine");
                 }
                 // If the entity channel does not exist, create it
                 self.entity_channels
-                    .insert(entity, EntityChannelSender::new(self.host_type));
+                    .insert(host_entity, EntityChannelSender::new(self.host_type));
 
                 self.outgoing_commands.push(command);
                 return;
             }
             EntityMessageType::Despawn => {
-                if !self.entity_channels.contains_key(&entity) {
+                if !self.entity_channels.contains_key(&host_entity) {
                     panic!("Cannot despawn an entity that does not exist in the engine");
                 }
                 // Remove the entity channel
-                self.entity_channels.remove(&entity).unwrap();
+                self.entity_channels.remove(&host_entity).unwrap();
                 self.outgoing_commands.push(command);
-                return;
-            }
-            // If the message are responses, immediately return
-            EntityMessageType::RequestAuthority |
-            EntityMessageType::ReleaseAuthority |
-            EntityMessageType::EnableDelegationResponse |
-            EntityMessageType::MigrateResponse => {
-                self.outgoing_commands.push(command);
-                todo!(); // we should handle these in a different engine
                 return;
             }
             EntityMessageType::Noop => {
@@ -74,16 +104,15 @@ impl HostEngine {
             _ => {}
         }
 
-        let Some(entity_channel) = self.entity_channels.get_mut(&entity) else {
+        let Some(entity_channel) = self.entity_channels.get_mut(&host_entity) else {
             panic!("Cannot accept command for an entity that does not exist in the engine. Command: {:?}", command);
         };
 
         // if log {
-            info!("SenderEngine::accept_command(entity={:?}, command={:?})", entity, command.get_type());
+            info!("SenderEngine::accept_command(entity={:?}, command={:?})", host_entity, command.get_type());
         // }
 
-        entity_channel.accept_message(command);
-
-        entity_channel.drain_messages_into(&mut self.outgoing_commands);
+        entity_channel.send_command(command);
+        entity_channel.drain_outgoing_messages_into(&mut self.outgoing_commands);
     }
 }

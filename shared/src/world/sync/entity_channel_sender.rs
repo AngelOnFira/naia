@@ -1,19 +1,27 @@
 use std::collections::HashSet;
 
-use crate::{world::sync::auth_channel::AuthChannel, ComponentKind, EntityCommand, EntityMessageType, HostType};
+use crate::{world::{entity::ordered_ids::OrderedIds, sync::{auth_channel::AuthChannel, entity_channel_receiver::EntityChannelState}}, ComponentKind, EntityCommand, EntityMessage, EntityMessageType, HostEntity, HostType, MessageIndex};
 
 pub struct EntityChannelSender {
-    outgoing_commands: Vec<EntityCommand>,
+    state: EntityChannelState,
     component_channels: HashSet<ComponentKind>,
     auth_channel: AuthChannel,
+
+    buffered_messages: OrderedIds<EntityMessage<()>>,
+    incoming_messages: Vec<EntityMessage<()>>,
+    outgoing_commands: Vec<EntityCommand>,
 }
 
 impl EntityChannelSender {
     pub(crate) fn new(host_type: HostType) -> Self {
         Self {
-            outgoing_commands: Vec::new(),
+            state: EntityChannelState::Despawned,
             component_channels: HashSet::new(),
             auth_channel: AuthChannel::new(host_type),
+
+            buffered_messages: OrderedIds::new(),
+            incoming_messages: Vec::new(),
+            outgoing_commands: Vec::new(),
         }
     }
 
@@ -21,17 +29,13 @@ impl EntityChannelSender {
         &self.component_channels
     }
 
-    pub(crate) fn accept_message(
+    pub(crate) fn send_command(
         &mut self,
         command: EntityCommand,
     ) {
         match command.get_type() {
             EntityMessageType::Spawn |
             EntityMessageType::Despawn |
-            EntityMessageType::RequestAuthority |
-            EntityMessageType::ReleaseAuthority |
-            EntityMessageType::EnableDelegationResponse |
-            EntityMessageType::MigrateResponse |
             EntityMessageType::Noop => {
                 panic!("These should be handled by the Engine, not the EntityChannelSender");
             }
@@ -55,8 +59,11 @@ impl EntityChannelSender {
             }
             EntityMessageType::Publish | EntityMessageType::Unpublish |
             EntityMessageType::EnableDelegation | EntityMessageType::DisableDelegation |
-            EntityMessageType::SetAuthority => {
-                self.auth_channel.accept_command(&command);
+            EntityMessageType::SetAuthority | EntityMessageType::RequestAuthority |
+            EntityMessageType::ReleaseAuthority |
+            EntityMessageType::EnableDelegationResponse |
+            EntityMessageType::MigrateResponse => {
+                self.auth_channel.validate_command(&command);
                 self.auth_channel.send_command(command);
                 self.auth_channel.sender_drain_messages_into(&mut self.outgoing_commands);
                 return;
@@ -64,10 +71,56 @@ impl EntityChannelSender {
         }
     }
 
-    pub(crate) fn drain_messages_into(
+    pub(crate) fn drain_incoming_messages_into(&mut self, entity: HostEntity, outgoing_events: &mut Vec<EntityMessage<HostEntity>>) {
+        // Drain the entity channel and append the messages to the outgoing events
+        let mut received_messages = Vec::new();
+        for rmsg in std::mem::take(&mut self.incoming_messages) {
+            received_messages.push(rmsg.with_entity(entity));
+        }
+        outgoing_events.append(&mut received_messages);
+    }
+
+    pub(crate) fn drain_outgoing_messages_into(
         &mut self,
         outgoing_commands: &mut Vec<EntityCommand>,
     ) {
         outgoing_commands.append(&mut self.outgoing_commands);
+    }
+
+    pub(crate) fn receive_message(
+        &mut self,
+        id: MessageIndex,
+        msg: EntityMessage<()>,
+    ) {
+        self.buffered_messages.push_back(id, msg);
+
+        self.process_messages();
+    }
+
+    fn process_messages(&mut self) {
+        loop {
+            let Some((id, msg)) = self.buffered_messages.peek_front() else {
+                break;
+            };
+
+            match msg.get_type() {
+                EntityMessageType::Publish | EntityMessageType::Unpublish |
+                EntityMessageType::EnableDelegation | EntityMessageType::DisableDelegation |
+                EntityMessageType::SetAuthority => {
+                    let (id, msg) = self.buffered_messages.pop_front().unwrap();
+
+                    // info!("EntityChannel::accept_message(id={}, msgType={:?})", id, msg.get_type());
+
+                    self.auth_channel.receiver_receive_message(self.state, id, msg);
+                    self.auth_channel.receiver_drain_messages_into(&mut self.incoming_messages);
+                }
+                EntityMessageType::Noop => {
+                    // Drop it
+                }
+                msg => {
+                    panic!("EntityChannel::accept_message() received an unexpected message type: {:?}", msg);
+                }
+            }
+        }
     }
 }

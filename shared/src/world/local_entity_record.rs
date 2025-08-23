@@ -5,7 +5,6 @@ use crate::{HostEntity, OwnedLocalEntity, RemoteEntity};
 pub struct LocalEntityRecord {
     entity: OwnedLocalEntity,
     delegated: bool,
-    delegated_host_entity: Option<HostEntity>,
 }
 
 impl LocalEntityRecord {
@@ -13,7 +12,6 @@ impl LocalEntityRecord {
         Self {
             entity: OwnedLocalEntity::new_host(entity),
             delegated: false,
-            delegated_host_entity: None,
         }
     }
 
@@ -21,7 +19,6 @@ impl LocalEntityRecord {
         Self {
             entity: OwnedLocalEntity::new_remote(entity),
             delegated: false,
-            delegated_host_entity: None,
         }
     }
 

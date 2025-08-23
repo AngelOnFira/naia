@@ -89,7 +89,7 @@ impl AuthChannelReceiver {
         self.buffered_messages.pop_front_until_and_excluding(id);
     }
 
-    pub(crate) fn accept_message(
+    pub(crate) fn receive_message(
         &mut self,
         entity_state: EntityChannelState,
         id: MessageIndex,

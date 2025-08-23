@@ -2,7 +2,7 @@ use naia_serde::{BitReader, BitWrite, ConstBitLength, Serde, SerdeErr, UnsignedV
 
 use crate::{EntityDoesNotExistError, GlobalEntity, LocalEntityAndGlobalEntityConverter};
 
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
 pub enum OwnedLocalEntity {
     Host(u16),
     Remote(u16),

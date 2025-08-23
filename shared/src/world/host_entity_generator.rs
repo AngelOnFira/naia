@@ -109,6 +109,13 @@ impl HostEntityGenerator {
         }
     }
 
+    pub(crate) fn remove_by_host_entity(&mut self, converter: &mut LocalEntityMap, host_entity: &HostEntity) {
+        let global_entity = *(converter
+            .global_entity_from_host(host_entity)
+            .expect("Attempting to despawn entity which does not exist!"));
+        self.remove_by_global_entity(converter, &global_entity);
+    }
+
     pub fn remove_by_remote_entity(
         &mut self,
         entity_map: &mut LocalEntityMap,

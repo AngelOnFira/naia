@@ -16,7 +16,7 @@
 //!    its sliding window without caring about intra‑packet order.
 //! 3. **Ingestion path (this crate)**  
 //!    *Receiver* deduplicates on `MessageIndex` and feeds messages into
-//!    [`RemoteEngine::accept_message`].
+//!    [`RemoteEngine::receive_message`].
 //!    The `Engine` owns one **`EntityChannel`** per live entity; each
 //!    `EntityChannel` owns:
 //!    - an **`AuthChannel`** (publish / delegation / authority negotiation)  
@@ -27,7 +27,7 @@
 //!    global out‑of‑order arrival.  
 //!    Once a channel determines that a message is *now safe* to apply, it
 //!    is pushed into `outgoing_events`; the caller drains these via
-//!    [`RemoteEngine::receive_messages`] and mutates its local ECS accordingly.
+//!    [`RemoteEngine::take_incoming_events`] and mutates its local ECS accordingly.
 //!
 //! ## Why unordered beats ordered
 //! * Ordered transports serialize unrelated entity updates, so a single

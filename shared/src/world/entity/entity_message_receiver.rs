@@ -1,6 +1,6 @@
 use std::{fmt::Debug, hash::Hash};
 
-use crate::{messages::channels::receivers::reliable_receiver::ReliableReceiver, world::sync::RemoteEngine, EntityMessage, MessageIndex};
+use crate::{messages::channels::receivers::reliable_receiver::ReliableReceiver, world::sync::{RemoteEngine, HostEngine}, EntityMessage, HostEntity, MessageIndex};
 
 pub struct EntityMessageReceiver;
 
@@ -19,14 +19,24 @@ impl EntityMessageReceiver {
     ///
     /// Outputs the list of [`EntityMessage`] that can be executed now, buffer the rest
     /// into each entity's [`EntityChannelReceiver`]
-    pub fn receive_messages<E: Copy + Hash + Eq + Debug>(
-        receiver: &mut ReliableReceiver<EntityMessage<E>>,
-        remote_engine: &mut RemoteEngine<E>
+    pub fn remote_take_incoming_messages<E: Copy + Hash + Eq + Debug>(
+        remote_engine: &mut RemoteEngine<E>,
+        incoming_messages: Vec<(MessageIndex, EntityMessage<E>)>,
     ) -> Vec<EntityMessage<E>> {
-        let incoming_messages = receiver.receive_messages();
         for (message_index, message) in incoming_messages {
-            remote_engine.accept_message(message_index, message);
+            remote_engine.receive_message(message_index, message);
         }
-        remote_engine.receive_messages()
+        remote_engine.take_incoming_events()
+    }
+
+    // TODO: refactor this to use a generic type for the engine
+    pub fn host_take_incoming_events<E: Copy + Hash + Eq + Debug>(
+        host_engine: &mut HostEngine,
+        incoming_messages: Vec<(MessageIndex, EntityMessage<HostEntity>)>,
+    ) -> Vec<EntityMessage<HostEntity>> {
+        for (message_index, message) in incoming_messages {
+            host_engine.receive_message(message_index, message);
+        }
+        host_engine.take_incoming_events()
     }
 }

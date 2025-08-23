@@ -7,20 +7,23 @@ use log::warn;
 
 use naia_socket_shared::Instant;
 
-use crate::{messages::channels::receivers::reliable_receiver::ReliableReceiver, world::{
-    entity::{local_entity::RemoteEntity, in_scope_entities::{InScopeEntities, InScopeEntitiesMut}},
-    remote::{
-        remote_world_waitlist::RemoteWorldWaitlist,
-        entity_event::EntityEvent,
-        entity_waitlist::EntityWaitlist,
+use crate::{
+    world::{
+        entity::{local_entity::RemoteEntity, in_scope_entities::{InScopeEntities, InScopeEntitiesMut}},
+        remote::{
+            remote_world_waitlist::RemoteWorldWaitlist,
+            entity_event::EntityEvent,
+            entity_waitlist::EntityWaitlist,
+        },
+        sync::RemoteEngine,
     },
-    sync::RemoteEngine,
-}, ComponentKind, ComponentKinds, ComponentUpdate, EntityMessage, EntityAndGlobalEntityConverter, GlobalEntity, GlobalEntitySpawner, GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter, Replicate, Tick, WorldMutType, EntityMessageType, OwnedLocalEntity, HostEntity, EntityMessageReceiver, HostType, MessageIndex, LocalEntityMap, EntityCommand};
+    ComponentKind, ComponentKinds, ComponentUpdate, EntityMessage, EntityAndGlobalEntityConverter, GlobalEntity,
+    GlobalEntitySpawner, GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter, Replicate, Tick,
+    WorldMutType, EntityMessageType, OwnedLocalEntity, HostEntity, EntityMessageReceiver, HostType,
+    LocalEntityMap, EntityCommand, MessageIndex
+};
 
 pub struct RemoteWorldManager {
-
-    // receiver
-    receiver: ReliableReceiver<EntityMessage<RemoteEntity>>,
     
     // For Server, this contains the Entities that have been received from the Client, that the Client has authority over.
     // For Client, this contains the Entities that have been received from the Server, that the Server has authority over.
@@ -30,9 +33,12 @@ pub struct RemoteWorldManager {
     // For Client, it reflects the delegated RemoteEntities it has authority over
     delegated_world_opt: Option<HashSet<RemoteEntity>>,
     
-    // incoming messages
-    incoming_components: HashMap<(RemoteEntity, ComponentKind), Box<dyn Replicate>>,
+
+    // TODO: move these up into the local_world_manager
+    incoming_components: HashMap<(OwnedLocalEntity, ComponentKind), Box<dyn Replicate>>,
     incoming_updates: Vec<(Tick, GlobalEntity, ComponentUpdate)>,
+
+    // incoming messages
     incoming_events: Vec<EntityEvent>,
     waitlist: RemoteWorldWaitlist,
 
@@ -47,7 +53,6 @@ impl RemoteWorldManager {
             None
         };
         Self {
-            receiver: ReliableReceiver::new(),
             remote_engine: RemoteEngine::new(host_type),
             delegated_world_opt,
             incoming_components: HashMap::new(),
@@ -89,17 +94,13 @@ impl RemoteWorldManager {
         }
     }
 
-    pub fn receive_message(&mut self, message_id: MessageIndex, message: EntityMessage<RemoteEntity>) {
-        self.receiver.buffer_message(message_id, message);
-    }
-
     pub(crate) fn insert_received_component(
         &mut self,
-        remote_entity: &RemoteEntity,
+        local_entity: &OwnedLocalEntity,
         component_kind: &ComponentKind,
         component: Box<dyn Replicate>,
     ) {
-        self.incoming_components.insert((*remote_entity, *component_kind), component);
+        self.incoming_components.insert((*local_entity, *component_kind), component);
     }
 
     pub(crate) fn insert_received_update(
@@ -109,6 +110,12 @@ impl RemoteWorldManager {
         component_update: ComponentUpdate
     ) {
         self.incoming_updates.push((tick, *global_entity, component_update));
+    }
+
+    pub fn take_outgoing_commands(
+        &mut self,
+    ) -> Vec<EntityCommand> {
+        self.remote_engine.take_outgoing_commands()
     }
 
     pub(crate) fn send_command(
@@ -130,7 +137,7 @@ impl RemoteWorldManager {
         self.waitlist.on_entity_channel_opened(in_scope_entities, global_entity);
     }
 
-    pub fn process_world_events<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
+    pub fn take_incoming_events<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
         &mut self,
         spawner: &mut dyn GlobalEntitySpawner<E>,
         global_world_manager: &dyn GlobalWorldManagerType,
@@ -138,11 +145,12 @@ impl RemoteWorldManager {
         component_kinds: &ComponentKinds,
         world: &mut W,
         now: &Instant,
+        incoming_messages: Vec<(MessageIndex, EntityMessage<RemoteEntity>)>,
     ) -> Vec<EntityEvent> {
 
-        let incoming_messages = EntityMessageReceiver::receive_messages(
-            &mut self.receiver,
-            &mut self.remote_engine
+        let incoming_messages = EntityMessageReceiver::remote_take_incoming_messages(
+            &mut self.remote_engine,
+            incoming_messages,
         );
 
         self.process_updates(

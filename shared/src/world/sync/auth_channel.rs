@@ -30,7 +30,7 @@ impl AuthChannel {
         }
     }
 
-    pub(crate) fn accept_command(
+    pub(crate) fn validate_command(
         &mut self,
         command: &EntityCommand,
     ) {
@@ -127,13 +127,13 @@ impl AuthChannel {
         self.receiver.buffer_pop_front_until_and_excluding(id);
     }
 
-    pub(crate) fn receiver_accept_message(
+    pub(crate) fn receiver_receive_message(
         &mut self,
         entity_state: EntityChannelState,
         id: MessageIndex,
         msg: EntityMessage<()>,
     ) {
-        self.receiver.accept_message(entity_state, id, msg);
+        self.receiver.receive_message(entity_state, id, msg);
     }
 
     pub(crate) fn receiver_process_messages(&mut self, entity_state: EntityChannelState) {

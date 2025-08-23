@@ -180,12 +180,14 @@ impl HostWorldWriter {
             EntityCommand::Spawn(global_entity) => {
                 EntityMessageType::Spawn.ser(writer);
 
-                // write net entity
-                world_manager
+                // get host entity
+                let host_entity = world_manager
                     .entity_converter()
                     .global_entity_to_host_entity(global_entity)
-                    .unwrap()
-                    .ser(writer);
+                    .unwrap();
+
+                // write host entity
+                host_entity.ser(writer);
 
                 // if we are writing to this packet, add it to record
                 if is_writing {
@@ -199,11 +201,14 @@ impl HostWorldWriter {
             EntityCommand::Despawn(global_entity) => {
                 EntityMessageType::Despawn.ser(writer);
 
-                // write net entity
-                world_manager.entity_converter()
-                    .global_entity_to_host_entity(global_entity)
-                    .unwrap()
-                    .ser(writer);
+                // get local entity
+                let local_entity = world_manager
+                    .entity_converter()
+                    .global_entity_to_owned_entity(global_entity)
+                    .unwrap();
+
+                // write local entity
+                local_entity.ser(writer);
 
                 // if we are writing to this packet, add it to record
                 if is_writing {
@@ -236,12 +241,14 @@ impl HostWorldWriter {
                 } else {
                     EntityMessageType::InsertComponent.ser(writer);
 
-                    // write net entity
-                    world_manager
+                    // get local entity
+                    let local_entity = world_manager
                         .entity_converter()
-                        .global_entity_to_host_entity(global_entity)
-                        .unwrap()
-                        .ser(writer);
+                        .global_entity_to_owned_entity(global_entity)
+                        .unwrap();
+                    
+                    // write local entity
+                    local_entity.ser(writer);
 
                     let mut converter = world_manager.entity_converter_mut(global_world_manager);
 
@@ -278,12 +285,14 @@ impl HostWorldWriter {
                 } else {
                     EntityMessageType::RemoveComponent.ser(writer);
 
-                    // write net entity
-                    world_manager
+                    // get local entity
+                    let local_entity = world_manager
                         .entity_converter()
-                        .global_entity_to_host_entity(global_entity)
-                        .unwrap()
-                        .ser(writer);
+                        .global_entity_to_owned_entity(global_entity)
+                        .unwrap();
+                    
+                    // write local entity
+                    local_entity.ser(writer);
 
                     // write component kind
                     component_kind.ser(component_kinds, writer);
@@ -298,23 +307,26 @@ impl HostWorldWriter {
                     }
                 }
             }
-            // Former SystemChannel messages - now serialized as EntityCommandEvents
             EntityCommand::Publish(sub_id_opt, global_entity) => {
+                // get subcommand id
                 let Some(sub_id) = sub_id_opt else {
                     panic!("Publish command must have a CommandId");
                 };
 
+                // write message type
                 EntityMessageType::Publish.ser(writer);
 
                 // write subcommand id
                 sub_id.ser(writer);
 
-                // write net entity
-                world_manager
+                // get local entity
+                let local_entity = world_manager
                     .entity_converter()
-                    .global_entity_to_host_entity(global_entity)
-                    .unwrap()
-                    .ser(writer);
+                    .global_entity_to_owned_entity(global_entity)
+                    .unwrap();
+                
+                // write local entity
+                local_entity.ser(writer);
 
                 // if we are writing to this packet, add it to record
                 if is_writing {
@@ -326,21 +338,25 @@ impl HostWorldWriter {
                 }
             }
             EntityCommand::Unpublish(sub_id_opt, global_entity) => {
+                // get subcommand id
                 let Some(sub_id) = sub_id_opt else {
                     panic!("Unpublish command must have a CommandId");
                 };
 
+                // write message type
                 EntityMessageType::Unpublish.ser(writer);
 
                 // write subcommand id
                 sub_id.ser(writer);
 
-                // write net entity
-                world_manager
+                // get local entity
+                let local_entity = world_manager
                     .entity_converter()
-                    .global_entity_to_host_entity(global_entity)
-                    .unwrap()
-                    .ser(writer);
+                    .global_entity_to_owned_entity(global_entity)
+                    .unwrap();
+                
+                // write local entity
+                local_entity.ser(writer);
 
                 // if we are writing to this packet, add it to record
                 if is_writing {
@@ -352,21 +368,24 @@ impl HostWorldWriter {
                 }
             }
             EntityCommand::EnableDelegation(sub_id_opt, global_entity) => {
+                // get subcommand id
                 let Some(sub_id) = sub_id_opt else {
                     panic!("EnableDelegation command must have a CommandId");
                 };
 
+                // write message type
                 EntityMessageType::EnableDelegation.ser(writer);
 
                 // write subcommand id
                 sub_id.ser(writer);
 
-                // write net entity
-                world_manager
+                // get local entity
+                let local_entity = world_manager
                     .entity_converter()
-                    .global_entity_to_host_entity(global_entity)
-                    .unwrap()
-                    .ser(writer);
+                    .global_entity_to_owned_entity(global_entity)
+                    .unwrap();
+                
+                local_entity.ser(writer);
 
                 // if we are writing to this packet, add it to record
                 if is_writing {
@@ -378,21 +397,28 @@ impl HostWorldWriter {
                 }
             }
             EntityCommand::DisableDelegation(sub_id_opt, global_entity) => {
+                
+                // this command is only ever sent by the server, regarding server-owned entities, to clients
+                
+                // get subcommand id
                 let Some(sub_id) = sub_id_opt else {
                     panic!("DisableDelegation command must have a CommandId");
                 };
 
+                // write message type
                 EntityMessageType::DisableDelegation.ser(writer);
 
                 // write subcommand id
                 sub_id.ser(writer);
 
-                // write net entity
-                world_manager
+                // get host entity
+                let host_entity = world_manager
                     .entity_converter()
                     .global_entity_to_host_entity(global_entity)
-                    .unwrap()
-                    .ser(writer);
+                    .unwrap();
+                
+                // write host entity
+                host_entity.ser(writer);
 
                 // if we are writing to this packet, add it to record
                 if is_writing {
@@ -404,21 +430,28 @@ impl HostWorldWriter {
                 }
             }
             EntityCommand::SetAuthority(sub_id_opt, global_entity, auth_status) => {
+                
+                // this command is only ever sent by the server, regarding server-owned entities, to clients
+                
+                // get subcommand id
                 let Some(sub_id) = sub_id_opt else {
                     panic!("SetAuthority command must have a CommandId");
                 };
 
+                // write message type
                 EntityMessageType::SetAuthority.ser(writer);
 
                 // write subcommand id
                 sub_id.ser(writer);
 
-                // write net entity
-                world_manager
+                // get host entity
+                let host_entity = world_manager
                     .entity_converter()
                     .global_entity_to_host_entity(global_entity)
-                    .unwrap()
-                    .ser(writer);
+                    .unwrap();
+                
+                // write host entity
+                host_entity.ser(writer);
 
                 // write auth status
                 auth_status.ser(writer);
@@ -434,77 +467,29 @@ impl HostWorldWriter {
             }
             
             // below are response-type commands
-            EntityCommand::EnableDelegationResponse(sub_id_opt, global_entity) => {
-                let Some(sub_id) = sub_id_opt else {
-                    panic!("EnableDelegationResponse command must have a CommandId");
-                };
-
-                EntityMessageType::EnableDelegationResponse.ser(writer);
-
-                // write subcommand id
-                sub_id.ser(writer);
-
-                // write net entity
-                world_manager
-                    .entity_converter()
-                    .global_entity_to_remote_entity(global_entity)
-                    .unwrap()
-                    .ser(writer);
-
-                // if we are writing to this packet, add it to record
-                if is_writing {
-                    world_manager.record_command_written(
-                        packet_index,
-                        command_id,
-                        EntityMessage::EnableDelegationResponse(*sub_id, *global_entity),
-                    );
-                }
-            }
-            EntityCommand::MigrateResponse(sub_id_opt, global_entity, new_host_entity_value) => {
-                let Some(sub_id) = sub_id_opt else {
-                    panic!("MigrateResponse command must have a CommandId");
-                };
-
-                EntityMessageType::MigrateResponse.ser(writer);
-
-                // write subcommand id
-                sub_id.ser(writer);
-
-                // write net entity
-                world_manager
-                    .entity_converter()
-                    .global_entity_to_remote_entity(global_entity)
-                    .unwrap()
-                    .ser(writer);
-
-                // write new host entity value
-                new_host_entity_value.ser(writer);
-
-                // if we are writing to this packet, add it to record
-                if is_writing {
-                    world_manager.record_command_written(
-                        packet_index,
-                        command_id,
-                        EntityMessage::MigrateResponse(*sub_id, *global_entity, *new_host_entity_value),
-                    );
-                }
-            }
             EntityCommand::RequestAuthority(sub_id_opt, global_entity, host_entity) => {
+                
+                // this command is only ever sent by clients, regarding server-owned entities, to server
+                
+                // get subcommand id
                 let Some(sub_id) = sub_id_opt else {
                     panic!("RequestAuthority command must have a CommandId");
                 };
 
+                // write message type
                 EntityMessageType::RequestAuthority.ser(writer);
 
                 // write subcommand id
                 sub_id.ser(writer);
 
-                // write net entity
-                world_manager
+                // get remote entity
+                let remote_entity = world_manager
                     .entity_converter()
                     .global_entity_to_remote_entity(global_entity)
-                    .unwrap()
-                    .ser(writer);
+                    .unwrap();
+                
+                // write remote entity
+                remote_entity.ser(writer);
 
                 // write host entity value
                 host_entity.value().ser(writer);
@@ -519,30 +504,101 @@ impl HostWorldWriter {
                 }
             }
             EntityCommand::ReleaseAuthority(sub_id_opt, global_entity) => {
+                
+                // this command is only ever sent by clients, regarding server-owned entities, to server
+                
+                // get subcommand id
                 let Some(sub_id) = sub_id_opt else {
                     panic!("ReleaseAuthority command must have a CommandId");
                 };
 
+                // write message type
                 EntityMessageType::ReleaseAuthority.ser(writer);
 
-                // write subcommand id
-                sub_id.ser(writer);
-
-                // get owned entity
-                let owned_entity = world_manager
+                // get remote entity
+                let remote_entity = world_manager
                     .entity_converter()
-                    .global_entity_to_owned_entity(global_entity)
-                    .unwrap()
-                    .to_reversed(); // ! reverse it before sending it over the wire !
-                // write owned entity
-                owned_entity.ser(writer);
+                    .global_entity_to_remote_entity(global_entity)
+                    .unwrap();
+
+                // write remote entity
+                remote_entity.ser(writer);
 
                 // if we are writing to this packet, add it to record
                 if is_writing {
                     world_manager.record_command_written(
                         packet_index,
                         command_id,
-                        EntityMessage::ReleaseAuthority(*sub_id, owned_entity),
+                        EntityMessage::ReleaseAuthority(*sub_id, *global_entity),
+                    );
+                }
+            }
+            EntityCommand::EnableDelegationResponse(sub_id_opt, global_entity) => {
+                
+                // this command is only ever sent by clients, regarding server-owned entities, to server
+                
+                // get subcommand id
+                let Some(sub_id) = sub_id_opt else {
+                    panic!("EnableDelegationResponse command must have a CommandId");
+                };
+
+                // write message type
+                EntityMessageType::EnableDelegationResponse.ser(writer);
+
+                // write subcommand id
+                sub_id.ser(writer);
+
+                // get remote entity
+                let remote_entity = world_manager
+                    .entity_converter()
+                    .global_entity_to_remote_entity(global_entity)
+                    .unwrap();
+
+                // write remote entity
+                remote_entity.ser(writer);
+
+                // if we are writing to this packet, add it to record
+                if is_writing {
+                    world_manager.record_command_written(
+                        packet_index,
+                        command_id,
+                        EntityMessage::EnableDelegationResponse(*sub_id, *global_entity),
+                    );
+                }
+            }
+            EntityCommand::MigrateResponse(sub_id_opt, global_entity, new_host_entity_value) => {
+                
+                // this command is only ever sent by the server, regarding newly delegated server-owned entities, to clients
+                
+                // get subcommand id
+                let Some(sub_id) = sub_id_opt else {
+                    panic!("MigrateResponse command must have a CommandId");
+                };
+
+                // write message type
+                EntityMessageType::MigrateResponse.ser(writer);
+
+                // write subcommand id
+                sub_id.ser(writer);
+
+                // get old remote entity
+                let old_remote_entity = world_manager
+                    .entity_converter()
+                    .global_entity_to_remote_entity(global_entity)
+                    .unwrap();
+
+                // write old remote entity
+                old_remote_entity.ser(writer);
+
+                // write new host entity
+                new_host_entity_value.ser(writer);
+
+                // if we are writing to this packet, add it to record
+                if is_writing {
+                    world_manager.record_command_written(
+                        packet_index,
+                        command_id,
+                        EntityMessage::MigrateResponse(*sub_id, *global_entity, new_host_entity_value.copy_to_owned()),
                     );
                 }
             }

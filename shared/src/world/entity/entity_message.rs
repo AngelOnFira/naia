@@ -15,9 +15,9 @@ pub enum EntityMessage<E: Copy + Eq + PartialEq> {
     
     // These are not commands, they are something else
     RequestAuthority(SubCommandId, E, RemoteEntity),
-    ReleaseAuthority(SubCommandId, OwnedLocalEntity),
+    ReleaseAuthority(SubCommandId, E),
     EnableDelegationResponse(SubCommandId, E),
-    MigrateResponse(SubCommandId, E, HostEntity),
+    MigrateResponse(SubCommandId, E, OwnedLocalEntity),
 
     Noop,
 }
@@ -68,6 +68,25 @@ impl<E: Copy + Eq + PartialEq> EntityMessage<E> {
             Self::Noop => panic!("Cannot strip entity from a Noop message"),
         }
     }
+
+    pub fn with_entity<O: Copy + Eq + PartialEq>(self, entity: O) -> EntityMessage<O> {
+        match self {
+            EntityMessage::Spawn(_) => EntityMessage::Spawn(entity),
+            EntityMessage::Despawn(_) => EntityMessage::Despawn(entity),
+            EntityMessage::InsertComponent(_, component_kind) => EntityMessage::InsertComponent(entity, component_kind),
+            EntityMessage::RemoveComponent(_, component_kind) => EntityMessage::RemoveComponent(entity, component_kind),
+            EntityMessage::Publish(sub_id, _) => EntityMessage::Publish(sub_id, entity),
+            EntityMessage::Unpublish(sub_id, _) => EntityMessage::Unpublish(sub_id, entity),
+            EntityMessage::EnableDelegation(sub_id, _) => EntityMessage::EnableDelegation(sub_id, entity),
+            EntityMessage::EnableDelegationResponse(sub_id, _) => EntityMessage::EnableDelegationResponse(sub_id, entity),
+            EntityMessage::DisableDelegation(sub_id, _) => EntityMessage::DisableDelegation(sub_id, entity),
+            EntityMessage::RequestAuthority(sub_id, _, other_entity) => EntityMessage::RequestAuthority(sub_id, entity, other_entity),
+            EntityMessage::ReleaseAuthority(_sub_id, _) => panic!("EntityReleaseAuthority should not call `with_entity()`"),
+            EntityMessage::SetAuthority(sub_id, _, status) => EntityMessage::SetAuthority(sub_id, entity, status),
+            EntityMessage::MigrateResponse(sub_id, _, other_entity) => EntityMessage::MigrateResponse(sub_id, entity, other_entity),
+            EntityMessage::Noop => panic!("Cannot add entity to a Noop message"),
+        }
+    }
     
     pub fn get_type(&self) -> EntityMessageType {
         match self {
@@ -100,27 +119,6 @@ impl<E: Copy + Eq + PartialEq> EntityMessage<E> {
             Self::SetAuthority(sub_id, _, _) => Some(*sub_id),
             Self::MigrateResponse(sub_id, _, _) => Some(*sub_id),
             _ => None,
-        }
-    }
-}
-
-impl EntityMessage<()> {
-    pub fn with_entity<E: Copy + Eq + PartialEq>(self, entity: E) -> EntityMessage<E> {
-        match self {
-            EntityMessage::Spawn(_) => EntityMessage::Spawn(entity),
-            EntityMessage::Despawn(_) => EntityMessage::Despawn(entity),
-            EntityMessage::InsertComponent(_, component_kind) => EntityMessage::InsertComponent(entity, component_kind),
-            EntityMessage::RemoveComponent(_, component_kind) => EntityMessage::RemoveComponent(entity, component_kind),
-            EntityMessage::Publish(sub_id, _) => EntityMessage::Publish(sub_id, entity),
-            EntityMessage::Unpublish(sub_id, _) => EntityMessage::Unpublish(sub_id, entity),
-            EntityMessage::EnableDelegation(sub_id, _) => EntityMessage::EnableDelegation(sub_id, entity),
-            EntityMessage::EnableDelegationResponse(sub_id, _) => EntityMessage::EnableDelegationResponse(sub_id, entity),
-            EntityMessage::DisableDelegation(sub_id, _) => EntityMessage::DisableDelegation(sub_id, entity),
-            EntityMessage::RequestAuthority(sub_id, _, other_entity) => EntityMessage::RequestAuthority(sub_id, entity, other_entity),
-            EntityMessage::ReleaseAuthority(_sub_id, _) => panic!("EntityReleaseAuthority should not call `with_entity()`"),
-            EntityMessage::SetAuthority(sub_id, _, status) => EntityMessage::SetAuthority(sub_id, entity, status),
-            EntityMessage::MigrateResponse(sub_id, _, other_entity) => EntityMessage::MigrateResponse(sub_id, entity, other_entity),
-            EntityMessage::Noop => panic!("Cannot add entity to a Noop message"),
         }
     }
 }

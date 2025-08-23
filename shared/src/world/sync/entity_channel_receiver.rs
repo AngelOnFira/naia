@@ -76,11 +76,10 @@
 
 use std::{hash::Hash, collections::{HashMap, HashSet}};
 
-use crate::{sequence_less_than, world::{
+use crate::{EntityCommand, sequence_less_than, world::{
     sync::component_channel_receiver::ComponentChannelReceiver,
     entity::ordered_ids::OrderedIds
 }, ComponentKind, EntityMessage, EntityMessageType, HostType, MessageIndex};
-use crate::EntityCommand;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum EntityChannelState {
@@ -90,28 +89,32 @@ pub(crate) enum EntityChannelState {
 
 pub struct EntityChannelReceiver {
     state: EntityChannelState,
-    component_channels: HashMap<ComponentKind, ComponentChannelReceiver>,
     last_epoch_id: Option<MessageIndex>,
-
+    
+    component_channels: HashMap<ComponentKind, ComponentChannelReceiver>,
+    auth_channel: AuthChannel,
+    
     buffered_messages: OrderedIds<EntityMessage<()>>,
     incoming_messages: Vec<EntityMessage<()>>,
-
-    auth_channel: AuthChannel,
+    outgoing_commands: Vec<EntityCommand>,
 }
 
 impl EntityChannelReceiver {
     pub(crate) fn new(host_type: HostType) -> Self {
         Self {
-            component_channels: HashMap::new(),
-            incoming_messages: Vec::new(),
             state: EntityChannelState::Despawned,
-            auth_channel: AuthChannel::new(host_type),
-            buffered_messages: OrderedIds::new(),
             last_epoch_id: None,
+            
+            component_channels: HashMap::new(),
+            auth_channel: AuthChannel::new(host_type),
+            
+            buffered_messages: OrderedIds::new(),
+            incoming_messages: Vec::new(),
+            outgoing_commands: Vec::new(),
         }
     }
 
-    pub(crate) fn accept_message(
+    pub(crate) fn receive_message(
         &mut self,
         id: MessageIndex,
         msg: EntityMessage<()>,
@@ -138,15 +141,23 @@ impl EntityChannelReceiver {
         command: EntityCommand,
     ) {
         self.auth_channel.send_command(command);
+        self.auth_channel.sender_drain_messages_into(&mut self.outgoing_commands);
     }
 
-    pub(crate) fn drain_messages_into<E: Copy + Hash + Eq>(&mut self, entity: E, outgoing_events: &mut Vec<EntityMessage<E>>) {
+    pub(crate) fn drain_incoming_messages_into<E: Copy + Hash + Eq>(&mut self, entity: E, outgoing_events: &mut Vec<EntityMessage<E>>) {
         // Drain the entity channel and append the messages to the outgoing events
         let mut received_messages = Vec::new();
         for rmsg in std::mem::take(&mut self.incoming_messages) {
             received_messages.push(rmsg.with_entity(entity));
         }
         outgoing_events.append(&mut received_messages);
+    }
+
+    pub(crate) fn drain_outgoing_messages_into(
+        &mut self,
+        outgoing_commands: &mut Vec<EntityCommand>,
+    ) {
+        outgoing_commands.append(&mut self.outgoing_commands);
     }
 
     pub(crate) fn has_component_kind(&self, component_kind: &ComponentKind) -> bool {
@@ -235,7 +246,7 @@ impl EntityChannelReceiver {
                     
                     // info!("EntityChannel::accept_message(id={}, msgType={:?})", id, msg.get_type());
 
-                    self.auth_channel.receiver_accept_message(self.state, id, msg);
+                    self.auth_channel.receiver_receive_message(self.state, id, msg);
                     self.auth_channel.receiver_drain_messages_into(&mut self.incoming_messages);
                 }
                 EntityMessageType::Noop => {
