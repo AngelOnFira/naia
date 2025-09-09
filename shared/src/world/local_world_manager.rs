@@ -89,7 +89,10 @@ impl LocalWorldManager {
     // Host-focused
 
     pub fn host_has_entity(&self, global_entity: &GlobalEntity) -> bool {
-        self.host.host_has_entity(global_entity)
+        let Ok(host_entity) = self.entity_map.global_entity_to_host_entity(global_entity) else {
+            return false;
+        };
+        self.host.host_has_entity(&host_entity)
     }
 
     pub fn host_init_entity(
@@ -111,19 +114,19 @@ impl LocalWorldManager {
     // should be remote? or maybe not, this is after migration? only server sends this
     pub fn host_send_migrate_response(
         &mut self,
-        global_entity: &GlobalEntity,
+        _global_entity: &GlobalEntity,
     ) {
-        // TODO: ?
+        todo!();
 
         // Add remote entity to Host World
-        let new_host_entity = todo!(); // connection.base.host_world_manager.track_remote_entity(
+        // let new_host_entity = connection.base.host_world_manager.track_remote_entity(
         //     &mut connection.base.local_world_manager,
         //     global_entity,
         //     component_kinds,
         // );
 
-        let command = EntityCommand::MigrateResponse(None, *global_entity, new_host_entity);
-        self.host.send_command(&self.entity_map, command);
+        // let command = EntityCommand::MigrateResponse(None, *global_entity, new_host_entity);
+        // self.host.send_command(&self.entity_map, command);
     }
 
     pub fn host_send_set_auth(
@@ -266,7 +269,6 @@ impl LocalWorldManager {
             global_world_manager,
             &mut self.entity_map,
             world,
-            now,
             incoming_host_messages,
         );
         let mut remote_events = self.remote.take_incoming_events(
@@ -424,15 +426,15 @@ impl LocalWorldManager {
 
     pub fn track_hosts_redundant_remote_entity(
         &mut self,
-        remote_entity: &RemoteEntity,
-        component_kinds: &Vec<ComponentKind>,
+        _remote_entity: &RemoteEntity,
+        _component_kinds: &Vec<ComponentKind>,
     ) {
         todo!();
     }
 
     pub fn untrack_hosts_redundant_remote_entity(
         &mut self,
-        remote_entity: &RemoteEntity
+        _remote_entity: &RemoteEntity
     ) {
         todo!();
     }
@@ -533,7 +535,7 @@ impl LocalWorldManager {
         {
             for (command_id, command) in command_list {
                 if self.sender.deliver_message(&command_id).is_some() {
-                    self.host.deliver_message(&self.entity_map, command_id, command);
+                    self.host.deliver_message(command_id, command);
                 }
             }
         }

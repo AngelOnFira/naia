@@ -9,14 +9,11 @@ use bevy::{
     },
 };
 
-use naia_bevy_client::{
-    events::{
-        ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, InsertComponentEvent,
-        MessageEvents, PublishEntityEvent, RejectEvent, RemoveComponentEvent, RequestEvents,
-        SpawnEntityEvent, UnpublishEntityEvent, UpdateComponentEvent,
-    },
-    sequence_greater_than, Client, CommandsExt, Random, Replicate, Tick,
-};
+use naia_bevy_client::{events::{
+    ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, InsertComponentEvent,
+    MessageEvents, PublishEntityEvent, RejectEvent, RemoveComponentEvent, RequestEvents,
+    SpawnEntityEvent, UnpublishEntityEvent, UpdateComponentEvent,
+}, sequence_greater_than, Client, CommandsExt, Random, Replicate, ReplicationConfig, Tick};
 
 use naia_bevy_demo_shared::{
     behavior as shared_behavior,
@@ -53,8 +50,8 @@ pub fn connect_events(
             .spawn_empty()
             // MUST call this to begin replication
             .enable_replication(&mut client)
-            // make Entity Public, which means it will be visibile to other Clients
-            //.configure_replication(&mut client, ReplicationConfig::Public)
+            // make Entity Public, which means it will be visible to other Clients
+            .configure_replication::<Main>(ReplicationConfig::Public)
             // Insert Position component
             .insert(Position::new(
                 16 * ((Random::gen_range_u32(0, 40) as i16) - 20),

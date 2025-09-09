@@ -155,7 +155,7 @@ impl LocalEntityMap {
 
     pub fn set_remote_owned(
         &mut self,
-        global_entity: &GlobalEntity,
+        _global_entity: &GlobalEntity,
     ) {
         todo!();
         // let Some(record) = self.global_to_local.get_mut(global_entity) else {
@@ -168,7 +168,7 @@ impl LocalEntityMap {
         // }
     }
 
-    pub fn set_host_owned(&mut self, global_entity: &GlobalEntity) {
+    pub fn set_host_owned(&mut self, _global_entity: &GlobalEntity) {
         todo!();
         // let Some(record) = self.global_to_local.get_mut(global_entity) else {
         //     panic!("no record exists for entity");
@@ -180,7 +180,7 @@ impl LocalEntityMap {
         // }
     }
 
-    pub fn has_both_host_and_remote_entity(&self, global_entity: &GlobalEntity) -> bool {
+    pub fn has_both_host_and_remote_entity(&self, _global_entity: &GlobalEntity) -> bool {
         todo!()
         // if let Some(record) = self.global_to_local.get(global_entity) {
         //     if record.host_entity().is_some() && record.remote_entity().is_some() {

@@ -99,7 +99,7 @@ impl EntityChannelSender {
 
     fn process_messages(&mut self) {
         loop {
-            let Some((id, msg)) = self.buffered_messages.peek_front() else {
+            let Some((_id, msg)) = self.buffered_messages.peek_front() else {
                 break;
             };
 

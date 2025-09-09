@@ -1,4 +1,4 @@
-use crate::{world::host::host_world_manager::SubCommandId, EntityAuthStatus, HostEntity, RemoteEntity, world::component::component_kinds::ComponentKind, EntityMessageType, EntityEvent, OwnedLocalEntity, LocalEntityMap};
+use crate::{world::host::host_world_manager::SubCommandId, EntityAuthStatus, HostEntity, RemoteEntity, world::component::component_kinds::ComponentKind, EntityMessageType, EntityEvent, LocalEntityMap};
 
 // Raw entity sync messages sent over the wire
 #[derive(PartialEq, Eq, Debug, Clone)]
@@ -17,7 +17,7 @@ pub enum EntityMessage<E: Copy + Eq + PartialEq> {
     RequestAuthority(SubCommandId, E, RemoteEntity),
     ReleaseAuthority(SubCommandId, E),
     EnableDelegationResponse(SubCommandId, E),
-    MigrateResponse(SubCommandId, E, OwnedLocalEntity),
+    MigrateResponse(SubCommandId, E, HostEntity),
 
     Noop,
 }

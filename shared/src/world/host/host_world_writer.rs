@@ -171,7 +171,7 @@ impl HostWorldWriter {
     ) {
         let (command_id, command) = next_send_commands.front().unwrap();
 
-        info!("Writing command {command_id:?} of type {command:?} into packet {packet_index:?}");
+        info!("Writing command {:?} of type {:?} into packet {:?}", command_id, command.get_type(), packet_index);
 
         // write command id
         Self::write_command_id(writer, last_written_id, command_id);
@@ -194,7 +194,7 @@ impl HostWorldWriter {
                     world_manager.record_command_written(
                         packet_index,
                         command_id,
-                        EntityMessage::Spawn(*global_entity),
+                        EntityMessage::Spawn(host_entity.copy_to_owned()),
                     );
                 }
             }
@@ -215,7 +215,7 @@ impl HostWorldWriter {
                     world_manager.record_command_written(
                         packet_index,
                         command_id,
-                        EntityMessage::Despawn(*global_entity),
+                        EntityMessage::Despawn(local_entity),
                     );
                 }
             }
@@ -264,7 +264,7 @@ impl HostWorldWriter {
                         world_manager.record_command_written(
                             packet_index,
                             command_id,
-                            EntityMessage::InsertComponent(*global_entity, *component_kind),
+                            EntityMessage::InsertComponent(local_entity, *component_kind),
                         );
                     }
                 }
@@ -302,7 +302,7 @@ impl HostWorldWriter {
                         world_manager.record_command_written(
                             packet_index,
                             command_id,
-                            EntityMessage::RemoveComponent(*global_entity, *component_kind),
+                            EntityMessage::RemoveComponent(local_entity, *component_kind),
                         );
                     }
                 }
@@ -333,7 +333,7 @@ impl HostWorldWriter {
                     world_manager.record_command_written(
                         packet_index,
                         command_id,
-                        EntityMessage::Publish(*sub_id, *global_entity),
+                        EntityMessage::Publish(*sub_id, local_entity),
                     );
                 }
             }
@@ -363,7 +363,7 @@ impl HostWorldWriter {
                     world_manager.record_command_written(
                         packet_index,
                         command_id,
-                        EntityMessage::Unpublish(*sub_id, *global_entity),
+                        EntityMessage::Unpublish(*sub_id, local_entity),
                     );
                 }
             }
@@ -392,7 +392,7 @@ impl HostWorldWriter {
                     world_manager.record_command_written(
                         packet_index,
                         command_id,
-                        EntityMessage::EnableDelegation(*sub_id, *global_entity),
+                        EntityMessage::EnableDelegation(*sub_id, local_entity),
                     );
                 }
             }
@@ -425,7 +425,7 @@ impl HostWorldWriter {
                     world_manager.record_command_written(
                         packet_index,
                         command_id,
-                        EntityMessage::DisableDelegation(*sub_id, *global_entity),
+                        EntityMessage::DisableDelegation(*sub_id, host_entity.copy_to_owned()),
                     );
                 }
             }
@@ -461,7 +461,7 @@ impl HostWorldWriter {
                     world_manager.record_command_written(
                         packet_index,
                         command_id,
-                        EntityMessage::SetAuthority(*sub_id, *global_entity, *auth_status),
+                        EntityMessage::SetAuthority(*sub_id, host_entity.copy_to_owned(), *auth_status),
                     );
                 }
             }
@@ -499,7 +499,7 @@ impl HostWorldWriter {
                     world_manager.record_command_written(
                         packet_index,
                         command_id,
-                        EntityMessage::RequestAuthority(*sub_id, *global_entity, *host_entity),
+                        EntityMessage::RequestAuthority(*sub_id, remote_entity.copy_to_owned(), *host_entity),
                     );
                 }
             }
@@ -529,7 +529,7 @@ impl HostWorldWriter {
                     world_manager.record_command_written(
                         packet_index,
                         command_id,
-                        EntityMessage::ReleaseAuthority(*sub_id, *global_entity),
+                        EntityMessage::ReleaseAuthority(*sub_id, remote_entity.copy_to_owned()),
                     );
                 }
             }
@@ -562,7 +562,7 @@ impl HostWorldWriter {
                     world_manager.record_command_written(
                         packet_index,
                         command_id,
-                        EntityMessage::EnableDelegationResponse(*sub_id, *global_entity),
+                        EntityMessage::EnableDelegationResponse(*sub_id, remote_entity.copy_to_owned()),
                     );
                 }
             }
@@ -598,7 +598,7 @@ impl HostWorldWriter {
                     world_manager.record_command_written(
                         packet_index,
                         command_id,
-                        EntityMessage::MigrateResponse(*sub_id, *global_entity, new_host_entity_value.copy_to_owned()),
+                        EntityMessage::MigrateResponse(*sub_id, old_remote_entity.copy_to_owned(), *new_host_entity_value),
                     );
                 }
             }

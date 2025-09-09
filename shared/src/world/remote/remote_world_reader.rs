@@ -92,13 +92,13 @@ impl RemoteWorldReader {
             }
             EntityMessageType::Despawn => {
                 // read local entity
-                let local_entity = OwnedLocalEntity::de(reader)?;
+                let local_entity = OwnedLocalEntity::de(reader)?.to_reversed();
 
                 world_manager.receiver_buffer_message(message_id, EntityMessage::Despawn(local_entity));
             }
             EntityMessageType::InsertComponent => {
                 // read local entity
-                let local_entity = OwnedLocalEntity::de(reader)?;
+                let local_entity = OwnedLocalEntity::de(reader)?.to_reversed();
                 
                 // read component
                 let converter = world_manager.entity_converter();
@@ -117,7 +117,7 @@ impl RemoteWorldReader {
             }
             EntityMessageType::RemoveComponent => {
                 // read local entity
-                let local_entity = OwnedLocalEntity::de(reader)?;
+                let local_entity = OwnedLocalEntity::de(reader)?.to_reversed();
                 
                 // read component kind
                 let component_kind = ComponentKind::de(component_kinds, reader)?;
@@ -133,7 +133,7 @@ impl RemoteWorldReader {
                 let sub_command_id = SubCommandId::de(reader)?;
 
                 // read local entity
-                let local_entity = OwnedLocalEntity::de(reader)?;
+                let local_entity = OwnedLocalEntity::de(reader)?.to_reversed();
 
                 world_manager.receiver_buffer_message(message_id, EntityMessage::Publish(sub_command_id, local_entity));
             }
@@ -143,7 +143,7 @@ impl RemoteWorldReader {
                 let sub_command_id = SubCommandId::de(reader)?;
 
                 // read local entity
-                let local_entity = OwnedLocalEntity::de(reader)?;
+                let local_entity = OwnedLocalEntity::de(reader)?.to_reversed();
 
                 world_manager.receiver_buffer_message(message_id, EntityMessage::Unpublish(sub_command_id, local_entity));
             }
@@ -153,7 +153,7 @@ impl RemoteWorldReader {
                 let sub_command_id = SubCommandId::de(reader)?;
 
                 // read local entity
-                let local_entity = OwnedLocalEntity::de(reader)?;
+                let local_entity = OwnedLocalEntity::de(reader)?.to_reversed();
 
                 world_manager.receiver_buffer_message(message_id, EntityMessage::EnableDelegation(sub_command_id, local_entity));
             }
@@ -200,14 +200,14 @@ impl RemoteWorldReader {
                 let host_entity = HostEntity::de(reader)?;
                 
                 // read remote entity value
-                let remote_entity_value = u16::de(reader)?;
+                let remote_entity = RemoteEntity::de(reader)?;
 
                 world_manager.receiver_buffer_message(
                     message_id,
                     EntityMessage::RequestAuthority(
                         sub_command_id,
                         host_entity.copy_to_owned(),
-                        RemoteEntity::new(remote_entity_value),
+                        remote_entity,
                     ),
                 );
             }
@@ -246,14 +246,14 @@ impl RemoteWorldReader {
                 let old_host_entity = HostEntity::de(reader)?;
                 
                 // read new remote entity
-                let new_remote_entity = RemoteEntity::de(reader)?;
+                let new_host_entity = HostEntity::de(reader)?;
 
                 world_manager.receiver_buffer_message(
                     message_id,
                     EntityMessage::MigrateResponse(
                         sub_command_id,
                         old_host_entity.copy_to_owned(),
-                        new_remote_entity.copy_to_owned(),
+                        new_host_entity,
                     ),
                 );
             }

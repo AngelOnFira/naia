@@ -45,7 +45,7 @@ impl HostEngine {
     ) {
         match msg.get_type() {
             EntityMessageType::Spawn | EntityMessageType::Despawn | EntityMessageType::InsertComponent | EntityMessageType::RemoveComponent => {
-                panic!("Host should not receive messages of this type");
+                panic!("Host should not receive messages of this type: {:?}", msg.get_type());
             } 
             EntityMessageType::Noop => {
                 return;
@@ -75,7 +75,7 @@ impl HostEngine {
         let global_entity = command.entity();
         let host_entity = converter.global_entity_to_host_entity(&global_entity).unwrap();
 
-        info!("SenderEngine::accept_command(entity={:?}, command={:?})", global_entity, command.get_type());
+        info!("HostEngine::send_command(global entity={:?}, host_entity={:?}, command={:?})", global_entity, host_entity, command.get_type());
 
         match command.get_type() {
             EntityMessageType::Spawn => {
@@ -107,10 +107,6 @@ impl HostEngine {
         let Some(entity_channel) = self.entity_channels.get_mut(&host_entity) else {
             panic!("Cannot accept command for an entity that does not exist in the engine. Command: {:?}", command);
         };
-
-        // if log {
-            info!("SenderEngine::accept_command(entity={:?}, command={:?})", host_entity, command.get_type());
-        // }
 
         entity_channel.send_command(command);
         entity_channel.drain_outgoing_messages_into(&mut self.outgoing_commands);

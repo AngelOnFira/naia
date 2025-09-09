@@ -30,7 +30,7 @@ impl EntityMessageReceiver {
     }
 
     // TODO: refactor this to use a generic type for the engine
-    pub fn host_take_incoming_events<E: Copy + Hash + Eq + Debug>(
+    pub fn host_take_incoming_events(
         host_engine: &mut HostEngine,
         incoming_messages: Vec<(MessageIndex, EntityMessage<HostEntity>)>,
     ) -> Vec<EntityMessage<HostEntity>> {

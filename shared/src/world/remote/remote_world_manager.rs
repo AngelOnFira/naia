@@ -19,7 +19,7 @@ use crate::{
     },
     ComponentKind, ComponentKinds, ComponentUpdate, EntityMessage, EntityAndGlobalEntityConverter, GlobalEntity,
     GlobalEntitySpawner, GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter, Replicate, Tick,
-    WorldMutType, EntityMessageType, OwnedLocalEntity, HostEntity, EntityMessageReceiver, HostType,
+    WorldMutType, EntityMessageType, OwnedLocalEntity, EntityMessageReceiver, HostType,
     LocalEntityMap, EntityCommand, MessageIndex
 };
 
@@ -245,8 +245,9 @@ impl RemoteWorldManager {
                         .push(EntityEvent::Despawn(global_entity));
                 }
                 EntityMessage::InsertComponent(remote_entity, component_kind) => {
+                    let local_entity = remote_entity.copy_to_owned();
                     let component = self.incoming_components
-                        .remove(&(remote_entity, component_kind))
+                        .remove(&(local_entity, component_kind))
                         .unwrap();
 
                     if local_entity_map.contains_remote_entity(&remote_entity) {
@@ -286,21 +287,11 @@ impl RemoteWorldManager {
                             msg.to_event(local_entity_map)
                         }
                         EntityMessageType::ReleaseAuthority => {
-                            let EntityMessage::ReleaseAuthority(_sub_id, owned_entity) = msg else {
+                            let EntityMessage::ReleaseAuthority(_sub_id, remote_entity) = msg else {
                                 panic!("");
                             };
-                            match owned_entity {
-                                OwnedLocalEntity::Remote(remote_entity) => {
-                                    let remote_entity = RemoteEntity::new(remote_entity);
-                                    let global_entity = local_entity_map.global_entity_from_remote(&remote_entity).unwrap();
-                                    EntityEvent::ReleaseAuthority(*global_entity)
-                                }
-                                OwnedLocalEntity::Host(host_entity) => {
-                                    let host_entity = HostEntity::new(host_entity);
-                                    let global_entity = local_entity_map.global_entity_from_host(&host_entity).unwrap();
-                                    EntityEvent::ReleaseAuthority(*global_entity)
-                                }
-                            }
+                            let global_entity = local_entity_map.global_entity_from_remote(&remote_entity).unwrap();
+                            EntityEvent::ReleaseAuthority(*global_entity)
                         }
                         _ => msg.to_event(local_entity_map)
                     };

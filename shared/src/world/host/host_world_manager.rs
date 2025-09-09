@@ -1,12 +1,11 @@
-use std::collections::{HashMap, HashSet};
-use std::hash::Hash;
+use std::{hash::Hash, collections::{HashMap, HashSet}};
 
-use naia_socket_shared::Instant;
+use log::info;
 
 use crate::{messages::channels::receivers::reliable_receiver::ReliableReceiver, world::{
     sync::{HostEngine, RemoteEngine, EntityChannelReceiver, EntityChannelSender},
     host::entity_update_manager::EntityUpdateManager,
-}, EntityMessage, EntityMessageReceiver, GlobalEntity, HostType, ComponentKind, HostEntityGenerator, MessageIndex, EntityCommand, LocalEntityMap, HostEntity, EntityConverterMut, GlobalWorldManagerType, ShortMessageIndex, WorldMutType, GlobalEntitySpawner, RemoteEntity, ComponentKinds, EntityEvent, LocalEntityAndGlobalEntityConverter, OwnedLocalEntity};
+}, EntityMessage, EntityMessageReceiver, GlobalEntity, HostType, ComponentKind, HostEntityGenerator, MessageIndex, EntityCommand, LocalEntityMap, HostEntity, EntityConverterMut, GlobalWorldManagerType, ShortMessageIndex, WorldMutType, GlobalEntitySpawner, EntityEvent, LocalEntityAndGlobalEntityConverter, OwnedLocalEntity};
 
 pub type CommandId = MessageIndex;
 pub type SubCommandId = ShortMessageIndex;
@@ -28,6 +27,7 @@ pub struct HostWorldManager {
     // For Client, this contains the non-Delegated Entities that the Client has authority over, that have been delivered to the Server
     delivered_receiver: ReliableReceiver<EntityMessage<HostEntity>>,
     delivered_engine: RemoteEngine<HostEntity>,
+    incoming_events: Vec<EntityEvent>
 }
 
 impl HostWorldManager {
@@ -37,6 +37,7 @@ impl HostWorldManager {
             host_engine: HostEngine::new(host_type),
             delivered_receiver: ReliableReceiver::new(),
             delivered_engine: RemoteEngine::new(host_type.invert()),
+            incoming_events: Vec::new(),
         }
     }
 
@@ -56,7 +57,6 @@ impl HostWorldManager {
         global_world_manager: &dyn GlobalWorldManagerType,
         local_entity_map: &mut LocalEntityMap,
         world: &mut W,
-        now: &Instant,
         incoming_messages: Vec<(MessageIndex, EntityMessage<HostEntity>)>,
     ) -> Vec<EntityEvent> {
 
@@ -64,18 +64,15 @@ impl HostWorldManager {
             &mut self.host_engine,
             incoming_messages,
         );
-        
-        // todo
+
         self.process_incoming_messages(
             spawner,
             global_world_manager,
             local_entity_map,
             world,
-            now,
             incoming_messages,
         );
 
-        // todo
         std::mem::take(&mut self.incoming_events)
     }
 
@@ -112,8 +109,8 @@ impl HostWorldManager {
         self.entity_generator.host_remove_reserved_entity(global_entity)
     }
 
-    pub(crate) fn host_has_entity(&self, global_entity: &GlobalEntity) -> bool {
-        self.get_host_world().contains_key(global_entity)
+    pub(crate) fn host_has_entity(&self, host_entity: &HostEntity) -> bool {
+        self.get_host_world().contains_key(host_entity)
     }
 
     // used when Entity first comes into Connection's scope
@@ -165,7 +162,7 @@ impl HostWorldManager {
         self.host_engine.send_command(converter, EntityCommand::RemoveComponent(*global_entity, *component_kind));
     }
 
-    pub fn remote_despawn_entity(&mut self, global_entity: &GlobalEntity) {
+    pub fn remote_despawn_entity(&mut self, _global_entity: &GlobalEntity) {
         todo!("close entity channel?");
     }
 
@@ -197,7 +194,15 @@ impl HostWorldManager {
     }
 
     pub(crate) fn deliver_message(&mut self, command_id: CommandId, message: EntityMessage<OwnedLocalEntity>) {
-        self.delivered_receiver.buffer_message(command_id, message);
+        let Some(local_entity) = message.entity() else {
+            return;
+        };
+        if local_entity.is_remote() {
+            return;
+        }
+        let host_entity = local_entity.host();
+        let host_message = message.with_entity(host_entity);
+        self.delivered_receiver.buffer_message(command_id, host_message);
     }
 
     pub(crate) fn process_delivered_commands(
@@ -231,6 +236,64 @@ impl HostWorldManager {
                 _ => {
                     // Only Auth-related messages are left here
                     // Right now it doesn't seem like we need to track auth state here
+                }
+            }
+        }
+    }
+
+    fn process_incoming_messages<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
+        &mut self,
+        _spawner: &mut dyn GlobalEntitySpawner<E>,
+        _global_world_manager: &dyn GlobalWorldManagerType,
+        _local_entity_map: &mut LocalEntityMap,
+        _world: &mut W,
+        incoming_messages: Vec<EntityMessage<HostEntity>>,
+    ) {
+        // execute the action and emit an event
+        for message in incoming_messages {
+            info!("Processing EntityMessage<HostEntity>: {:?}", message);
+            match message {
+                EntityMessage::Spawn(_) => {
+                    todo!("Implement EntityMessage::<HostEntity>::Spawn handling");
+                }
+                EntityMessage::Despawn(_) => {
+                    todo!("Implement EntityMessage::<HostEntity>::Despawn handling");
+                }
+                EntityMessage::InsertComponent(_, _) => {
+                    todo!("Implement EntityMessage::<HostEntity>::InsertComponent handling");
+                }
+                EntityMessage::RemoveComponent(_, _) => {
+                    todo!("Implement EntityMessage::<HostEntity>::RemoveComponent handling");
+                }
+                EntityMessage::Publish(_, _) => {
+                    todo!("Implement EntityMessage::<HostEntity>::Publish handling");
+                }
+                EntityMessage::Unpublish(_, _) => {
+                    todo!("Implement EntityMessage::<HostEntity>::Unpublish handling");
+                }
+                EntityMessage::EnableDelegation(_, _) => {
+                    todo!("Implement EntityMessage::<HostEntity>::EnableDelegation handling");
+                }
+                EntityMessage::DisableDelegation(_, _) => {
+                    todo!("Implement EntityMessage::<HostEntity>::DisableDelegation handling");
+                }
+                EntityMessage::SetAuthority(_, _, _) => {
+                    todo!("Implement EntityMessage::<HostEntity>::SetAuthority handling");
+                }
+                EntityMessage::RequestAuthority(_, _, _) => {
+                    todo!("Implement EntityMessage::<HostEntity>::RequestAuthority handling");
+                }
+                EntityMessage::ReleaseAuthority(_, _) => {
+                    todo!("Implement EntityMessage::<HostEntity>::ReleaseAuthority handling");
+                }
+                EntityMessage::EnableDelegationResponse(_, _) => {
+                    todo!("Implement EntityMessage::<HostEntity>::EnableDelegationResponse handling");
+                }
+                EntityMessage::MigrateResponse(_, _, _) => {
+                    todo!("Implement EntityMessage::<HostEntity>::MigrateResponse handling");
+                }
+                EntityMessage::Noop => {
+                    // do nothing
                 }
             }
         }

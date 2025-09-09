@@ -938,11 +938,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         }
 
         // update in world manager
-        info!(
-            "Client.insert_component_worldless(): inserting Component {:?} into Entity {:?}",
-            self.protocol.component_kinds.kind_to_name(&component_kind),
-            global_entity
-        );
+        // info!(
+        //     "Client.insert_component_worldless(): inserting Component {:?} into Entity {:?}",
+        //     self.protocol.component_kinds.kind_to_name(&component_kind),
+        //     global_entity
+        // );
         self.global_world_manager
             .host_insert_component(&self.protocol.component_kinds, &global_entity, component);
 
