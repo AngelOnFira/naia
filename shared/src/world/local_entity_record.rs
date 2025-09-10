@@ -4,6 +4,7 @@ use crate::{HostEntity, OwnedLocalEntity, RemoteEntity};
 #[derive(Debug)]
 pub struct LocalEntityRecord {
     entity: OwnedLocalEntity,
+    old_remote_entity: Option<RemoteEntity>,
     delegated: bool,
 }
 
@@ -11,6 +12,7 @@ impl LocalEntityRecord {
     pub fn new_host_owned_entity(entity: HostEntity) -> Self {
         Self {
             entity: OwnedLocalEntity::new_host(entity),
+            old_remote_entity: None,
             delegated: false,
         }
     }
@@ -18,6 +20,7 @@ impl LocalEntityRecord {
     pub fn new_remote_owned_entity(entity: RemoteEntity) -> Self {
         Self {
             entity: OwnedLocalEntity::new_remote(entity),
+            old_remote_entity: None,
             delegated: false,
         }
     }
@@ -26,8 +29,8 @@ impl LocalEntityRecord {
         self.entity.is_host()
     }
 
-    pub fn is_remote_owned(&self) -> bool {
-        self.entity.is_remote()
+    pub fn has_remote_entity(&self) -> bool {
+        self.entity.is_remote() || self.old_remote_entity.is_some()
     }
 
     pub fn is_delegated(&self) -> bool {
@@ -39,7 +42,14 @@ impl LocalEntityRecord {
     }
 
     pub(crate) fn remote_entity(&self) -> RemoteEntity {
-        self.entity.remote()
+        if self.entity.is_remote() {
+            self.entity.remote()
+        } else {
+            let Some(old_remote) = self.old_remote_entity else {
+                panic!("No remote entity exists");
+            };
+            old_remote
+        }
     }
 
     pub(crate) fn owned_entity(&self) -> OwnedLocalEntity {
@@ -49,16 +59,17 @@ impl LocalEntityRecord {
     // should return old host entity if it exists
     pub(crate) fn set_host(&mut self, new_host_entity: HostEntity) -> Option<HostEntity> {
 
-        todo!("Really, it seems that the local entity record needs to go back to tracking both host and remote entities. We can't lose that information.");
+        if self.entity.is_host() {
+            panic!("Attempting to set host entity when entity is already host owned");
+        }
+        if self.old_remote_entity.is_some() {
+            panic!("Attempting to set host entity when old remote entity already exists");
+        }
 
-        // OLD CODE:
-        // let old_host_entity_opt = self.host.take();
-        // // if let Some(old_host_entity) = &old_host_entity_opt {
-        // //     warn!("Overwriting existing host entity: {:?}", old_host_entity);
-        // // }
-        // self.host = Some(new_host_entity);
-        // self.primary = Some(LocalEntity::Host);
-        // old_host_entity_opt
+        self.old_remote_entity = Some(self.entity.remote());
+        self.entity = OwnedLocalEntity::new_host(new_host_entity);
+
+        None
     }
 
     pub(crate) fn set_remote(&mut self, _remote: RemoteEntity) {
