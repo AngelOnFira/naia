@@ -104,9 +104,10 @@ impl EntityChannelSender {
             };
 
             match msg.get_type() {
-                EntityMessageType::Publish | EntityMessageType::Unpublish |
-                EntityMessageType::EnableDelegation | EntityMessageType::DisableDelegation |
-                EntityMessageType::SetAuthority => {
+                EntityMessageType::RequestAuthority |
+                EntityMessageType::ReleaseAuthority |
+                EntityMessageType::EnableDelegationResponse |
+                EntityMessageType::MigrateResponse => {
                     let (id, msg) = self.buffered_messages.pop_front().unwrap();
 
                     // info!("EntityChannel::accept_message(id={}, msgType={:?})", id, msg.get_type());

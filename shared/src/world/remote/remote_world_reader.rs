@@ -200,7 +200,7 @@ impl RemoteWorldReader {
                 let host_entity = HostEntity::de(reader)?;
                 
                 // read remote entity value
-                let remote_entity = RemoteEntity::de(reader)?;
+                let remote_entity = HostEntity::de(reader)?; // will reverse to RemoteEntity when it's turned into an event
 
                 world_manager.receiver_buffer_message(
                     message_id,

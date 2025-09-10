@@ -4,6 +4,8 @@ use std::{
     sync::{Arc, RwLock, RwLockReadGuard},
 };
 
+use log::warn;
+
 use crate::{ComponentKind, DiffMask, GlobalEntity, GlobalWorldManagerType};
 
 use super::{global_diff_handler::GlobalDiffHandler, mut_channel::MutReceiver};
@@ -70,7 +72,8 @@ impl UserDiffHandler {
         component_kind: &ComponentKind,
     ) -> bool {
         let Some(receiver) = self.receivers.get(&(*entity, *component_kind)) else {
-            panic!("Should not call this unless we're sure there's a receiver");
+            warn!("diff_mask_is_clear(): Should not call this unless we're sure there's a receiver");
+            return true;
         };
         return receiver.diff_mask_is_clear();
     }

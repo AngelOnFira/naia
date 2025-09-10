@@ -14,7 +14,7 @@ pub enum EntityMessage<E: Copy + Eq + PartialEq> {
     SetAuthority(SubCommandId, E, EntityAuthStatus),
     
     // These are not commands, they are something else
-    RequestAuthority(SubCommandId, E, RemoteEntity),
+    RequestAuthority(SubCommandId, E, HostEntity),
     ReleaseAuthority(SubCommandId, E),
     EnableDelegationResponse(SubCommandId, E),
     MigrateResponse(SubCommandId, E, HostEntity),
@@ -152,10 +152,10 @@ impl EntityMessage<RemoteEntity> {
             EntityMessage::EnableDelegation(_, _) => EntityEvent::EnableDelegation(global_entity),
             EntityMessage::EnableDelegationResponse(_, _) => EntityEvent::EnableDelegationResponse(global_entity),
             EntityMessage::DisableDelegation(_, _) => EntityEvent::DisableDelegation(global_entity),
-            EntityMessage::RequestAuthority(_, _, other_entity) => EntityEvent::RequestAuthority(global_entity, other_entity),
+            EntityMessage::RequestAuthority(_, _, new_host_entity) => EntityEvent::RequestAuthority(global_entity, new_host_entity.to_remote()),
             EntityMessage::ReleaseAuthority(_, _) => EntityEvent::ReleaseAuthority(global_entity),
             EntityMessage::SetAuthority(_, _, status) => EntityEvent::SetAuthority(global_entity, status),
-            EntityMessage::MigrateResponse(_, _, other_entity) => EntityEvent::MigrateResponse(global_entity, other_entity),
+            EntityMessage::MigrateResponse(_, _, other_entity) => EntityEvent::MigrateResponse(global_entity, other_entity.to_remote()),
             EntityMessage::Spawn(_) | EntityMessage::Despawn(_) |
             EntityMessage::InsertComponent(_, _) | EntityMessage::RemoveComponent(_, _) => panic!("Handled elsewhere"),
             EntityMessage::Noop => panic!("Cannot convert Noop message to an event"),
@@ -173,10 +173,10 @@ impl EntityMessage<HostEntity> {
             EntityMessage::EnableDelegation(_, _) => EntityEvent::EnableDelegation(global_entity),
             EntityMessage::EnableDelegationResponse(_, _) => EntityEvent::EnableDelegationResponse(global_entity),
             EntityMessage::DisableDelegation(_, _) => EntityEvent::DisableDelegation(global_entity),
-            EntityMessage::RequestAuthority(_, _, other_entity) => EntityEvent::RequestAuthority(global_entity, other_entity),
+            EntityMessage::RequestAuthority(_, _, new_host_entity) => EntityEvent::RequestAuthority(global_entity, new_host_entity.to_remote()),
             EntityMessage::ReleaseAuthority(_, _) => EntityEvent::ReleaseAuthority(global_entity),
             EntityMessage::SetAuthority(_, _, status) => EntityEvent::SetAuthority(global_entity, status),
-            EntityMessage::MigrateResponse(_, _, other_entity) => EntityEvent::MigrateResponse(global_entity, other_entity),
+            EntityMessage::MigrateResponse(_, _, new_host_entity) => EntityEvent::MigrateResponse(global_entity, new_host_entity.to_remote()),
             EntityMessage::Spawn(_) | EntityMessage::Despawn(_) |
             EntityMessage::InsertComponent(_, _) | EntityMessage::RemoveComponent(_, _) => panic!("Handled elsewhere"),
             EntityMessage::Noop => panic!("Cannot convert Noop message to an event"),

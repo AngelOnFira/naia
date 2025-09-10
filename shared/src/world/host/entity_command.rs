@@ -1,4 +1,4 @@
-use crate::{world::host::host_world_manager::SubCommandId, ComponentKind, EntityAuthStatus, EntityMessageType, GlobalEntity, HostEntity, RemoteEntity};
+use crate::{world::host::host_world_manager::SubCommandId, ComponentKind, EntityAuthStatus, EntityMessageType, GlobalEntity, HostEntity};
 
 // command to sync entities from host -> remote
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -16,7 +16,7 @@ pub enum EntityCommand {
     SetAuthority(Option<SubCommandId>, GlobalEntity, EntityAuthStatus), // only sent by server
 
     // These aren't commands, they are something else
-    RequestAuthority(Option<SubCommandId>, GlobalEntity, RemoteEntity), // only sent by client
+    RequestAuthority(Option<SubCommandId>, GlobalEntity, HostEntity), // only sent by client
     ReleaseAuthority(Option<SubCommandId>, GlobalEntity), // only sent by client
     EnableDelegationResponse(Option<SubCommandId>, GlobalEntity), // only sent by client
     MigrateResponse(Option<SubCommandId>, GlobalEntity, HostEntity), // only sent by server

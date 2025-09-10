@@ -1,4 +1,4 @@
-use crate::{ComponentKind, EntityAuthStatus, EntityMessageType, GlobalEntity, HostEntity, RemoteEntity, Replicate, Tick};
+use crate::{ComponentKind, EntityAuthStatus, EntityMessageType, GlobalEntity, RemoteEntity, Replicate, Tick};
 
 // ECS Lifecycle Events
 pub enum EntityEvent {
@@ -19,7 +19,7 @@ pub enum EntityEvent {
     RequestAuthority(GlobalEntity, RemoteEntity),
     ReleaseAuthority(GlobalEntity),
     EnableDelegationResponse(GlobalEntity),
-    MigrateResponse(GlobalEntity, HostEntity),
+    MigrateResponse(GlobalEntity, RemoteEntity),
 }
 
 impl EntityEvent {

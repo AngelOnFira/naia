@@ -198,7 +198,7 @@ impl LocalWorldManager {
         global_entity: &GlobalEntity,
     ) {
         let new_host_entity = self.host_reserve_entity(&global_entity); // host entity? on remote? this is wrong
-        let command = EntityCommand::RequestAuthority(None, *global_entity, new_host_entity.to_remote());
+        let command = EntityCommand::RequestAuthority(None, *global_entity, new_host_entity);
         self.remote.send_command(&self.entity_map, command);
     }
 

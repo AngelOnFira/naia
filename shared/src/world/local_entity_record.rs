@@ -47,8 +47,11 @@ impl LocalEntityRecord {
     }
 
     // should return old host entity if it exists
-    pub(crate) fn set_host(&mut self, _new_host_entity: HostEntity) -> Option<HostEntity> {
-        todo!();
+    pub(crate) fn set_host(&mut self, new_host_entity: HostEntity) -> Option<HostEntity> {
+
+        todo!("Really, it seems that the local entity record needs to go back to tracking both host and remote entities. We can't lose that information.");
+
+        // OLD CODE:
         // let old_host_entity_opt = self.host.take();
         // // if let Some(old_host_entity) = &old_host_entity_opt {
         // //     warn!("Overwriting existing host entity: {:?}", old_host_entity);

@@ -491,7 +491,7 @@ impl HostWorldWriter {
                 // write remote entity
                 remote_entity.ser(writer);
 
-                // write host entity value
+                // write host entity
                 host_entity.value().ser(writer);
 
                 // if we are writing to this packet, add it to record

@@ -1684,13 +1684,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         .unwrap();
                     self.entity_update_authority(&global_entity, &world_entity, new_auth_status);
                 }
-                EntityEvent::MigrateResponse(global_entity, host_entity) => {
+                EntityEvent::MigrateResponse(global_entity, remote_entity) => {
                     let world_entity = self
                         .global_entity_map
                         .global_entity_to_entity(&global_entity)
                         .unwrap();
                     self.entity_complete_delegation(world, &global_entity, &world_entity);
-                    self.add_redundant_remote_entity_to_host(&world_entity, host_entity.to_remote());
+                    self.add_redundant_remote_entity_to_host(&world_entity, remote_entity);
 
                     self.global_world_manager
                         .entity_update_authority(&global_entity, EntityAuthStatus::Granted);
