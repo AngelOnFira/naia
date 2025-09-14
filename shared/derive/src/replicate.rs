@@ -705,12 +705,12 @@ pub fn get_new_complete_method(
                 match *struct_type {
                     StructType::Struct => {
                         quote! {
-                             #field_name: EntityProperty::host_owned(#enum_name::#uppercase_variant_name as u8)
+                             #field_name: EntityProperty::new_for_component(#enum_name::#uppercase_variant_name as u8)
                         }
                     }
                     StructType::TupleStruct => {
                         quote! {
-                            EntityProperty::host_owned(#enum_name::#uppercase_variant_name as u8)
+                            EntityProperty::new_for_component(#enum_name::#uppercase_variant_name as u8)
                         }
                     }
                     _ => {

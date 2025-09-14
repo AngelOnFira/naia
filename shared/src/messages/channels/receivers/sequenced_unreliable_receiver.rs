@@ -1,5 +1,7 @@
 use std::mem;
 
+use log::{info, warn};
+
 use naia_serde::{BitReader, SerdeErr};
 use naia_socket_shared::Instant;
 
@@ -33,12 +35,15 @@ impl SequencedUnreliableReceiver {
         message: MessageContainer,
     ) {
         if let Some(remote_entity_set) = message.relations_waiting() {
+            warn!("Queuing waiting message {:?}! Waiting on entities: {:?}", message.name(), remote_entity_set);
             local_world_manager.entity_waitlist_queue(
                 &remote_entity_set,
                 &mut self.waitlist_store,
                 (message_index, message)
             );
             return;
+        } else {
+            info!("Received message {:?}!", message.name());
         }
 
         self.arrange_message(message_index, message);

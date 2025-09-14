@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use log::info;
+
 use crate::{world::{
     local_entity_record::LocalEntityRecord,
     entity::local_entity::{HostEntity, OwnedLocalEntity, RemoteEntity},
@@ -42,6 +44,7 @@ impl LocalEntityAndGlobalEntityConverter for LocalEntityMap {
         global_entity: &GlobalEntity,
     ) -> Result<OwnedLocalEntity, EntityDoesNotExistError> {
         if let Some(record) = self.global_to_local.get(global_entity) {
+            info!("global_entity_to_owned_entity(). Found record for global entity {:?}: {:?}", global_entity, record);
             return Ok(record.owned_entity());
         }
         Err(EntityDoesNotExistError)

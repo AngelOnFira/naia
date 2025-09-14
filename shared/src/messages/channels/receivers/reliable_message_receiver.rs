@@ -1,3 +1,5 @@
+use log::{info, warn};
+
 use naia_serde::{BitReader, SerdeErr};
 use naia_socket_shared::Instant;
 
@@ -67,7 +69,7 @@ impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
         };
 
         if let Some(remote_entity_set) = full_message.relations_waiting() {
-            // warn!("Queuing waiting message! Waiting on entities: {:?}", global_entity_set);
+            warn!("Queuing waiting message {:?}! Waiting on entities: {:?}", full_message.name(), remote_entity_set);
             local_world_manager.entity_waitlist_queue(
                 &remote_entity_set,
                 &mut self.waitlist_store,
@@ -75,7 +77,7 @@ impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
             );
             return;
         } else {
-            // info!("Received message! {:?}", full_message.name());
+            info!("Received message {:?}!", full_message.name());
         }
 
         let incoming_messages =

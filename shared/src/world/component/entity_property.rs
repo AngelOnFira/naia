@@ -304,14 +304,14 @@ pub struct EntityProperty {
 
 impl EntityProperty {
     // Should only be used by Messages
-    pub fn new() -> Self {
+    pub fn new_for_message() -> Self {
         Self {
             inner: EntityRelation::HostCreated(HostCreatedRelation::new()),
         }
     }
 
     // Should only be used by Components
-    pub fn host_owned(mutator_index: u8) -> Self {
+    pub fn new_for_component(mutator_index: u8) -> Self {
         Self {
             inner: EntityRelation::HostCreated(HostCreatedRelation::with_mutator(mutator_index)),
         }
@@ -326,6 +326,8 @@ impl EntityProperty {
         if exists {
             // LocalEntity is reversed on write, don't worry here
             let local_entity = OwnedLocalEntity::de(reader)?;
+
+            info!("EntityProperty::new_read() local_entity: {:?}", local_entity);
 
             if let Ok(global_entity) = local_entity.convert_to_global(converter) {
                 let mut new_impl = RemoteCreatedRelation::new_empty();
@@ -756,10 +758,15 @@ impl HostCreatedRelation {
             false.ser(writer);
             return;
         };
+
+        info!("HostCreatedRelation::write() `global_entity`: {:?}", global_entity);
+
         let Ok(owned_local_entity) = converter.get_or_reserve_entity(global_entity) else {
             false.ser(writer);
             return;
         };
+
+        info!("HostCreatedRelation::write() writing `local_entity`: {:?}", owned_local_entity);
 
         // Must reverse the LocalEntity because the Host<->Remote
         // relationship inverts after this data goes over the wire
