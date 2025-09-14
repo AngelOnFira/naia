@@ -216,8 +216,8 @@ fn get_relations_waiting_method(fields: &[Field], struct_type: &StructType) -> T
         if let Field::EntityProperty(_) = field {
             let field_name = get_field_name(field, index, struct_type);
             let body_add_right = quote! {
-                if let Some(local_entity) = self.#field_name.waiting_local_entity() {
-                    output.insert(local_entity);
+                if let Some(remote_entity) = self.#field_name.waiting_remote_entity() {
+                    output.insert(remote_entity);
                 }
             };
             let new_body = quote! {

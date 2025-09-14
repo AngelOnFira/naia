@@ -14,8 +14,8 @@ use crate::{world::entity::{
 
 #[derive(Clone)]
 enum EntityRelation {
-    HostOwned(HostOwnedRelation),
-    RemoteOwned(RemoteOwnedRelation),
+    HostCreated(HostCreatedRelation),
+    RemoteCreated(RemoteCreatedRelation),
     RemoteWaiting(RemoteWaitingRelation),
     RemotePublic(RemotePublicRelation),
     Delegated(DelegatedRelation),
@@ -38,8 +38,8 @@ impl EntityRelation {
     }
     fn name(&self) -> &str {
         match self {
-            EntityRelation::HostOwned(_) => "HostOwned",
-            EntityRelation::RemoteOwned(_) => "RemoteOwned",
+            EntityRelation::HostCreated(_) => "HostOwned",
+            EntityRelation::RemoteCreated(_) => "RemoteOwned",
             EntityRelation::RemoteWaiting(_) => "RemoteWaiting",
             EntityRelation::RemotePublic(_) => "RemotePublic",
             EntityRelation::Delegated(_) => "Delegated",
@@ -53,7 +53,7 @@ impl EntityRelation {
         converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
     ) {
         match self {
-            EntityRelation::HostOwned(inner) => {
+            EntityRelation::HostCreated(inner) => {
                 inner.write(writer, converter);
             }
             EntityRelation::RemotePublic(inner) => {
@@ -62,7 +62,7 @@ impl EntityRelation {
             EntityRelation::Delegated(inner) => {
                 inner.write(writer, converter);
             }
-            EntityRelation::RemoteOwned(_)
+            EntityRelation::RemoteCreated(_)
             | EntityRelation::RemoteWaiting(_)
             | EntityRelation::Local(_)
             | EntityRelation::Invalid => {
@@ -75,10 +75,10 @@ impl EntityRelation {
     }
     fn set_mutator(&mut self, mutator: &PropertyMutator) {
         match self {
-            EntityRelation::HostOwned(inner) => {
+            EntityRelation::HostCreated(inner) => {
                 inner.set_mutator(mutator);
             }
-            EntityRelation::RemoteOwned(_)
+            EntityRelation::RemoteCreated(_)
             | EntityRelation::RemoteWaiting(_)
             | EntityRelation::RemotePublic(_)
             | EntityRelation::Local(_)
@@ -93,10 +93,10 @@ impl EntityRelation {
     }
     fn bit_length(&self, converter: &mut dyn LocalEntityAndGlobalEntityConverterMut) -> u32 {
         match self {
-            EntityRelation::HostOwned(inner) => inner.bit_length(converter),
+            EntityRelation::HostCreated(inner) => inner.bit_length(converter),
             EntityRelation::Delegated(inner) => inner.bit_length(converter),
             EntityRelation::RemotePublic(inner) => inner.bit_length(converter),
-            EntityRelation::RemoteOwned(_)
+            EntityRelation::RemoteCreated(_)
             | EntityRelation::RemoteWaiting(_)
             | EntityRelation::Local(_)
             | EntityRelation::Invalid => {
@@ -130,7 +130,7 @@ impl EntityRelation {
         entity: &E,
     ) {
         match self {
-            EntityRelation::HostOwned(inner) => {
+            EntityRelation::HostCreated(inner) => {
                 inner.set(converter, entity);
             }
             EntityRelation::Local(inner) => {
@@ -139,7 +139,7 @@ impl EntityRelation {
             EntityRelation::Delegated(inner) => {
                 inner.set(converter, entity);
             }
-            EntityRelation::RemoteOwned(_)
+            EntityRelation::RemoteCreated(_)
             | EntityRelation::RemoteWaiting(_)
             | EntityRelation::RemotePublic(_)
             | EntityRelation::Invalid => {
@@ -149,7 +149,7 @@ impl EntityRelation {
     }
     fn set_to_none(&mut self) {
         match self {
-            EntityRelation::HostOwned(inner) => {
+            EntityRelation::HostCreated(inner) => {
                 inner.set_to_none();
             }
             EntityRelation::Local(inner) => {
@@ -158,7 +158,7 @@ impl EntityRelation {
             EntityRelation::Delegated(inner) => {
                 inner.set_to_none();
             }
-            EntityRelation::RemoteOwned(_)
+            EntityRelation::RemoteCreated(_)
             | EntityRelation::RemoteWaiting(_)
             | EntityRelation::RemotePublic(_)
             | EntityRelation::Invalid => {
@@ -168,11 +168,11 @@ impl EntityRelation {
     }
     fn mirror(&mut self, other: &EntityProperty) {
         match self {
-            EntityRelation::HostOwned(inner) => match &other.inner {
-                EntityRelation::HostOwned(other_inner) => {
+            EntityRelation::HostCreated(inner) => match &other.inner {
+                EntityRelation::HostCreated(other_inner) => {
                     inner.set_global_entity(&other_inner.global_entity);
                 }
-                EntityRelation::RemoteOwned(other_inner) => {
+                EntityRelation::RemoteCreated(other_inner) => {
                     inner.set_global_entity(&other_inner.global_entity);
                 }
                 EntityRelation::RemotePublic(other_inner) => {
@@ -192,10 +192,10 @@ impl EntityRelation {
                 }
             },
             EntityRelation::Local(inner) => match &other.inner {
-                EntityRelation::HostOwned(other_inner) => {
+                EntityRelation::HostCreated(other_inner) => {
                     inner.set_global_entity(&other_inner.global_entity);
                 }
-                EntityRelation::RemoteOwned(other_inner) => {
+                EntityRelation::RemoteCreated(other_inner) => {
                     inner.set_global_entity(&other_inner.global_entity);
                 }
                 EntityRelation::RemotePublic(other_inner) => {
@@ -215,10 +215,10 @@ impl EntityRelation {
                 }
             },
             EntityRelation::Delegated(inner) => match &other.inner {
-                EntityRelation::HostOwned(other_inner) => {
+                EntityRelation::HostCreated(other_inner) => {
                     inner.set_global_entity(&other_inner.global_entity);
                 }
-                EntityRelation::RemoteOwned(other_inner) => {
+                EntityRelation::RemoteCreated(other_inner) => {
                     inner.set_global_entity(&other_inner.global_entity);
                 }
                 EntityRelation::RemotePublic(other_inner) => {
@@ -237,7 +237,7 @@ impl EntityRelation {
                     panic!("Invalid EntityProperty should never be mirrored.");
                 }
             },
-            EntityRelation::RemoteOwned(_)
+            EntityRelation::RemoteCreated(_)
             | EntityRelation::RemoteWaiting(_)
             | EntityRelation::RemotePublic(_) => {
                 panic!("Remote EntityProperty should never be set manually.");
@@ -247,10 +247,10 @@ impl EntityRelation {
             }
         }
     }
-    fn waiting_local_entity(&self) -> Option<RemoteEntity> {
+    fn waiting_remote_entity(&self) -> Option<RemoteEntity> {
         match self {
-            EntityRelation::HostOwned(_)
-            | EntityRelation::RemoteOwned(_)
+            EntityRelation::HostCreated(_)
+            | EntityRelation::RemoteCreated(_)
             | EntityRelation::RemotePublic(_)
             | EntityRelation::Local(_)
             | EntityRelation::Delegated(_)
@@ -264,7 +264,7 @@ impl EntityRelation {
         writer: &mut BitWriter,
     ) {
         match self {
-            EntityRelation::RemoteOwned(inner) => {
+            EntityRelation::RemoteCreated(inner) => {
                 inner.write_local_entity(converter, writer);
             }
             EntityRelation::RemotePublic(inner) => {
@@ -273,7 +273,7 @@ impl EntityRelation {
             EntityRelation::Delegated(inner) => {
                 inner.write_local_entity(converter, writer);
             }
-            EntityRelation::HostOwned(_)
+            EntityRelation::HostCreated(_)
             | EntityRelation::RemoteWaiting(_)
             | EntityRelation::Local(_)
             | EntityRelation::Invalid => {
@@ -287,8 +287,8 @@ impl EntityRelation {
 
     fn get_global_entity(&self) -> Option<GlobalEntity> {
         match self {
-            EntityRelation::HostOwned(inner) => inner.global_entity,
-            EntityRelation::RemoteOwned(inner) => inner.global_entity,
+            EntityRelation::HostCreated(inner) => inner.global_entity,
+            EntityRelation::RemoteCreated(inner) => inner.global_entity,
             EntityRelation::RemotePublic(inner) => inner.global_entity,
             EntityRelation::Local(inner) => inner.global_entity,
             EntityRelation::Delegated(inner) => inner.global_entity,
@@ -306,14 +306,14 @@ impl EntityProperty {
     // Should only be used by Messages
     pub fn new() -> Self {
         Self {
-            inner: EntityRelation::HostOwned(HostOwnedRelation::new()),
+            inner: EntityRelation::HostCreated(HostCreatedRelation::new()),
         }
     }
 
     // Should only be used by Components
     pub fn host_owned(mutator_index: u8) -> Self {
         Self {
-            inner: EntityRelation::HostOwned(HostOwnedRelation::with_mutator(mutator_index)),
+            inner: EntityRelation::HostCreated(HostCreatedRelation::with_mutator(mutator_index)),
         }
     }
 
@@ -328,11 +328,11 @@ impl EntityProperty {
             let local_entity = OwnedLocalEntity::de(reader)?;
 
             if let Ok(global_entity) = local_entity.convert_to_global(converter) {
-                let mut new_impl = RemoteOwnedRelation::new_empty();
+                let mut new_impl = RemoteCreatedRelation::new_empty();
                 new_impl.global_entity = Some(global_entity);
 
                 let new_self = Self {
-                    inner: EntityRelation::RemoteOwned(new_impl),
+                    inner: EntityRelation::RemoteCreated(new_impl),
                 };
 
                 Ok(new_self)
@@ -352,11 +352,11 @@ impl EntityProperty {
                 }
             }
         } else {
-            let mut new_impl = RemoteOwnedRelation::new_empty();
+            let mut new_impl = RemoteCreatedRelation::new_empty();
             new_impl.global_entity = None;
 
             let new_self = Self {
-                inner: EntityRelation::RemoteOwned(new_impl),
+                inner: EntityRelation::RemoteCreated(new_impl),
             };
 
             Ok(new_self)
@@ -392,7 +392,7 @@ impl EntityProperty {
         );
         self.inner = match eval {
             (None, None, None, None) => {
-                EntityRelation::RemoteOwned(RemoteOwnedRelation::new_empty())
+                EntityRelation::RemoteCreated(RemoteCreatedRelation::new_empty())
             }
             (None, None, Some(local_entity), Some(Err(_))) => {
                 info!("1 setting inner to RemoteWaiting");
@@ -400,8 +400,8 @@ impl EntityProperty {
                     local_entity.take_remote(),
                 ))
             }
-            (None, None, Some(_), Some(Ok(global_entity))) => EntityRelation::RemoteOwned(
-                RemoteOwnedRelation::new_with_value(Some(global_entity)),
+            (None, None, Some(_), Some(Ok(global_entity))) => EntityRelation::RemoteCreated(
+                RemoteCreatedRelation::new_with_value(Some(global_entity)),
             ),
             (Some(public_relation), None, None, None) => EntityRelation::RemotePublic(
                 RemotePublicRelation::new(None, public_relation.index, &public_relation.mutator),
@@ -445,7 +445,7 @@ impl EntityProperty {
 
     pub fn waiting_complete(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter) {
         match &mut self.inner {
-            EntityRelation::RemoteOwned(_)
+            EntityRelation::RemoteCreated(_)
             | EntityRelation::RemotePublic(_)
             | EntityRelation::Delegated(_) => {
                 // already complete! this is intended behavior:
@@ -480,12 +480,12 @@ impl EntityProperty {
                     }
                 } else {
                     // will not publish or delegate
-                    let mut new_impl = RemoteOwnedRelation::new_empty();
+                    let mut new_impl = RemoteCreatedRelation::new_empty();
                     new_impl.global_entity = new_global_entity;
-                    self.inner = EntityRelation::RemoteOwned(new_impl);
+                    self.inner = EntityRelation::RemoteCreated(new_impl);
                 }
             }
-            EntityRelation::HostOwned(_) | EntityRelation::Local(_) | EntityRelation::Invalid => {
+            EntityRelation::HostCreated(_) | EntityRelation::Local(_) | EntityRelation::Invalid => {
                 panic!(
                     "Can't complete EntityProperty of type: `{:?}`!",
                     self.inner.name()
@@ -497,7 +497,7 @@ impl EntityProperty {
     /// Migrate Remote Property to Public version
     pub fn remote_publish(&mut self, mutator_index: u8, mutator: &PropertyMutator) {
         match &mut self.inner {
-            EntityRelation::RemoteOwned(inner) => {
+            EntityRelation::RemoteCreated(inner) => {
                 let inner_value = inner.global_entity.clone();
                 self.inner = EntityRelation::RemotePublic(RemotePublicRelation::new(
                     inner_value,
@@ -508,7 +508,7 @@ impl EntityProperty {
             EntityRelation::RemoteWaiting(inner) => {
                 inner.remote_publish(mutator_index, mutator);
             }
-            EntityRelation::HostOwned(_)
+            EntityRelation::HostCreated(_)
             | EntityRelation::RemotePublic(_)
             | EntityRelation::Local(_)
             | EntityRelation::Delegated(_)
@@ -526,15 +526,15 @@ impl EntityProperty {
         match &mut self.inner {
             EntityRelation::RemotePublic(inner) => {
                 let inner_value = inner.global_entity.clone();
-                self.inner = EntityRelation::RemoteOwned(RemoteOwnedRelation {
+                self.inner = EntityRelation::RemoteCreated(RemoteCreatedRelation {
                     global_entity: inner_value,
                 });
             }
             EntityRelation::RemoteWaiting(inner) => {
                 inner.remote_unpublish();
             }
-            EntityRelation::HostOwned(_)
-            | EntityRelation::RemoteOwned(_)
+            EntityRelation::HostCreated(_)
+            | EntityRelation::RemoteCreated(_)
             | EntityRelation::Local(_)
             | EntityRelation::Delegated(_)
             | EntityRelation::Invalid => {
@@ -558,14 +558,14 @@ impl EntityProperty {
             if let Some((mutator_index, mutator)) = mutator_opt {
                 // with mutator
                 match &mut self.inner {
-                    EntityRelation::RemoteOwned(_) => (mutator_index, mutator),
+                    EntityRelation::RemoteCreated(_) => (mutator_index, mutator),
                     EntityRelation::RemoteWaiting(inner) => {
                         inner.remote_delegate(accessor);
                         return;
                     }
                     EntityRelation::Local(_)
                     | EntityRelation::RemotePublic(_)
-                    | EntityRelation::HostOwned(_)
+                    | EntityRelation::HostCreated(_)
                     | EntityRelation::Delegated(_)
                     | EntityRelation::Invalid => {
                         panic!(
@@ -577,7 +577,7 @@ impl EntityProperty {
             } else {
                 // without mutator
                 match &mut self.inner {
-                    EntityRelation::HostOwned(inner) => (
+                    EntityRelation::HostCreated(inner) => (
                         inner.index,
                         inner
                             .mutator
@@ -586,7 +586,7 @@ impl EntityProperty {
                     ),
                     EntityRelation::RemotePublic(inner) => (inner.index, &inner.mutator),
                     EntityRelation::Local(_)
-                    | EntityRelation::RemoteOwned(_)
+                    | EntityRelation::RemoteCreated(_)
                     | EntityRelation::RemoteWaiting(_)
                     | EntityRelation::Delegated(_)
                     | EntityRelation::Invalid => {
@@ -612,16 +612,16 @@ impl EntityProperty {
         match &mut self.inner {
             EntityRelation::Delegated(inner) => {
                 let inner_value = inner.global_entity.clone();
-                let mut new_inner = HostOwnedRelation::with_mutator(inner.index);
+                let mut new_inner = HostCreatedRelation::with_mutator(inner.index);
                 new_inner.set_mutator(&inner.mutator);
                 new_inner.global_entity = inner_value;
-                self.inner = EntityRelation::HostOwned(new_inner);
+                self.inner = EntityRelation::HostCreated(new_inner);
             }
             EntityRelation::RemoteWaiting(inner) => {
                 inner.remote_undelegate();
             }
-            EntityRelation::HostOwned(_)
-            | EntityRelation::RemoteOwned(_)
+            EntityRelation::HostCreated(_)
+            | EntityRelation::RemoteCreated(_)
             | EntityRelation::RemotePublic(_)
             | EntityRelation::Local(_)
             | EntityRelation::Invalid => {
@@ -636,7 +636,7 @@ impl EntityProperty {
     /// Migrate Host Property to Local version
     pub fn localize(&mut self) {
         match &mut self.inner {
-            EntityRelation::HostOwned(inner) => {
+            EntityRelation::HostCreated(inner) => {
                 let inner_value = inner.global_entity.clone();
                 self.inner = EntityRelation::Local(LocalRelation::new(inner_value));
             }
@@ -644,7 +644,7 @@ impl EntityProperty {
                 let inner_value = inner.global_entity.clone();
                 self.inner = EntityRelation::Local(LocalRelation::new(inner_value));
             }
-            EntityRelation::RemoteOwned(_)
+            EntityRelation::RemoteCreated(_)
             | EntityRelation::RemotePublic(_)
             | EntityRelation::RemoteWaiting(_)
             | EntityRelation::Local(_)
@@ -704,11 +704,11 @@ impl EntityProperty {
         self.inner.mirror(other);
     }
 
-    pub fn waiting_local_entity(&self) -> Option<RemoteEntity> {
-        self.inner.waiting_local_entity()
+    pub fn waiting_remote_entity(&self) -> Option<RemoteEntity> {
+        self.inner.waiting_remote_entity()
     }
 
-    // used for writing out ready local entity value when splitting updates
+    // used for writing out ready local entity value when splitting component updates
     pub fn write_local_entity(
         &self,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
@@ -720,13 +720,13 @@ impl EntityProperty {
 
 // HostOwnedRelation
 #[derive(Clone)]
-struct HostOwnedRelation {
+struct HostCreatedRelation {
     global_entity: Option<GlobalEntity>,
     mutator: Option<PropertyMutator>,
     index: u8,
 }
 
-impl HostOwnedRelation {
+impl HostCreatedRelation {
     pub fn new() -> Self {
         Self {
             global_entity: None,
@@ -815,11 +815,11 @@ impl HostOwnedRelation {
 
 // RemoteOwnedRelation
 #[derive(Clone, Debug)]
-struct RemoteOwnedRelation {
+struct RemoteCreatedRelation {
     global_entity: Option<GlobalEntity>,
 }
 
-impl RemoteOwnedRelation {
+impl RemoteCreatedRelation {
     fn new_empty() -> Self {
         Self {
             global_entity: None,

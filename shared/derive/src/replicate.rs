@@ -953,7 +953,7 @@ fn get_split_update_method(
                         let prop_copy = EntityProperty::new_read(reader, converter)?;
 
                         // get waiting local entity from copy after read
-                        let waiting_entity_opt = prop_copy.waiting_local_entity();
+                        let waiting_entity_opt = prop_copy.waiting_remote_entity();
                         if let Some(waiting_entity) = waiting_entity_opt {
                             waiting_did_write = true;
 
@@ -1248,7 +1248,7 @@ fn get_relations_waiting_method(fields: &[Property], struct_type: &StructType) -
         if let Property::Entity(_) = field {
             let field_name = get_field_name(field, struct_type);
             let body_add_right = quote! {
-                if let Some(local_entity) = self.#field_name.waiting_local_entity() {
+                if let Some(local_entity) = self.#field_name.waiting_remote_entity() {
                     output.insert(local_entity);
                 }
             };
