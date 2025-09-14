@@ -9,7 +9,7 @@ use crate::{messages::{
         indexed_message_reader::IndexedMessageReader,
     }, senders::request_sender::LocalRequestId},
     message_kinds::MessageKinds,
-}, sequence_greater_than, types::MessageIndex, world::{local_world_manager::LocalWorldManager, remote::entity_waitlist::{EntityWaitlist, WaitlistStore}}, LocalEntityAndGlobalEntityConverter, LocalResponseId, MessageContainer, RemoteEntity};
+}, sequence_greater_than, types::MessageIndex, world::{local_world_manager::LocalWorldManager, remote::entity_waitlist::{RemoteEntityWaitlist, WaitlistStore}}, LocalEntityAndGlobalEntityConverter, LocalResponseId, MessageContainer};
 
 pub struct SequencedUnreliableReceiver {
     newest_received_message_index: Option<MessageIndex>,
@@ -62,7 +62,7 @@ impl ChannelReceiver<MessageContainer> for SequencedUnreliableReceiver {
         &mut self,
         _message_kinds: &MessageKinds,
         now: &Instant,
-        entity_waitlist: &mut EntityWaitlist<RemoteEntity>,
+        entity_waitlist: &mut RemoteEntityWaitlist,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
     ) -> Vec<MessageContainer> {
         if let Some(list) = entity_waitlist.collect_ready_items(now, &mut self.waitlist_store) {

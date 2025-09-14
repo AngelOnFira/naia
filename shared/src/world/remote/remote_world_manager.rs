@@ -12,7 +12,7 @@ use crate::{world::{
     remote::{
         remote_world_waitlist::RemoteWorldWaitlist,
         entity_event::EntityEvent,
-        entity_waitlist::{EntityWaitlist, WaitlistStore},
+        entity_waitlist::{RemoteEntityWaitlist, WaitlistStore},
     },
     sync::RemoteEngine,
 }, ComponentKind, ComponentKinds, ComponentUpdate, EntityMessage, EntityAndGlobalEntityConverter, GlobalEntitySpawner, GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter, Replicate, Tick, WorldMutType, EntityMessageType, OwnedLocalEntity, EntityMessageReceiver, HostType, LocalEntityMap, EntityCommand, MessageIndex, GlobalEntity};
@@ -71,11 +71,11 @@ impl RemoteWorldManager {
         }
     }
 
-    pub fn entity_waitlist(&self) -> &EntityWaitlist<RemoteEntity> {
+    pub fn entity_waitlist(&self) -> &RemoteEntityWaitlist {
         self.waitlist.entity_waitlist()
     }
 
-    pub fn entity_waitlist_mut(&mut self) -> &mut EntityWaitlist<RemoteEntity> {
+    pub fn entity_waitlist_mut(&mut self) -> &mut RemoteEntityWaitlist {
         self.waitlist.entity_waitlist_mut()
     }
 

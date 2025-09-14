@@ -9,11 +9,11 @@ use naia_socket_shared::Instant;
 
 use crate::{world::{
     entity::in_scope_entities::InScopeEntities,
-    remote::entity_waitlist::{EntityWaitlist, WaitlistHandle, WaitlistStore},
+    remote::entity_waitlist::{RemoteEntityWaitlist, WaitlistHandle, WaitlistStore},
 }, ComponentFieldUpdate, ComponentKind, ComponentKinds, ComponentUpdate, EntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverter, RemoteEntity, Replicate, Tick, WorldMutType};
 
 pub struct RemoteWorldWaitlist {
-    entity_waitlist: EntityWaitlist<RemoteEntity>,
+    entity_waitlist: RemoteEntityWaitlist,
     insert_waitlist_store: WaitlistStore<(RemoteEntity, Box<dyn Replicate>)>,
     insert_waitlist_map: HashMap<(RemoteEntity, ComponentKind), WaitlistHandle>,
     update_waitlist_store: WaitlistStore<(Tick, RemoteEntity, ComponentKind, ComponentFieldUpdate)>,
@@ -23,7 +23,7 @@ pub struct RemoteWorldWaitlist {
 impl RemoteWorldWaitlist {
     pub fn new() -> Self {
         Self {
-            entity_waitlist: EntityWaitlist::new(),
+            entity_waitlist: RemoteEntityWaitlist::new(),
             insert_waitlist_store: WaitlistStore::new(),
             insert_waitlist_map: HashMap::new(),
             update_waitlist_store: WaitlistStore::new(),
@@ -31,11 +31,11 @@ impl RemoteWorldWaitlist {
         }
     }
 
-    pub fn entity_waitlist(&self) -> &EntityWaitlist<RemoteEntity> {
+    pub fn entity_waitlist(&self) -> &RemoteEntityWaitlist {
         &self.entity_waitlist
     }
 
-    pub fn entity_waitlist_mut(&mut self) -> &mut EntityWaitlist<RemoteEntity> {
+    pub fn entity_waitlist_mut(&mut self) -> &mut RemoteEntityWaitlist {
         &mut self.entity_waitlist
     }
 

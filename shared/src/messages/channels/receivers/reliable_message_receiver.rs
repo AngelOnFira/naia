@@ -12,7 +12,7 @@ use crate::{messages::{
         senders::request_sender::{LocalRequestOrResponseId, LocalRequestId},
     },
     message_kinds::MessageKinds,
-}, types::MessageIndex, world::{local_world_manager::LocalWorldManager, remote::entity_waitlist::{EntityWaitlist, WaitlistStore}}, LocalEntityAndGlobalEntityConverter, LocalResponseId, MessageContainer, RemoteEntity, RequestOrResponse};
+}, types::MessageIndex, world::{local_world_manager::LocalWorldManager, remote::entity_waitlist::{RemoteEntityWaitlist, WaitlistStore}}, LocalEntityAndGlobalEntityConverter, LocalResponseId, MessageContainer, RequestOrResponse};
 
 // Receiver Arranger Trait
 pub trait ReceiverArranger: Send + Sync {
@@ -153,7 +153,7 @@ impl<A: ReceiverArranger> ChannelReceiver<MessageContainer> for ReliableMessageR
         &mut self,
         message_kinds: &MessageKinds,
         now: &Instant,
-        entity_waitlist: &mut EntityWaitlist<RemoteEntity>,
+        entity_waitlist: &mut RemoteEntityWaitlist,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
     ) -> Vec<MessageContainer> {
         if let Some(list) = entity_waitlist.collect_ready_items(now, &mut self.waitlist_store) {

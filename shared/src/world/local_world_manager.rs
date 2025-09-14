@@ -5,12 +5,12 @@ use naia_socket_shared::Instant;
 use crate::{
     sequence_list::SequenceList,
     messages::channels::receivers::reliable_receiver::ReliableReceiver, types::{HostType, PacketIndex}, world::{
-    entity::entity_converters::GlobalWorldManagerType,
-    host::{
+        entity::entity_converters::GlobalWorldManagerType,
+        host::{
         host_world_manager::{HostWorldManager, CommandId},
         entity_update_manager::EntityUpdateManager
     },
-    remote::entity_waitlist::{EntityWaitlist, WaitlistStore},
+        remote::entity_waitlist::{RemoteEntityWaitlist, WaitlistStore},
 }, ChannelSender, ComponentKind, ComponentKinds, ComponentUpdate, DiffMask, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityCommand, EntityConverterMut, EntityEvent, EntityMessage, EntityMessageType, GlobalEntity, GlobalEntitySpawner, HostEntity, LocalEntityAndGlobalEntityConverter, LocalEntityMap, MessageIndex, OwnedLocalEntity, PacketNotifiable, ReliableSender, RemoteEntity, RemoteWorldManager, Replicate, Tick, WorldMutType, WorldRefType};
 
 const RESEND_COMMAND_RTT_FACTOR: f32 = 1.5;
@@ -226,7 +226,7 @@ impl LocalWorldManager {
         self.remote.send_command(&self.entity_map, command);
     }
 
-    pub fn entity_waitlist_mut(&mut self) -> &mut EntityWaitlist<RemoteEntity> {
+    pub fn entity_waitlist_mut(&mut self) -> &mut RemoteEntityWaitlist {
         self.remote.entity_waitlist_mut()
     }
 
@@ -539,7 +539,7 @@ impl LocalWorldManager {
     //     (reserver, remote.entity_waitlist_mut())
     // }
 
-    pub fn get_message_processor_helpers(&mut self) -> (&dyn LocalEntityAndGlobalEntityConverter, &mut EntityWaitlist<RemoteEntity>) {
+    pub fn get_message_processor_helpers(&mut self) -> (&dyn LocalEntityAndGlobalEntityConverter, &mut RemoteEntityWaitlist) {
         let entity_converter = self.entity_map.entity_converter();
         let entity_waitlist = self.remote.entity_waitlist_mut();
         (entity_converter, entity_waitlist)

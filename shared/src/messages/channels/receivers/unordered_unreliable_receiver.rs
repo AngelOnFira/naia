@@ -6,7 +6,7 @@ use naia_socket_shared::Instant;
 use crate::{messages::{
     channels::{receivers::channel_receiver::{ChannelReceiver, MessageChannelReceiver}, senders::request_sender::LocalRequestId},
     message_kinds::MessageKinds,
-}, world::{remote::entity_waitlist::{EntityWaitlist, WaitlistStore}, local_world_manager::LocalWorldManager}, LocalEntityAndGlobalEntityConverter, LocalResponseId, MessageContainer, RemoteEntity};
+}, world::{remote::entity_waitlist::{RemoteEntityWaitlist, WaitlistStore}, local_world_manager::LocalWorldManager}, LocalEntityAndGlobalEntityConverter, LocalResponseId, MessageContainer};
 
 pub struct UnorderedUnreliableReceiver {
     incoming_messages: VecDeque<MessageContainer>,
@@ -50,7 +50,7 @@ impl ChannelReceiver<MessageContainer> for UnorderedUnreliableReceiver {
         &mut self,
         _message_kinds: &MessageKinds,
         now: &Instant,
-        entity_waitlist: &mut EntityWaitlist<RemoteEntity>,
+        entity_waitlist: &mut RemoteEntityWaitlist,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
     ) -> Vec<MessageContainer> {
         if let Some(list) = entity_waitlist.collect_ready_items(now, &mut self.waitlist_store) {

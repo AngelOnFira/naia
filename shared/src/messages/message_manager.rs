@@ -28,8 +28,8 @@ use crate::{constants::FRAGMENTATION_LIMIT_BITS, messages::{
 }, types::{HostType, MessageIndex, PacketIndex}, world::{
     local_world_manager::LocalWorldManager,
     entity::entity_converters::LocalEntityAndGlobalEntityConverterMut,
-    remote::entity_waitlist::EntityWaitlist,
-}, LocalEntityAndGlobalEntityConverter, MessageKinds, PacketNotifiable, RemoteEntity};
+    remote::entity_waitlist::RemoteEntityWaitlist,
+}, LocalEntityAndGlobalEntityConverter, MessageKinds, PacketNotifiable};
 
 /// Handles incoming/outgoing messages, tracks the delivery status of Messages
 /// so that guaranteed Messages can be re-transmitted to the remote host
@@ -319,7 +319,7 @@ impl MessageManager {
         message_kinds: &MessageKinds,
         now: &Instant,
         entity_converter: &dyn LocalEntityAndGlobalEntityConverter,
-        entity_waitlist: &mut EntityWaitlist<RemoteEntity>,
+        entity_waitlist: &mut RemoteEntityWaitlist,
     ) -> Vec<(ChannelKind, Vec<MessageContainer>)> {
         let mut output = Vec::new();
         // TODO: shouldn't we have a priority mechanisms between channels?

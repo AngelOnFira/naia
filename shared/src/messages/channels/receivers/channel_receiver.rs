@@ -4,7 +4,7 @@ use naia_socket_shared::Instant;
 
 use crate::{
     messages::{channels::senders::request_sender::LocalRequestId, message_container::MessageContainer, message_kinds::MessageKinds},
-    world::{remote::entity_waitlist::EntityWaitlist, local_world_manager::LocalWorldManager}, LocalEntityAndGlobalEntityConverter, LocalResponseId, RemoteEntity};
+    world::{remote::entity_waitlist::RemoteEntityWaitlist, local_world_manager::LocalWorldManager}, LocalEntityAndGlobalEntityConverter, LocalResponseId};
 
 pub trait ChannelReceiver<P>: Send + Sync {
     /// Read messages from an internal buffer and return their content
@@ -12,7 +12,7 @@ pub trait ChannelReceiver<P>: Send + Sync {
         &mut self,
         message_kinds: &MessageKinds,
         now: &Instant,
-        entity_waitlist: &mut EntityWaitlist<RemoteEntity>,
+        entity_waitlist: &mut RemoteEntityWaitlist,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
     ) -> Vec<P>;
 }

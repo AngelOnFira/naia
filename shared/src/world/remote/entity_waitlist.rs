@@ -1,26 +1,25 @@
 use std::{
     collections::{HashMap, HashSet, VecDeque},
     time::Duration,
-    hash::Hash,
 };
 
 use naia_socket_shared::Instant;
 
-use crate::{world::entity::in_scope_entities::InScopeEntities, KeyGenerator};
+use crate::{world::entity::in_scope_entities::InScopeEntities, KeyGenerator, RemoteEntity};
 
 pub type WaitlistHandle = u16;
 
-pub struct EntityWaitlist<E: Copy + Eq + Hash + Sync + Send> {
+pub struct RemoteEntityWaitlist {
     handle_store: KeyGenerator<WaitlistHandle>,
-    handle_to_required_entities: HashMap<WaitlistHandle, HashSet<E>>,
-    waiting_entity_to_handles: HashMap<E, HashSet<WaitlistHandle>>,
+    handle_to_required_entities: HashMap<WaitlistHandle, HashSet<RemoteEntity>>,
+    waiting_entity_to_handles: HashMap<RemoteEntity, HashSet<WaitlistHandle>>,
     ready_handles: HashSet<WaitlistHandle>,
     removed_handles: HashSet<WaitlistHandle>,
     handle_ttls: VecDeque<(Instant, WaitlistHandle)>,
     handle_ttl: Duration,
 }
 
-impl<E: Copy + Eq + Hash + Sync + Send> EntityWaitlist<E> {
+impl RemoteEntityWaitlist {
     pub fn new() -> Self {
         Self {
             handle_to_required_entities: HashMap::new(),
@@ -33,7 +32,7 @@ impl<E: Copy + Eq + Hash + Sync + Send> EntityWaitlist<E> {
         }
     }
 
-    fn required_entities_are_in_scope(&self, in_scope_entities: &dyn InScopeEntities<E>, entities: &HashSet<E>) -> bool {
+    fn required_entities_are_in_scope(&self, in_scope_entities: &dyn InScopeEntities<RemoteEntity>, entities: &HashSet<RemoteEntity>) -> bool {
         for entity in entities {
             if !in_scope_entities.has_entity(entity) {
                 return false;
@@ -44,8 +43,8 @@ impl<E: Copy + Eq + Hash + Sync + Send> EntityWaitlist<E> {
 
     pub fn queue<T>(
         &mut self,
-        in_scope_entities: &dyn InScopeEntities<E>,
-        entities: &HashSet<E>,
+        in_scope_entities: &dyn InScopeEntities<RemoteEntity>,
+        entities: &HashSet<RemoteEntity>,
         waitlist_store: &mut WaitlistStore<T>,
         item: T,
     ) -> WaitlistHandle {
@@ -95,9 +94,9 @@ impl<E: Copy + Eq + Hash + Sync + Send> EntityWaitlist<E> {
 
     pub fn add_entity(
         &mut self,
-        in_scope_entities: &dyn InScopeEntities<E>,
+        in_scope_entities: &dyn InScopeEntities<RemoteEntity>,
         // converter: &dyn LocalEntityAndGlobalEntityConverter,
-        entity: &E
+        entity: &RemoteEntity
     ) {
         
         // let remote_entity = converter.global_entity_to_remote_entity(global_entity).unwrap();
