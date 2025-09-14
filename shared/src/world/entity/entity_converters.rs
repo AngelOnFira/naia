@@ -15,7 +15,7 @@ use crate::{bigmap::BigMapKey, world::{
     host::mut_channel::MutChannelType,
 }, ComponentKind, ComponentKinds, GlobalDiffHandler, InScopeEntities, HostEntityGenerator, PropertyMutator, LocalEntityMap};
 
-pub trait GlobalWorldManagerType : InScopeEntities {
+pub trait GlobalWorldManagerType : InScopeEntities<GlobalEntity> {
     fn component_kinds(&self, entity: &GlobalEntity) -> Option<Vec<ComponentKind>>;
     /// Whether or not a given user can receive a Message/Component with an EntityProperty relating to the given Entity
     fn entity_can_relate_to_user(&self, global_entity: &GlobalEntity, user_key: &u64) -> bool;

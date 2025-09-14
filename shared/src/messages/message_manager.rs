@@ -26,9 +26,10 @@ use crate::{constants::FRAGMENTATION_LIMIT_BITS, messages::{
     message_container::MessageContainer,
     request::GlobalRequestId,
 }, types::{HostType, MessageIndex, PacketIndex}, world::{
-    entity::{entity_converters::LocalEntityAndGlobalEntityConverterMut, in_scope_entities::InScopeEntitiesMut},
+    local_world_manager::LocalWorldManager,
+    entity::entity_converters::LocalEntityAndGlobalEntityConverterMut,
     remote::entity_waitlist::EntityWaitlist,
-}, LocalEntityAndGlobalEntityConverter, MessageKinds, PacketNotifiable};
+}, LocalEntityAndGlobalEntityConverter, MessageKinds, PacketNotifiable, RemoteEntity};
 
 /// Handles incoming/outgoing messages, tracks the delivery status of Messages
 /// so that guaranteed Messages can be re-transmitted to the remote host
@@ -292,8 +293,7 @@ impl MessageManager {
         &mut self,
         channel_kinds: &ChannelKinds,
         message_kinds: &MessageKinds,
-        entity_waitlist: &mut EntityWaitlist,
-        entity_converter: &mut dyn InScopeEntitiesMut,
+        local_world_manager: &mut LocalWorldManager,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
         loop {
@@ -307,7 +307,7 @@ impl MessageManager {
 
             // continue read inside channel
             let channel = self.channel_receivers.get_mut(&channel_kind).unwrap();
-            channel.read_messages(message_kinds, entity_waitlist, entity_converter, reader)?;
+            channel.read_messages(message_kinds, local_world_manager, reader)?;
         }
 
         Ok(())
@@ -319,7 +319,7 @@ impl MessageManager {
         message_kinds: &MessageKinds,
         now: &Instant,
         entity_converter: &dyn LocalEntityAndGlobalEntityConverter,
-        entity_waitlist: &mut EntityWaitlist,
+        entity_waitlist: &mut EntityWaitlist<RemoteEntity>,
     ) -> Vec<(ChannelKind, Vec<MessageContainer>)> {
         let mut output = Vec::new();
         // TODO: shouldn't we have a priority mechanisms between channels?

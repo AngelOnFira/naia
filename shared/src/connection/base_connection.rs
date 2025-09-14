@@ -13,7 +13,7 @@ use crate::{messages::{
         host_world_writer::HostWorldWriter,
     },
     remote::remote_world_reader::RemoteWorldReader,
-}, AckManager, ComponentKind, ComponentKinds, ConnectionConfig, EntityAndGlobalEntityConverter, EntityCommand, GlobalEntity, GlobalEntitySpawner, MessageKinds, PacketNotifiable, PacketType, StandardHeader, Tick, Timer, WorldRefType};
+}, AckManager, ComponentKind, ComponentKinds, ConnectionConfig, EntityAndGlobalEntityConverter, EntityCommand, GlobalEntity, MessageKinds, PacketNotifiable, PacketType, StandardHeader, Tick, Timer, WorldRefType};
 
 /// Represents a connection to a remote host, and provides functionality to
 /// manage the connection and the communications to it
@@ -166,28 +166,21 @@ impl BaseConnection {
         }
     }
 
-    pub fn read_packet<E: Copy + Eq + Hash + Sync + Send>(
+    pub fn read_packet(
         &mut self,
         channel_kinds: &ChannelKinds,
         message_kinds: &MessageKinds,
         component_kinds: &ComponentKinds,
-        global_entity_manager: &dyn GlobalWorldManagerType,
-        spawner: &mut dyn GlobalEntitySpawner<E>,
-        client_tick: &Tick,
+        tick: &Tick,
         read_world_events: bool,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
-        let (mut reserver, entity_waitlist) = self.world_manager.get_message_reader_helpers(
-            global_entity_manager,
-            spawner,
-        );
 
         // read messages
         self.message_manager.read_messages(
             channel_kinds,
             message_kinds,
-            entity_waitlist,
-            &mut reserver,
+            &mut self.world_manager,
             reader,
         )?;
 
@@ -196,7 +189,7 @@ impl BaseConnection {
             RemoteWorldReader::read_world_events(
                 &mut self.world_manager,
                 component_kinds,
-                client_tick,
+                tick,
                 reader,
             )?;
         }

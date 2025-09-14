@@ -1,12 +1,9 @@
-use std::{hash::Hash, collections::HashMap};
+use std::collections::HashMap;
 
 use crate::{world::{
     local_entity_record::LocalEntityRecord,
-    entity::{
-        in_scope_entities::GlobalEntityReserver,
-        local_entity::{HostEntity, OwnedLocalEntity, RemoteEntity}
-    }
-}, EntityDoesNotExistError, GlobalEntity, GlobalEntitySpawner, GlobalWorldManagerType, HostType, LocalEntityAndGlobalEntityConverter};
+    entity::local_entity::{HostEntity, OwnedLocalEntity, RemoteEntity},
+}, EntityDoesNotExistError, GlobalEntity, HostType, LocalEntityAndGlobalEntityConverter};
 
 pub struct LocalEntityMap {
     host_type: HostType,
@@ -222,13 +219,5 @@ impl LocalEntityMap {
 
     pub fn entity_converter(&self) -> &dyn LocalEntityAndGlobalEntityConverter {
         self
-    }
-
-    pub fn global_entity_reserver<'a, 'b, 'c, E: Copy + Eq + Hash + Send + Sync>(
-        &'c mut self,
-        global_entity_manager: &'a dyn GlobalWorldManagerType,
-        global_entity_spawner: &'b mut dyn GlobalEntitySpawner<E>
-    ) -> GlobalEntityReserver<'a, 'b, 'c, E> {
-        GlobalEntityReserver::new(global_entity_manager, global_entity_spawner, self)
     }
 }

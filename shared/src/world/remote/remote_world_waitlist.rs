@@ -7,22 +7,17 @@ use log::{info, warn};
 
 use naia_socket_shared::Instant;
 
-use crate::{
-    world::{
-        entity::in_scope_entities::{InScopeEntities, InScopeEntitiesMut},
-        remote::entity_waitlist::{EntityWaitlist, WaitlistHandle, WaitlistStore},
-    },
-    ComponentFieldUpdate, ComponentKind, ComponentKinds, ComponentUpdate,
-    EntityAndGlobalEntityConverter, GlobalEntity, LocalEntityAndGlobalEntityConverter, Replicate,
-    Tick, WorldMutType,
-};
+use crate::{world::{
+    entity::in_scope_entities::InScopeEntities,
+    remote::entity_waitlist::{EntityWaitlist, WaitlistHandle, WaitlistStore},
+}, ComponentFieldUpdate, ComponentKind, ComponentKinds, ComponentUpdate, EntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverter, RemoteEntity, Replicate, Tick, WorldMutType};
 
 pub struct RemoteWorldWaitlist {
-    entity_waitlist: EntityWaitlist,
-    insert_waitlist_store: WaitlistStore<(GlobalEntity, Box<dyn Replicate>)>,
-    insert_waitlist_map: HashMap<(GlobalEntity, ComponentKind), WaitlistHandle>,
-    update_waitlist_store: WaitlistStore<(Tick, GlobalEntity, ComponentKind, ComponentFieldUpdate)>,
-    update_waitlist_map: HashMap<(GlobalEntity, ComponentKind), HashMap<u8, WaitlistHandle>>,
+    entity_waitlist: EntityWaitlist<RemoteEntity>,
+    insert_waitlist_store: WaitlistStore<(RemoteEntity, Box<dyn Replicate>)>,
+    insert_waitlist_map: HashMap<(RemoteEntity, ComponentKind), WaitlistHandle>,
+    update_waitlist_store: WaitlistStore<(Tick, RemoteEntity, ComponentKind, ComponentFieldUpdate)>,
+    update_waitlist_map: HashMap<(RemoteEntity, ComponentKind), HashMap<u8, WaitlistHandle>>,
 }
 
 impl RemoteWorldWaitlist {
@@ -36,38 +31,38 @@ impl RemoteWorldWaitlist {
         }
     }
 
-    pub fn entity_waitlist(&self) -> &EntityWaitlist {
+    pub fn entity_waitlist(&self) -> &EntityWaitlist<RemoteEntity> {
         &self.entity_waitlist
     }
 
-    pub fn entity_waitlist_mut(&mut self) -> &mut EntityWaitlist {
+    pub fn entity_waitlist_mut(&mut self) -> &mut EntityWaitlist<RemoteEntity> {
         &mut self.entity_waitlist
     }
 
     pub(crate) fn waitlist_queue_entity(
         &mut self,
-        converter: &mut dyn InScopeEntitiesMut,
-        global_entity: &GlobalEntity,
+        in_scope_entities: &dyn InScopeEntities<RemoteEntity>,
+        entity: &RemoteEntity,
         component: Box<dyn Replicate>,
         component_kind: &ComponentKind,
-        global_entity_set: &HashSet<GlobalEntity>
+        entity_set: &HashSet<RemoteEntity>
     ) {
         let handle = self.entity_waitlist.queue(
-            converter,
-            &global_entity_set,
+            in_scope_entities,
+            entity_set,
             &mut self.insert_waitlist_store,
-            (*global_entity, component),
+            (*entity, component),
         );
 
         self.insert_waitlist_map
-            .insert((*global_entity, *component_kind), handle);
+            .insert((*entity, *component_kind), handle);
     }
 
     pub(crate) fn entities_to_insert(
         &mut self,
         now: &Instant,
         local_converter: &dyn LocalEntityAndGlobalEntityConverter,
-    ) -> Vec<(GlobalEntity, ComponentKind, Box<dyn Replicate>)> {
+    ) -> Vec<(RemoteEntity, ComponentKind, Box<dyn Replicate>)> {
         let mut output = Vec::new();
         if let Some(list) = self
             .entity_waitlist
@@ -98,18 +93,18 @@ impl RemoteWorldWaitlist {
 
     pub fn on_entity_channel_opened(
         &mut self,
-        in_scope_entities: &dyn InScopeEntities,
+        in_scope_entities: &dyn InScopeEntities<RemoteEntity>,
         // converter: &dyn LocalEntityAndGlobalEntityConverter,
-        global_entity: &GlobalEntity
+        entity: &RemoteEntity
     ) {
-        self.entity_waitlist.add_entity(in_scope_entities, global_entity);
+        self.entity_waitlist.add_entity(in_scope_entities, entity);
     }
 
-    pub(crate) fn process_remove(&mut self, global_entity: &GlobalEntity, component_kind: &ComponentKind) -> bool {
+    pub(crate) fn process_remove(&mut self, entity: &RemoteEntity, component_kind: &ComponentKind) -> bool {
         // Remove from insert waitlist if it's there
         if let Some(handle) = self
             .insert_waitlist_map
-            .remove(&(*global_entity, *component_kind))
+            .remove(&(*entity, *component_kind))
         {
             self.insert_waitlist_store.remove(&handle);
             self.entity_waitlist.remove_waiting_handle(&handle);
@@ -118,7 +113,7 @@ impl RemoteWorldWaitlist {
         // Remove Component from update waitlist if it's there
         if let Some(handle_map) = self
             .update_waitlist_map
-            .remove(&(*global_entity, *component_kind))
+            .remove(&(*entity, *component_kind))
         {
             for (_index, handle) in handle_map {
                 self.update_waitlist_store.remove(&handle);
@@ -132,15 +127,15 @@ impl RemoteWorldWaitlist {
     /// Process component updates from raw bits for a given entity
     pub(crate) fn process_ready_updates<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
         &mut self,
-        in_scope_entities: &dyn InScopeEntities,
+        in_scope_entities: &dyn InScopeEntities<RemoteEntity>,
         local_converter: &dyn LocalEntityAndGlobalEntityConverter,
         world_converter: &dyn EntityAndGlobalEntityConverter<E>,
         component_kinds: &ComponentKinds,
         world: &mut W,
-        mut incoming_updates: Vec<(Tick, GlobalEntity, ComponentUpdate)>,
-    ) -> Vec<(Tick, GlobalEntity, ComponentKind)> {
+        mut incoming_updates: Vec<(Tick, RemoteEntity, ComponentUpdate)>,
+    ) -> Vec<(Tick, RemoteEntity, ComponentKind)> {
         let mut output = Vec::new();
-        for (tick, global_entity, component_update) in incoming_updates.drain(..) {
+        for (tick, remote_entity, component_update) in incoming_updates.drain(..) {
             let component_kind = component_update.kind;
 
             // split the component_update into the waiting and ready parts
@@ -167,23 +162,20 @@ impl RemoteWorldWaitlist {
             // if it exists, queue the waiting part of the component update
             if let Some(waiting_updates) = waiting_updates_opt {
                 for (waiting_remote_entity, waiting_field_update) in waiting_updates {
-                    if let Ok(waiting_global_entity) =
-                        local_converter.remote_entity_to_global_entity(&waiting_remote_entity)
-                    {
                         let field_id = waiting_field_update.field_id();
 
                         // Have to convert the single waiting entity to a HashSet ..
                         // TODO: make this more efficient
                         let mut waiting_entities = HashSet::new();
-                        waiting_entities.insert(waiting_global_entity);
+                        waiting_entities.insert(waiting_remote_entity);
 
                         let handle = self.entity_waitlist.queue(
                             in_scope_entities,
                             &waiting_entities,
                             &mut self.update_waitlist_store,
-                            (tick, global_entity, component_kind, waiting_field_update),
+                            (tick, remote_entity, component_kind, waiting_field_update),
                         );
-                        let component_field_key = (global_entity, component_kind);
+                        let component_field_key = (remote_entity, component_kind);
                         if !self.update_waitlist_map.contains_key(&component_field_key) {
                             self.update_waitlist_map
                                 .insert(component_field_key, HashMap::new());
@@ -197,13 +189,11 @@ impl RemoteWorldWaitlist {
                             self.entity_waitlist.remove_waiting_handle(old_handle);
                         }
                         handle_map.insert(field_id, handle);
-                    } else {
-                        warn!("Remote World Manager: cannot convert remote entity to global entity for waitlisting");
-                    }
                 }
             }
             // if it exists, apply the ready part of the component update
             if let Some(ready_update) = ready_update_opt {
+                let global_entity = local_converter.remote_entity_to_global_entity(&remote_entity).unwrap();
                 let world_entity = world_converter
                     .global_entity_to_entity(&global_entity)
                     .unwrap();
@@ -220,7 +210,7 @@ impl RemoteWorldWaitlist {
                     continue;
                 }
 
-                output.push((tick, global_entity, component_kind));
+                output.push((tick, remote_entity, component_kind));
             }
         }
         output
@@ -232,16 +222,16 @@ impl RemoteWorldWaitlist {
         world_converter: &dyn EntityAndGlobalEntityConverter<E>,
         world: &mut W,
         now: &Instant,
-    ) -> Vec<(Tick, GlobalEntity, ComponentKind)> {
+    ) -> Vec<(Tick, RemoteEntity, ComponentKind)> {
         let mut output = Vec::new();
         if let Some(list) = self
             .entity_waitlist
             .collect_ready_items(now, &mut self.update_waitlist_store)
         {
-            for (tick, global_entity, component_kind, ready_update) in list {
+            for (tick, remote_entity, component_kind, ready_update) in list {
                 info!("processing waiting update!");
 
-                let component_key = (global_entity, component_kind);
+                let component_key = (remote_entity, component_kind);
                 let mut remove_entry = false;
                 if let Some(component_map) = self.update_waitlist_map.get_mut(&component_key) {
                     component_map.remove(&ready_update.field_id());
@@ -253,6 +243,7 @@ impl RemoteWorldWaitlist {
                     self.update_waitlist_map.remove(&component_key);
                 }
 
+                let global_entity = local_converter.remote_entity_to_global_entity(&remote_entity).unwrap();
                 let world_entity = world_converter
                     .global_entity_to_entity(&global_entity)
                     .unwrap();
@@ -270,7 +261,7 @@ impl RemoteWorldWaitlist {
                     continue;
                 }
 
-                output.push((tick, global_entity, component_kind));
+                output.push((tick, remote_entity, component_kind));
             }
         }
 

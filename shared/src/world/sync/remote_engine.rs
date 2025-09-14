@@ -31,7 +31,7 @@
 
 use std::{fmt::Debug, hash::Hash, collections::HashMap};
 
-use crate::{world::{sync::{entity_channel_receiver::EntityChannelReceiver, config::EngineConfig}, entity::entity_message::EntityMessage}, EntityMessageType, HostType, MessageIndex};
+use crate::{world::{sync::{entity_channel_receiver::EntityChannelReceiver, config::EngineConfig}, entity::entity_message::EntityMessage}, EntityMessageType, HostType, InScopeEntities, MessageIndex, RemoteEntity};
 use crate::EntityCommand;
 
 pub struct RemoteEngine<E: Copy + Hash + Eq + Debug> {
@@ -111,5 +111,11 @@ impl<E: Copy + Hash + Eq + Debug> RemoteEngine<E> {
         let entity_channel = self.entity_channels.get_mut(&entity).unwrap();
         entity_channel.send_command(command);
         entity_channel.drain_outgoing_messages_into(&mut self.outgoing_commands);
+    }
+}
+
+impl InScopeEntities<RemoteEntity> for RemoteEngine<RemoteEntity> {
+    fn has_entity(&self, entity: &RemoteEntity) -> bool {
+        self.get_world().contains_key(entity)
     }
 }

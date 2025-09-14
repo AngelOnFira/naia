@@ -246,8 +246,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     &self.protocol.channel_kinds,
                     &self.protocol.message_kinds,
                     &self.protocol.component_kinds,
-                    &self.global_world_manager,
-                    &mut self.global_entity_map,
                 )
                 .is_err()
             {
@@ -1544,10 +1542,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     connection
                         .base
                         .world_manager
-                        .on_entity_channel_opened(
-                            &self.global_world_manager,
-                            &global_entity
-                        );
+                        .on_entity_channel_opened(&global_entity);
                 }
                 EntityEvent::Despawn(global_entity) => {
                     let world_entity = self

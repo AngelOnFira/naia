@@ -2,7 +2,9 @@
 use naia_serde::{BitReader, SerdeErr};
 use naia_socket_shared::Instant;
 
-use crate::{messages::{channels::senders::request_sender::LocalRequestId, message_container::MessageContainer, message_kinds::MessageKinds}, world::{remote::entity_waitlist::EntityWaitlist, entity::in_scope_entities::InScopeEntitiesMut}, LocalEntityAndGlobalEntityConverter, LocalResponseId};
+use crate::{
+    messages::{channels::senders::request_sender::LocalRequestId, message_container::MessageContainer, message_kinds::MessageKinds},
+    world::{remote::entity_waitlist::EntityWaitlist, local_world_manager::LocalWorldManager}, LocalEntityAndGlobalEntityConverter, LocalResponseId, RemoteEntity};
 
 pub trait ChannelReceiver<P>: Send + Sync {
     /// Read messages from an internal buffer and return their content
@@ -10,7 +12,7 @@ pub trait ChannelReceiver<P>: Send + Sync {
         &mut self,
         message_kinds: &MessageKinds,
         now: &Instant,
-        entity_waitlist: &mut EntityWaitlist,
+        entity_waitlist: &mut EntityWaitlist<RemoteEntity>,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
     ) -> Vec<P>;
 }
@@ -20,8 +22,7 @@ pub trait MessageChannelReceiver: ChannelReceiver<MessageContainer> {
     fn read_messages(
         &mut self,
         message_kinds: &MessageKinds,
-        entity_waitlist: &mut EntityWaitlist,
-        converter: &mut dyn InScopeEntitiesMut,
+        local_world_manager: &mut LocalWorldManager,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr>;
 

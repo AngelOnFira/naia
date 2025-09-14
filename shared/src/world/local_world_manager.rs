@@ -2,15 +2,16 @@ use std::{time::Duration, net::SocketAddr, sync::RwLockReadGuard, hash::Hash, co
 
 use naia_socket_shared::Instant;
 
-use crate::{messages::channels::receivers::reliable_receiver::ReliableReceiver, types::{HostType, PacketIndex}, world::{
-    entity::{entity_converters::GlobalWorldManagerType, in_scope_entities::GlobalEntityReserver},
+use crate::{
+    sequence_list::SequenceList,
+    messages::channels::receivers::reliable_receiver::ReliableReceiver, types::{HostType, PacketIndex}, world::{
+    entity::entity_converters::GlobalWorldManagerType,
     host::{
         host_world_manager::{HostWorldManager, CommandId},
         entity_update_manager::EntityUpdateManager
     },
-    remote::entity_waitlist::EntityWaitlist,
-}, ChannelSender, ComponentKind, ComponentKinds, ComponentUpdate, DiffMask, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityCommand, EntityConverterMut, EntityEvent, EntityMessage, EntityMessageType, GlobalEntity, GlobalEntitySpawner, HostEntity, InScopeEntities, LocalEntityAndGlobalEntityConverter, LocalEntityMap, MessageIndex, OwnedLocalEntity, PacketNotifiable, ReliableSender, RemoteEntity, RemoteWorldManager, Replicate, Tick, WorldMutType, WorldRefType};
-use crate::sequence_list::SequenceList;
+    remote::entity_waitlist::{EntityWaitlist, WaitlistStore},
+}, ChannelSender, ComponentKind, ComponentKinds, ComponentUpdate, DiffMask, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityCommand, EntityConverterMut, EntityEvent, EntityMessage, EntityMessageType, GlobalEntity, GlobalEntitySpawner, HostEntity, LocalEntityAndGlobalEntityConverter, LocalEntityMap, MessageIndex, OwnedLocalEntity, PacketNotifiable, ReliableSender, RemoteEntity, RemoteWorldManager, Replicate, Tick, WorldMutType, WorldRefType};
 
 const RESEND_COMMAND_RTT_FACTOR: f32 = 1.5;
 const COMMAND_RECORD_TTL: Duration = Duration::from_secs(60);
@@ -24,6 +25,21 @@ pub struct LocalWorldManager {
     host: HostWorldManager,
     remote: RemoteWorldManager,
     updater: EntityUpdateManager,
+}
+
+impl LocalWorldManager {
+    pub(crate) fn entity_waitlist_queue<T>(
+        &mut self,
+        remote_entity_set: &HashSet<RemoteEntity>,
+        waitlist_store: &mut WaitlistStore<T>,
+        message: T,
+    ) {
+        self.remote.entity_waitlist_queue(
+            remote_entity_set,
+            waitlist_store,
+            message,
+        );
+    }
 }
 
 impl LocalWorldManager {
@@ -210,7 +226,7 @@ impl LocalWorldManager {
         self.remote.send_command(&self.entity_map, command);
     }
 
-    pub fn entity_waitlist_mut(&mut self) -> &mut EntityWaitlist {
+    pub fn entity_waitlist_mut(&mut self) -> &mut EntityWaitlist<RemoteEntity> {
         self.remote.entity_waitlist_mut()
     }
 
@@ -228,7 +244,8 @@ impl LocalWorldManager {
         global_entity: &GlobalEntity,
         component_update: ComponentUpdate
     ) {
-        self.remote.insert_received_update(tick, global_entity, component_update);
+        let remote_entity = self.entity_map.global_entity_to_remote_entity(global_entity).unwrap();
+        self.remote.insert_received_update(tick, &remote_entity, component_update);
     }
 
     pub fn take_incoming_events<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
@@ -289,10 +306,10 @@ impl LocalWorldManager {
 
     pub fn on_entity_channel_opened(
         &mut self,
-        in_scope_entities: &dyn InScopeEntities,
         global_entity: &GlobalEntity
     ) {
-        self.remote.on_entity_channel_opened(in_scope_entities, global_entity);
+        let remote_entity = self.entity_map.global_entity_to_remote_entity(global_entity).unwrap();
+        self.remote.on_entity_channel_opened(&remote_entity);
     }
 
     // Update-focused
@@ -512,17 +529,17 @@ impl LocalWorldManager {
         self.updater.take_outgoing_events(world, world_converter, global_world_manager, updatable_world)
     }
 
-    pub(crate) fn get_message_reader_helpers<'a, 'b, 'c, E: Copy + Eq + Hash + Sync + Send>(
-        &'c mut self,
-        global_entity_manager: &'a dyn GlobalWorldManagerType,
-        spawner: &'b mut dyn GlobalEntitySpawner<E>
-    ) -> (GlobalEntityReserver<'a, 'b, 'c, E>, &'c mut EntityWaitlist) {
-        let reserver = self.entity_map.global_entity_reserver(global_entity_manager, spawner);
-        let entity_waitlist = self.remote.entity_waitlist_mut();
-        (reserver, entity_waitlist)
-    }
+    // pub(crate) fn get_message_reader_helpers<'a, 'b, 'c, E: Copy + Eq + Hash + Sync + Send>(
+    //     &'b mut self,
+    //     spawner: &'b mut dyn GlobalEntitySpawner<E>
+    // ) -> (GlobalEntityReserver<'a, 'b, 'c, E>, &'a mut EntityWaitlist<RemoteEntity>) {
+    //     let remote= &mut self.remote;
+    //     let entity_map = &mut self.entity_map;
+    //     let reserver = remote.get_message_reader_helpers(entity_map, spawner);
+    //     (reserver, remote.entity_waitlist_mut())
+    // }
 
-    pub fn get_message_processor_helpers(&mut self) -> (&dyn LocalEntityAndGlobalEntityConverter, &mut EntityWaitlist) {
+    pub fn get_message_processor_helpers(&mut self) -> (&dyn LocalEntityAndGlobalEntityConverter, &mut EntityWaitlist<RemoteEntity>) {
         let entity_converter = self.entity_map.entity_converter();
         let entity_waitlist = self.remote.entity_waitlist_mut();
         (entity_converter, entity_waitlist)

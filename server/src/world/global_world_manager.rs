@@ -408,7 +408,7 @@ impl GlobalWorldManagerType for GlobalWorldManager {
     }
 }
 
-impl InScopeEntities for GlobalWorldManager {
+impl InScopeEntities<GlobalEntity> for GlobalWorldManager {
     fn has_entity(&self, global_entity: &GlobalEntity) -> bool {
         self.entity_records.contains_key(global_entity)
     }

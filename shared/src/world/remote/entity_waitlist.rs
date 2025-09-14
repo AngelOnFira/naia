@@ -1,27 +1,26 @@
 use std::{
     collections::{HashMap, HashSet, VecDeque},
     time::Duration,
+    hash::Hash,
 };
-
-use log::info;
 
 use naia_socket_shared::Instant;
 
-use crate::{world::entity::in_scope_entities::InScopeEntities, GlobalEntity, KeyGenerator};
+use crate::{world::entity::in_scope_entities::InScopeEntities, KeyGenerator};
 
 pub type WaitlistHandle = u16;
 
-pub struct EntityWaitlist {
+pub struct EntityWaitlist<E: Copy + Eq + Hash + Sync + Send> {
     handle_store: KeyGenerator<WaitlistHandle>,
-    handle_to_required_entities: HashMap<WaitlistHandle, HashSet<GlobalEntity>>,
-    waiting_entity_to_handles: HashMap<GlobalEntity, HashSet<WaitlistHandle>>,
+    handle_to_required_entities: HashMap<WaitlistHandle, HashSet<E>>,
+    waiting_entity_to_handles: HashMap<E, HashSet<WaitlistHandle>>,
     ready_handles: HashSet<WaitlistHandle>,
     removed_handles: HashSet<WaitlistHandle>,
     handle_ttls: VecDeque<(Instant, WaitlistHandle)>,
     handle_ttl: Duration,
 }
 
-impl EntityWaitlist {
+impl<E: Copy + Eq + Hash + Sync + Send> EntityWaitlist<E> {
     pub fn new() -> Self {
         Self {
             handle_to_required_entities: HashMap::new(),
@@ -34,7 +33,7 @@ impl EntityWaitlist {
         }
     }
 
-    fn required_entities_are_in_scope(&self, in_scope_entities: &dyn InScopeEntities, entities: &HashSet<GlobalEntity>) -> bool {
+    fn required_entities_are_in_scope(&self, in_scope_entities: &dyn InScopeEntities<E>, entities: &HashSet<E>) -> bool {
         for entity in entities {
             if !in_scope_entities.has_entity(entity) {
                 return false;
@@ -45,8 +44,8 @@ impl EntityWaitlist {
 
     pub fn queue<T>(
         &mut self,
-        in_scope_entities: &dyn InScopeEntities,
-        entities: &HashSet<GlobalEntity>,
+        in_scope_entities: &dyn InScopeEntities<E>,
+        entities: &HashSet<E>,
         waitlist_store: &mut WaitlistStore<T>,
         item: T,
     ) -> WaitlistHandle {
@@ -54,7 +53,7 @@ impl EntityWaitlist {
 
         // if all entities are in scope, we can send the message immediately
         if self.required_entities_are_in_scope(in_scope_entities, entities) {
-            info!("Entity's dependencies {:?} are in scope", entities);
+            //info!("Entity's dependencies {:?} are in scope", entities);
             waitlist_store.queue(new_handle, item);
             self.ready_handles.insert(new_handle);
             return new_handle;
@@ -96,9 +95,9 @@ impl EntityWaitlist {
 
     pub fn add_entity(
         &mut self,
-        in_scope_entities: &dyn InScopeEntities,
+        in_scope_entities: &dyn InScopeEntities<E>,
         // converter: &dyn LocalEntityAndGlobalEntityConverter,
-        global_entity: &GlobalEntity
+        entity: &E
     ) {
         
         // let remote_entity = converter.global_entity_to_remote_entity(global_entity).unwrap();
@@ -107,7 +106,7 @@ impl EntityWaitlist {
         // get a list of handles ready to send
         let mut outgoing_handles = Vec::new();
 
-        if let Some(message_set) = self.waiting_entity_to_handles.get(global_entity) {
+        if let Some(message_set) = self.waiting_entity_to_handles.get(entity) {
             for message_handle in message_set.iter() {
                 if let Some(entities) = self.handle_to_required_entities.get(message_handle) {
                     if self.required_entities_are_in_scope(in_scope_entities, entities) {

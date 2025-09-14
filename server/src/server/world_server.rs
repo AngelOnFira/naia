@@ -1941,8 +1941,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             &self.message_kinds,
             &self.component_kinds,
             self.client_authoritative_entities,
-            &self.global_world_manager,
-            &mut self.global_entity_map,
             server_tick,
             client_tick,
             reader,
@@ -2007,11 +2005,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                     connection
                         .base
                         .world_manager
-                        .on_entity_channel_opened(
-                            &self.global_world_manager,
-                            // connection.base.local_world_manager.entity_converter(),
-                            &global_entity
-                        );
+                        .on_entity_channel_opened( // connection.base.local_world_manager.entity_converter(),
+                                                   &global_entity);
                 }
                 EntityEvent::Despawn(global_entity) => {
                     let world_entity = self.global_entity_map.global_entity_to_entity(&global_entity).unwrap();
