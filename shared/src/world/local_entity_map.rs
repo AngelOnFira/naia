@@ -32,7 +32,7 @@ impl LocalEntityAndGlobalEntityConverter for LocalEntityMap {
         global_entity: &GlobalEntity,
     ) -> Result<RemoteEntity, EntityDoesNotExistError> {
         if let Some(record) = self.global_to_local.get(global_entity) {
-            if record.has_remote_entity() {
+            if record.is_remote_owned() {
                 return Ok(record.remote_entity());
             }
         }

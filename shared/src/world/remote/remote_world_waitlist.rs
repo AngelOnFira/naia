@@ -10,7 +10,7 @@ use naia_socket_shared::Instant;
 use crate::{world::{
     entity::in_scope_entities::InScopeEntities,
     remote::entity_waitlist::{RemoteEntityWaitlist, WaitlistHandle, WaitlistStore},
-}, ComponentFieldUpdate, ComponentKind, ComponentKinds, ComponentUpdate, EntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverter, RemoteEntity, Replicate, Tick, WorldMutType};
+}, ComponentFieldUpdate, ComponentKind, ComponentKinds, ComponentUpdate, EntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverter, OwnedLocalEntity, RemoteEntity, Replicate, Tick, WorldMutType};
 
 pub struct RemoteWorldWaitlist {
     entity_waitlist: RemoteEntityWaitlist,
@@ -132,10 +132,10 @@ impl RemoteWorldWaitlist {
         world_converter: &dyn EntityAndGlobalEntityConverter<E>,
         component_kinds: &ComponentKinds,
         world: &mut W,
-        mut incoming_updates: Vec<(Tick, RemoteEntity, ComponentUpdate)>,
-    ) -> Vec<(Tick, RemoteEntity, ComponentKind)> {
+        mut incoming_updates: Vec<(Tick, OwnedLocalEntity, ComponentUpdate)>,
+    ) -> Vec<(Tick, OwnedLocalEntity, ComponentKind)> {
         let mut output = Vec::new();
-        for (tick, remote_entity, component_update) in incoming_updates.drain(..) {
+        for (tick, local_entity, component_update) in incoming_updates.drain(..) {
             let component_kind = component_update.kind;
 
             // split the component_update into the waiting and ready parts
@@ -161,6 +161,13 @@ impl RemoteWorldWaitlist {
 
             // if it exists, queue the waiting part of the component update
             if let Some(waiting_updates) = waiting_updates_opt {
+
+                // Convert OwnedLocalEntity to RemoteEntity
+                let OwnedLocalEntity::Remote(remote_entity) = local_entity else {
+                    panic!("Expected RemoteEntity");
+                };
+                let remote_entity = RemoteEntity::new(remote_entity);
+
                 for (waiting_remote_entity, waiting_field_update) in waiting_updates {
                         let field_id = waiting_field_update.field_id();
 
@@ -193,7 +200,7 @@ impl RemoteWorldWaitlist {
             }
             // if it exists, apply the ready part of the component update
             if let Some(ready_update) = ready_update_opt {
-                let global_entity = local_converter.remote_entity_to_global_entity(&remote_entity).unwrap();
+                let global_entity = local_converter.owned_entity_to_global_entity(&local_entity).unwrap();
                 let world_entity = world_converter
                     .global_entity_to_entity(&global_entity)
                     .unwrap();
@@ -210,7 +217,7 @@ impl RemoteWorldWaitlist {
                     continue;
                 }
 
-                output.push((tick, remote_entity, component_kind));
+                output.push((tick, local_entity, component_kind));
             }
         }
         output

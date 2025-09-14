@@ -25,21 +25,12 @@ pub struct LocalWorldManager {
     host: HostWorldManager,
     remote: RemoteWorldManager,
     updater: EntityUpdateManager,
-}
 
-impl LocalWorldManager {
-    pub(crate) fn entity_waitlist_queue<T>(
-        &mut self,
-        remote_entity_set: &HashSet<RemoteEntity>,
-        waitlist_store: &mut WaitlistStore<T>,
-        message: T,
-    ) {
-        self.remote.entity_waitlist_queue(
-            remote_entity_set,
-            waitlist_store,
-            message,
-        );
-    }
+    // TODO: this is kind of specific to the receiver, put it somewhere else?
+    incoming_components: HashMap<(OwnedLocalEntity, ComponentKind), Box<dyn Replicate>>,
+    
+    // TODO: this is kind of specific to the updater, put it somewhere else?
+    incoming_updates: Vec<(Tick, OwnedLocalEntity, ComponentUpdate)>,
 }
 
 impl LocalWorldManager {
@@ -59,7 +50,23 @@ impl LocalWorldManager {
             host: HostWorldManager::new(host_type, user_key),
             remote: RemoteWorldManager::new(host_type),
             updater: EntityUpdateManager::new(address, global_world_manager),
+
+            incoming_components: HashMap::new(),
+            incoming_updates: Vec::new(),
         }
+    }
+
+    pub(crate) fn entity_waitlist_queue<T>(
+        &mut self,
+        remote_entity_set: &HashSet<RemoteEntity>,
+        waitlist_store: &mut WaitlistStore<T>,
+        message: T,
+    ) {
+        self.remote.entity_waitlist_queue(
+            remote_entity_set,
+            waitlist_store,
+            message,
+        );
     }
 
     // EntityMap-focused
@@ -235,7 +242,7 @@ impl LocalWorldManager {
     }
 
     pub(crate) fn insert_received_component(&mut self, local_entity: &OwnedLocalEntity, component_kind: &ComponentKind, component: Box<dyn Replicate>) {
-        self.remote.insert_received_component(local_entity, component_kind, component);
+        self.incoming_components.insert((*local_entity, *component_kind), component);
     }
 
     pub(crate) fn insert_received_update(
@@ -244,8 +251,8 @@ impl LocalWorldManager {
         global_entity: &GlobalEntity,
         component_update: ComponentUpdate
     ) {
-        let remote_entity = self.entity_map.global_entity_to_remote_entity(global_entity).unwrap();
-        self.remote.insert_received_update(tick, &remote_entity, component_update);
+        let entity = self.entity_map.global_entity_to_owned_entity(global_entity).unwrap();
+        self.incoming_updates.push((tick, entity, component_update));
     }
 
     pub fn take_incoming_events<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
@@ -295,6 +302,8 @@ impl LocalWorldManager {
             component_kinds,
             world,
             now,
+            &mut self.incoming_components,
+            std::mem::take(&mut self.incoming_updates),
             incoming_remote_messages
         );
 
