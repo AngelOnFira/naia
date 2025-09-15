@@ -101,14 +101,6 @@ impl LocalWorldManager {
         self.entity_map.global_entity_from_remote(remote_entity)
     }
 
-    pub fn has_both_host_and_remote_entity(&self, global_entity: &GlobalEntity) -> bool {
-        self.entity_map.has_both_host_and_remote_entity(global_entity)
-    }
-
-    pub fn set_host_owned(&mut self, global_entity: &GlobalEntity) {
-        self.entity_map.set_host_owned(global_entity);
-    }
-
     // Host-focused
 
     pub fn host_has_entity(&self, global_entity: &GlobalEntity) -> bool {
@@ -220,8 +212,7 @@ impl LocalWorldManager {
         &mut self,
         global_entity: &GlobalEntity,
     ) {
-        let new_host_entity = self.host_reserve_entity(&global_entity); // host entity? on remote? this is wrong
-        let command = EntityCommand::RequestAuthority(None, *global_entity, new_host_entity);
+        let command = EntityCommand::RequestAuthority(None, *global_entity);
         self.remote.send_command(&self.entity_map, command);
     }
 
@@ -448,21 +439,6 @@ impl LocalWorldManager {
         // only server should ever be able to call this, on host-owned (server-owned) entities
         let command = EntityCommand::DisableDelegation(None, *global_entity);
         self.host.send_command(&self.entity_map, command);
-    }
-
-    pub fn track_hosts_redundant_remote_entity(
-        &mut self,
-        _remote_entity: &RemoteEntity,
-        _component_kinds: &Vec<ComponentKind>,
-    ) {
-        todo!();
-    }
-
-    pub fn untrack_hosts_redundant_remote_entity(
-        &mut self,
-        _remote_entity: &RemoteEntity
-    ) {
-        todo!();
     }
 
     // Joint

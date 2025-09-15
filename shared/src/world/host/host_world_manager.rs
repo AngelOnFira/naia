@@ -280,7 +280,7 @@ impl HostWorldManager {
                 EntityMessage::SetAuthority(_, _, _) => {
                     todo!("Implement EntityMessage::<HostEntity>::SetAuthority handling");
                 }
-                EntityMessage::RequestAuthority(_, _, _) => {
+                EntityMessage::RequestAuthority(_, _) => {
                     todo!("Implement EntityMessage::<HostEntity>::RequestAuthority handling");
                 }
                 EntityMessage::ReleaseAuthority(_, _) => {

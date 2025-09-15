@@ -16,7 +16,7 @@ pub enum EntityEvent {
     SetAuthority(GlobalEntity, EntityAuthStatus),
     
     // These are not commands, they are something else
-    RequestAuthority(GlobalEntity, RemoteEntity),
+    RequestAuthority(GlobalEntity),
     ReleaseAuthority(GlobalEntity),
     EnableDelegationResponse(GlobalEntity),
     MigrateResponse(GlobalEntity, RemoteEntity),
@@ -35,7 +35,7 @@ impl EntityEvent {
             Self::EnableDelegation(_) => Some(EntityMessageType::EnableDelegation),
             Self::EnableDelegationResponse(_) => Some(EntityMessageType::EnableDelegationResponse),
             Self::DisableDelegation(_) => Some(EntityMessageType::DisableDelegation),
-            Self::RequestAuthority(_, _) => Some(EntityMessageType::RequestAuthority),
+            Self::RequestAuthority(_) => Some(EntityMessageType::RequestAuthority),
             Self::ReleaseAuthority(_) => Some(EntityMessageType::ReleaseAuthority),
             Self::SetAuthority(_, _) => Some(EntityMessageType::SetAuthority),
             Self::MigrateResponse(_, _) => Some(EntityMessageType::MigrateResponse),
@@ -55,7 +55,7 @@ impl EntityEvent {
             Self::EnableDelegation(entity) => *entity,
             Self::EnableDelegationResponse(entity) => *entity,
             Self::DisableDelegation(entity) => *entity,
-            Self::RequestAuthority(entity, _) => *entity,
+            Self::RequestAuthority(entity) => *entity,
             Self::ReleaseAuthority(entity) => *entity,
             Self::SetAuthority(entity, _) => *entity,
             Self::MigrateResponse(entity, _) => *entity,

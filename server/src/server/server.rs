@@ -2,7 +2,7 @@ use std::{hash::Hash, net::SocketAddr, panic, time::Duration};
 
 use naia_shared::{
     Channel, ComponentKind, EntityAndGlobalEntityConverter, EntityAuthStatus,
-    EntityDoesNotExistError, GlobalEntity, Instant, Message, Protocol, RemoteEntity, Replicate,
+    EntityDoesNotExistError, GlobalEntity, Instant, Message, Protocol, Replicate,
     Request, Response, ResponseReceiveKey, ResponseSendKey, SocketConfig, Tick, WorldMutType,
     WorldRefType,
 };
@@ -247,10 +247,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         &mut self,
         origin_user: &UserKey,
         world_entity: &E,
-        remote_entity: &RemoteEntity,
     ) {
-        self.world_server
-            .client_request_authority(origin_user, world_entity, remote_entity);
+        self.world_server.client_request_authority(origin_user, world_entity);
     }
 
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!

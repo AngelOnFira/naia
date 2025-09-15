@@ -81,44 +81,30 @@ impl LocalEntityMap {
         }
     }
 
-    pub fn insert_with_host_entity(&mut self, global_entity: GlobalEntity, host_entity: HostEntity) -> Option<HostEntity> {
-        let mut old_host_entity_opt = None;
-        if let Some(record) = self.global_to_local.get_mut(&global_entity) {
-            if let Some(old_host_entity) = record.set_host(host_entity) {
-                old_host_entity_opt = Some(old_host_entity);
-            }
-        } else {
-            self.global_to_local.insert(global_entity, LocalEntityRecord::new_host_owned_entity(host_entity));
+    pub fn insert_with_host_entity(&mut self, global_entity: GlobalEntity, host_entity: HostEntity) {
+        if self.global_to_local.contains_key(&global_entity) {
+            panic!("Cannot overwrite inserted global entity: {:?}", global_entity);
         }
+        if self.host_to_global.contains_key(&host_entity) {
+            panic!("Cannot overwrite inserted host entity {:?}", host_entity);
+        }
+
+        self.global_to_local.insert(global_entity, LocalEntityRecord::new_host_owned_entity(host_entity));
+
         self.host_to_global.insert(host_entity, global_entity);
-        old_host_entity_opt
     }
 
-    pub fn insert_with_remote_entity(&mut self, global_entity: GlobalEntity, remote: RemoteEntity) {
+    pub fn insert_with_remote_entity(&mut self, global_entity: GlobalEntity, remote_entity: RemoteEntity) {
 
-        if let Some(old_global_entity) = self.remote_to_global.get(&remote) {
-            if old_global_entity == &global_entity {
-                panic!("Already inserted remote entity {:?} for this global entity: {:?}", remote, global_entity);
-            }
-            let old_record = self.global_to_local.get_mut(old_global_entity).expect("Expected record for old global entity");
-            if old_record.is_only_remote() {
-                panic!("Remote entity {:?} is already associated with global entity {:?}, but it is not associated with a host entity. Cannot overwrite.", remote, old_global_entity);
-            }
-            // remote is using a newly generated remote entity for this global entity
-            // but we've kept the old remote entity in the map for another global entity, for trailing messages to be able to map entityproperties
-            // at this point, those trailing messages are probably already processed
-            // so, clear the remote entity from the old global entity record
-            old_record.clear_remote();
-            self.remote_to_global.remove(&remote);
+        if self.global_to_local.contains_key(&global_entity) {
+            panic!("Cannot overwrite inserted global entity: {:?}", global_entity);
+        }
+        if self.remote_to_global.contains_key(&remote_entity) {
+            panic!("Cannot overwrite inserted remote entity {:?}", remote_entity);
         }
 
-        if let Some(record) = self.global_to_local.get_mut(&global_entity) {
-            record.set_remote(remote);
-        } else {
-            self.global_to_local
-                .insert(global_entity, LocalEntityRecord::new_remote_owned_entity(remote));
-        }
-        self.remote_to_global.insert(remote, global_entity);
+        self.global_to_local.insert(global_entity, LocalEntityRecord::new_remote_owned_entity(remote_entity));
+        self.remote_to_global.insert(remote_entity, global_entity);
     }
 
     pub fn global_entity_from_remote(&self, remote_entity: &RemoteEntity) -> Option<&GlobalEntity> {
@@ -153,43 +139,6 @@ impl LocalEntityMap {
         global_entity
     }
 
-    pub fn set_remote_owned(
-        &mut self,
-        _global_entity: &GlobalEntity,
-    ) {
-        todo!();
-        // let Some(record) = self.global_to_local.get_mut(global_entity) else {
-        //     panic!("no record exists for entity");
-        // };
-        // if record.host_entity().is_some() && record.remote_entity().is_some() {
-        //     record.set_remote_owned();
-        // } else {
-        //     panic!("record does not have dual host and remote entity");
-        // }
-    }
-
-    pub fn set_host_owned(&mut self, _global_entity: &GlobalEntity) {
-        todo!();
-        // let Some(record) = self.global_to_local.get_mut(global_entity) else {
-        //     panic!("no record exists for entity");
-        // };
-        // if record.host_entity().is_some() && record.remote_entity().is_some() {
-        //     record.set_host_owned();
-        // } else {
-        //     panic!("record does not have dual host and remote entity");
-        // }
-    }
-
-    pub fn has_both_host_and_remote_entity(&self, _global_entity: &GlobalEntity) -> bool {
-        todo!()
-        // if let Some(record) = self.global_to_local.get(global_entity) {
-        //     if record.host_entity().is_some() && record.remote_entity().is_some() {
-        //         return true;
-        //     }
-        // }
-        // return false;
-    }
-
     pub fn contains_global_entity(&self, global_entity: &GlobalEntity) -> bool {
         self.global_to_local.contains_key(global_entity)
     }
@@ -208,7 +157,7 @@ impl LocalEntityMap {
 
     pub(crate) fn remote_entities(&self) -> Vec<GlobalEntity> {
         self.iter()
-            .filter(|(_, record)| record.is_only_remote())
+            .filter(|(_, record)| record.is_remote_owned())
             .map(|(global_entity, _)| *global_entity)
             .collect::<Vec<GlobalEntity>>()
     }

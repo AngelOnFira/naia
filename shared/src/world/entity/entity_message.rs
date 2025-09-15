@@ -14,7 +14,7 @@ pub enum EntityMessage<E: Copy + Eq + PartialEq> {
     SetAuthority(SubCommandId, E, EntityAuthStatus),
     
     // These are not commands, they are something else
-    RequestAuthority(SubCommandId, E, HostEntity),
+    RequestAuthority(SubCommandId, E),
     ReleaseAuthority(SubCommandId, E),
     EnableDelegationResponse(SubCommandId, E),
     MigrateResponse(SubCommandId, E, HostEntity),
@@ -34,7 +34,7 @@ impl<E: Copy + Eq + PartialEq> EntityMessage<E> {
             Self::EnableDelegation(_, entity) => Some(*entity),
             Self::EnableDelegationResponse(_, entity) => Some(*entity),
             Self::DisableDelegation(_, entity) => Some(*entity),
-            Self::RequestAuthority(_, entity, _) => Some(*entity),
+            Self::RequestAuthority(_, entity) => Some(*entity),
             Self::ReleaseAuthority(_, _) => panic!("EntityReleaseAuthority should not call `entity()`"),
             Self::SetAuthority(_, entity, _) => Some(*entity),
             Self::MigrateResponse(_, entity, _) => Some(*entity),
@@ -61,7 +61,7 @@ impl<E: Copy + Eq + PartialEq> EntityMessage<E> {
             Self::EnableDelegation(sub_id, _) => EntityMessage::EnableDelegation(sub_id, ()),
             Self::EnableDelegationResponse(sub_id, _) => EntityMessage::EnableDelegationResponse(sub_id, ()),
             Self::DisableDelegation(sub_id, _) => EntityMessage::DisableDelegation(sub_id, ()),
-            Self::RequestAuthority(sub_id, _, other_entity) => EntityMessage::RequestAuthority(sub_id, (), other_entity),
+            Self::RequestAuthority(sub_id, _) => EntityMessage::RequestAuthority(sub_id, ()),
             Self::ReleaseAuthority(_sub_id, _) => panic!("EntityReleaseAuthority should not call `strip_entity()`"),
             Self::SetAuthority(sub_id, _, status) => EntityMessage::SetAuthority(sub_id, (), status),
             Self::MigrateResponse(sub_id, _, other_entity) => EntityMessage::MigrateResponse(sub_id, (), other_entity),
@@ -80,7 +80,7 @@ impl<E: Copy + Eq + PartialEq> EntityMessage<E> {
             EntityMessage::EnableDelegation(sub_id, _) => EntityMessage::EnableDelegation(sub_id, entity),
             EntityMessage::EnableDelegationResponse(sub_id, _) => EntityMessage::EnableDelegationResponse(sub_id, entity),
             EntityMessage::DisableDelegation(sub_id, _) => EntityMessage::DisableDelegation(sub_id, entity),
-            EntityMessage::RequestAuthority(sub_id, _, other_entity) => EntityMessage::RequestAuthority(sub_id, entity, other_entity),
+            EntityMessage::RequestAuthority(sub_id, _) => EntityMessage::RequestAuthority(sub_id, entity),
             EntityMessage::ReleaseAuthority(_sub_id, _) => panic!("EntityReleaseAuthority should not call `with_entity()`"),
             EntityMessage::SetAuthority(sub_id, _, status) => EntityMessage::SetAuthority(sub_id, entity, status),
             EntityMessage::MigrateResponse(sub_id, _, other_entity) => EntityMessage::MigrateResponse(sub_id, entity, other_entity),
@@ -99,7 +99,7 @@ impl<E: Copy + Eq + PartialEq> EntityMessage<E> {
             Self::EnableDelegation(_, _) => EntityMessageType::EnableDelegation,
             Self::EnableDelegationResponse(_, _) => EntityMessageType::EnableDelegationResponse,
             Self::DisableDelegation(_, _) => EntityMessageType::DisableDelegation,
-            Self::RequestAuthority(_, _, _) => EntityMessageType::RequestAuthority,
+            Self::RequestAuthority(_, _) => EntityMessageType::RequestAuthority,
             Self::ReleaseAuthority(_, _) => EntityMessageType::ReleaseAuthority,
             Self::SetAuthority(_, _, _) => EntityMessageType::SetAuthority,
             Self::MigrateResponse(_, _, _) => EntityMessageType::MigrateResponse,
@@ -114,7 +114,7 @@ impl<E: Copy + Eq + PartialEq> EntityMessage<E> {
             Self::EnableDelegation(sub_id, _) => Some(*sub_id),
             Self::EnableDelegationResponse(sub_id, _) => Some(*sub_id),
             Self::DisableDelegation(sub_id, _) => Some(*sub_id),
-            Self::RequestAuthority(sub_id, _, _) => Some(*sub_id),
+            Self::RequestAuthority(sub_id, _) => Some(*sub_id),
             Self::ReleaseAuthority(sub_id, _) => Some(*sub_id),
             Self::SetAuthority(sub_id, _, _) => Some(*sub_id),
             Self::MigrateResponse(sub_id, _, _) => Some(*sub_id),
@@ -133,8 +133,8 @@ impl EntityMessage<RemoteEntity> {
             EntityMessage::MigrateResponse(sub_id, entity, other_entity) => {
                 EntityMessage::MigrateResponse(sub_id, entity.to_host(), other_entity)
             }
-            EntityMessage::RequestAuthority(sub_id, entity, other_entity) => {
-                EntityMessage::RequestAuthority(sub_id, entity.to_host(), other_entity)
+            EntityMessage::RequestAuthority(sub_id, entity) => {
+                EntityMessage::RequestAuthority(sub_id, entity.to_host())
             }
             EntityMessage::ReleaseAuthority(_, _) => panic!("EntityReleaseAuthority should not call `to_host_message()`"),
             msg => {
@@ -152,7 +152,7 @@ impl EntityMessage<RemoteEntity> {
             EntityMessage::EnableDelegation(_, _) => EntityEvent::EnableDelegation(global_entity),
             EntityMessage::EnableDelegationResponse(_, _) => EntityEvent::EnableDelegationResponse(global_entity),
             EntityMessage::DisableDelegation(_, _) => EntityEvent::DisableDelegation(global_entity),
-            EntityMessage::RequestAuthority(_, _, new_host_entity) => EntityEvent::RequestAuthority(global_entity, new_host_entity.to_remote()),
+            EntityMessage::RequestAuthority(_, _) => EntityEvent::RequestAuthority(global_entity),
             EntityMessage::ReleaseAuthority(_, _) => EntityEvent::ReleaseAuthority(global_entity),
             EntityMessage::SetAuthority(_, _, status) => EntityEvent::SetAuthority(global_entity, status),
             EntityMessage::MigrateResponse(_, _, other_entity) => EntityEvent::MigrateResponse(global_entity, other_entity.to_remote()),
@@ -173,7 +173,7 @@ impl EntityMessage<HostEntity> {
             EntityMessage::EnableDelegation(_, _) => EntityEvent::EnableDelegation(global_entity),
             EntityMessage::EnableDelegationResponse(_, _) => EntityEvent::EnableDelegationResponse(global_entity),
             EntityMessage::DisableDelegation(_, _) => EntityEvent::DisableDelegation(global_entity),
-            EntityMessage::RequestAuthority(_, _, new_host_entity) => EntityEvent::RequestAuthority(global_entity, new_host_entity.to_remote()),
+            EntityMessage::RequestAuthority(_, _) => EntityEvent::RequestAuthority(global_entity),
             EntityMessage::ReleaseAuthority(_, _) => EntityEvent::ReleaseAuthority(global_entity),
             EntityMessage::SetAuthority(_, _, status) => EntityEvent::SetAuthority(global_entity, status),
             EntityMessage::MigrateResponse(_, _, new_host_entity) => EntityEvent::MigrateResponse(global_entity, new_host_entity.to_remote()),

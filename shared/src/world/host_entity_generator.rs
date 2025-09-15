@@ -44,10 +44,7 @@ impl HostEntityGenerator {
             panic!("Global Entity has already reserved Local Entity!");
         }
         let host_entity = self.generate_host_entity();
-        if let Some(old_host_entity) = entity_map
-            .insert_with_host_entity(*global_entity, host_entity) {
-            self.recycle_host_entity(old_host_entity);
-        }
+        entity_map.insert_with_host_entity(*global_entity, host_entity);
         self.reserved_host_entities.insert(*global_entity, host_entity);
         host_entity
     }
@@ -78,21 +75,6 @@ impl HostEntityGenerator {
 
     pub(crate) fn generate_host_entity(&mut self) -> HostEntity {
         HostEntity::new(self.generator.generate())
-    }
-
-    pub(crate) fn insert_host_entity(
-        &mut self,
-        entity_map: &mut LocalEntityMap,
-        global_entity: GlobalEntity,
-        host_entity: HostEntity,
-    ) {
-        if entity_map.contains_host_entity(&host_entity) {
-            panic!("Local Entity already exists!");
-        }
-
-        if let Some(old_host_entity) = entity_map.insert_with_host_entity(global_entity, host_entity) {
-            self.recycle_host_entity(old_host_entity);
-        }
     }
 
     pub(crate) fn remove_by_global_entity(

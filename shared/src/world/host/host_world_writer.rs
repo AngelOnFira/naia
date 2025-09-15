@@ -467,7 +467,7 @@ impl HostWorldWriter {
             }
             
             // below are response-type commands
-            EntityCommand::RequestAuthority(sub_id_opt, global_entity, host_entity) => {
+            EntityCommand::RequestAuthority(sub_id_opt, global_entity) => {
                 
                 // this command is only ever sent by clients, regarding server-owned entities, to server
                 
@@ -491,15 +491,12 @@ impl HostWorldWriter {
                 // write remote entity
                 remote_entity.ser(writer);
 
-                // write host entity
-                host_entity.value().ser(writer);
-
                 // if we are writing to this packet, add it to record
                 if is_writing {
                     world_manager.record_command_written(
                         packet_index,
                         command_id,
-                        EntityMessage::RequestAuthority(*sub_id, remote_entity.copy_to_owned(), *host_entity),
+                        EntityMessage::RequestAuthority(*sub_id, remote_entity.copy_to_owned()),
                     );
                 }
             }
@@ -630,7 +627,7 @@ impl HostWorldWriter {
             | EntityCommand::EnableDelegation(_, _)
             | EntityCommand::EnableDelegationResponse(_, _)
             | EntityCommand::DisableDelegation(_, _)
-            | EntityCommand::RequestAuthority(_, _, _)
+            | EntityCommand::RequestAuthority(_, _)
             | EntityCommand::ReleaseAuthority(_, _)
             | EntityCommand::SetAuthority(_, _, _)
             | EntityCommand::MigrateResponse(_, _, _) => {

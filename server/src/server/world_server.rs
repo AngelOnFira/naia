@@ -9,7 +9,7 @@ use std::{
 
 use log::{info, warn};
 
-use naia_shared::{handshake::HandshakeHeader, BigMap, BitReader, BitWriter, Channel, ChannelKind, ChannelKinds, ComponentKind, ComponentKinds, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityDoesNotExistError, GlobalEntity, GlobalEntityMap, GlobalEntitySpawner, GlobalRequestId, GlobalResponseId, GlobalWorldManagerType, Instant, Message, MessageContainer, MessageKinds, PacketType, Protocol, RemoteEntity, Replicate, ReplicatedComponent, Request, Response, ResponseReceiveKey, ResponseSendKey, Serde, SerdeErr, SharedGlobalWorldManager, StandardHeader, Tick, Timer, WorldMutType, WorldRefType, EntityEvent, HostType};
+use naia_shared::{handshake::HandshakeHeader, BigMap, BitReader, BitWriter, Channel, ChannelKind, ChannelKinds, ComponentKind, ComponentKinds, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityDoesNotExistError, GlobalEntity, GlobalEntityMap, GlobalEntitySpawner, GlobalRequestId, GlobalResponseId, GlobalWorldManagerType, Instant, Message, MessageContainer, MessageKinds, PacketType, Protocol, Replicate, ReplicatedComponent, Request, Response, ResponseReceiveKey, ResponseSendKey, Serde, SerdeErr, SharedGlobalWorldManager, StandardHeader, Tick, Timer, WorldMutType, WorldRefType, EntityEvent, HostType};
 
 use crate::{
     connection::{connection::Connection, io::Io, tick_buffer_messages::TickBufferMessages},
@@ -651,13 +651,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 }
 
                 // Clean up any remote entity that was mapped to the delegated host entity in this connection!
-                if connection
-                    .base
-                    .world_manager
-                    .has_both_host_and_remote_entity(global_entity)
-                {
-                    Self::remove_redundant_remote_entity_from_host(connection, global_entity);
-                }
+                todo!();
+                // if connection
+                //     .base
+                //     .world_manager
+                //     .has_both_host_and_remote_entity(global_entity)
+                // {
+                //     Self::remove_redundant_remote_entity_from_host(connection, global_entity);
+                // }
             }
         }
     }
@@ -771,7 +772,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         &mut self,
         origin_user: &UserKey,
         world_entity: &E,
-        remote_entity: &RemoteEntity,
     ) {
         let global_entity = self
             .global_entity_map
@@ -784,7 +784,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         if success {
             // entity authority was granted for origin user
 
-            self.add_redundant_remote_entity_to_host(origin_user, &global_entity, remote_entity);
+            {
+                // adding remote entity to host entity?
+                //self.add_redundant_remote_entity_to_host(origin_user, &global_entity, remote_entity);
+                todo!();
+            }
 
             // for any users that have this entity in scope, send an `update_authority_status` message
 
@@ -864,50 +868,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             .unwrap();
         self.global_world_manager
             .entity_authority_status(&global_entity)
-    }
-
-    fn add_redundant_remote_entity_to_host(
-        &mut self,
-        user_key: &UserKey,
-        global_entity: &GlobalEntity,
-        remote_entity: &RemoteEntity,
-    ) {
-        if let Some(user) = self.users.get(user_key) {
-            let connection = self.user_connections.get_mut(&user.address()).unwrap();
-
-            // Local World Manager now tracks the Entity by it's Remote Entity
-            connection
-                .base
-                .world_manager
-                .insert_with_remote_entity(*global_entity, *remote_entity);
-
-            // Remote world reader needs to track remote entity too
-            let component_kinds = self
-                .global_world_manager
-                .component_kinds(global_entity)
-                .unwrap();
-            connection
-                .base.world_manager
-                .track_hosts_redundant_remote_entity(remote_entity, &component_kinds);
-        }
-    }
-
-    fn remove_redundant_remote_entity_from_host(
-        connection: &mut Connection,
-        global_entity: &GlobalEntity,
-    ) {
-        let remote_entity = connection
-            .base.world_manager
-            .entity_converter()
-            .global_entity_to_remote_entity(global_entity)
-            .unwrap();
-        connection
-            .base
-            .world_manager
-            .set_host_owned(global_entity);
-        connection
-            .base
-            .world_manager.untrack_hosts_redundant_remote_entity(&remote_entity);
     }
 
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
@@ -1569,10 +1529,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         let Some(connection) = self.user_connections.get_mut(&user.address()) else {
             panic!("connection does not exist")
         };
-        let component_kinds = self
-            .global_world_manager
-            .component_kinds(global_entity)
-            .unwrap();
 
         // Send EntityMigrateResponse action through EntityActionEvent system
         connection
@@ -2049,10 +2005,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                             );
 
                             // track remote component on the originating connection for the time being
-                            let user = self.users.get(user_key).unwrap();
-                            let addr = user.address();
-                            let connection = self.user_connections.get_mut(&addr).unwrap();
-                            todo!(); // connection
+                            todo!();
+                            // let user = self.users.get(user_key).unwrap();
+                            // let addr = user.address();
+                            // let connection = self.user_connections.get_mut(&addr).unwrap();
+                            // connection
                             //     .base
                             //     .host_world_manager
                             //     .track_remote_component(&global_entity, &component_kind);
@@ -2134,12 +2091,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 EntityEvent::DisableDelegation(_) => {
                     panic!("Clients should not be able to disable entity delegation.");
                 }
-                EntityEvent::RequestAuthority(global_entity, remote_entity) => {
+                EntityEvent::RequestAuthority(global_entity) => {
                     let world_entity = self
                         .global_entity_map
                         .global_entity_to_entity(&global_entity)
                         .unwrap();
-                    self.client_request_authority(user_key, &world_entity, &remote_entity);
+                    self.client_request_authority(user_key, &world_entity);
                 }
                 EntityEvent::ReleaseAuthority(global_entity) => {
                     // info!("received release auth entity message!");

@@ -16,7 +16,7 @@ pub enum EntityCommand {
     SetAuthority(Option<SubCommandId>, GlobalEntity, EntityAuthStatus), // only sent by server
 
     // These aren't commands, they are something else
-    RequestAuthority(Option<SubCommandId>, GlobalEntity, HostEntity), // only sent by client
+    RequestAuthority(Option<SubCommandId>, GlobalEntity), // only sent by client
     ReleaseAuthority(Option<SubCommandId>, GlobalEntity), // only sent by client
     EnableDelegationResponse(Option<SubCommandId>, GlobalEntity), // only sent by client
     MigrateResponse(Option<SubCommandId>, GlobalEntity, HostEntity), // only sent by server
@@ -34,7 +34,7 @@ impl EntityCommand {
             Self::EnableDelegation(_, entity) => *entity,
             Self::DisableDelegation(_, entity) => *entity,
             Self::SetAuthority(_, entity, _) => *entity,
-            Self::RequestAuthority(_, entity, _) => *entity,
+            Self::RequestAuthority(_, entity) => *entity,
             Self::ReleaseAuthority(_, entity) => *entity,
             Self::EnableDelegationResponse(_, entity) => *entity,
             Self::MigrateResponse(_, entity, _) => *entity,
@@ -60,7 +60,7 @@ impl EntityCommand {
             Self::EnableDelegation(_, _) => EntityMessageType::EnableDelegation,
             Self::DisableDelegation(_, _) => EntityMessageType::DisableDelegation,
             Self::SetAuthority(_, _, _) => EntityMessageType::SetAuthority,
-            Self::RequestAuthority(_, _, _) => EntityMessageType::RequestAuthority,
+            Self::RequestAuthority(_, _) => EntityMessageType::RequestAuthority,
             Self::ReleaseAuthority(_, _) => EntityMessageType::ReleaseAuthority,
             Self::EnableDelegationResponse(_, _) => EntityMessageType::EnableDelegationResponse,
             Self::MigrateResponse(_, _, _) => EntityMessageType::MigrateResponse,
@@ -77,7 +77,7 @@ impl EntityCommand {
             Self::EnableDelegation(sub_id, _) | 
             Self::DisableDelegation(sub_id, _) |
             Self::SetAuthority(sub_id, _, _) | 
-            Self::RequestAuthority(sub_id, _, _) | 
+            Self::RequestAuthority(sub_id, _) |
             Self::ReleaseAuthority(sub_id, _) |
             Self::EnableDelegationResponse(sub_id, _) | 
             Self::MigrateResponse(sub_id, _, _) => {
