@@ -7,8 +7,6 @@ use crate::{
     world::{
         component::{
             component_kinds::{ComponentKind, ComponentKinds},
-            component_update::ComponentUpdate,
-            diff_mask::DiffMask,
             property_mutate::PropertyMutator,
             replica_ref::{ReplicaDynMut, ReplicaDynRef},
         },
@@ -17,6 +15,8 @@ use crate::{
     },
     ComponentFieldUpdate, LocalEntityAndGlobalEntityConverterMut, RemoteEntity,
 };
+use crate::world::update::component_update::ComponentUpdate;
+use crate::world::update::diff_mask::DiffMask;
 
 pub trait ReplicateBuilder: Send + Sync + Named {
     /// Create new Component from incoming bit stream

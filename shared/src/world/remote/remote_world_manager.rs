@@ -8,14 +8,16 @@ use log::warn;
 use naia_socket_shared::Instant;
 
 use crate::{world::{
-    entity::{local_entity::RemoteEntity, in_scope_entities::InScopeEntities},
+    entity::in_scope_entities::InScopeEntities,
     remote::{
+        remote_entity_waitlist::{RemoteEntityWaitlist, WaitlistStore},
         remote_world_waitlist::RemoteWorldWaitlist,
-        entity_event::EntityEvent,
-        entity_waitlist::{RemoteEntityWaitlist, WaitlistStore},
     },
     sync::RemoteEngine,
-}, ComponentKind, ComponentKinds, ComponentUpdate, EntityMessage, EntityAndGlobalEntityConverter, GlobalEntitySpawner, GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter, Replicate, Tick, WorldMutType, EntityMessageType, OwnedLocalEntity, EntityMessageReceiver, HostType, LocalEntityMap, EntityCommand, MessageIndex, GlobalEntity};
+}, ComponentKind, ComponentKinds, ComponentUpdate, EntityAndGlobalEntityConverter, EntityCommand, EntityMessage, EntityMessageReceiver, GlobalEntity, GlobalEntitySpawner, GlobalWorldManagerType, HostType, LocalEntityAndGlobalEntityConverter, LocalEntityMap, MessageIndex, OwnedLocalEntity, Replicate, Tick, WorldMutType};
+use crate::world::entity_event::EntityEvent;
+use crate::world::host::host_world_manager::CommandId;
+use crate::world::local::local_entity::RemoteEntity;
 
 pub struct RemoteWorldManager {
     
@@ -47,6 +49,10 @@ impl RemoteWorldManager {
             incoming_events: Vec::new(),
             waitlist: RemoteWorldWaitlist::new(),
         }
+    }
+
+    pub(crate) fn deliver_message(&mut self, _command_id: CommandId, _message: EntityMessage<RemoteEntity>) {
+        todo!()
     }
 
     pub(crate) fn entity_waitlist_queue<T>(
@@ -100,22 +106,40 @@ impl RemoteWorldManager {
         self.remote_engine.take_outgoing_commands()
     }
 
-    pub(crate) fn send_command(
+    pub fn send_entity_command(
+        &mut self,
+        converter: &dyn LocalEntityAndGlobalEntityConverter,
+        command: EntityCommand,
+    ) {
+        let global_entity = command.entity();
+        let remote_entity = converter.global_entity_to_remote_entity(&global_entity).unwrap();
+        self.remote_engine.send_entity_command(remote_entity, command);
+    }
+    
+    pub(crate) fn send_auth_command(
         &mut self,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
         command: EntityCommand
     ) {
         let global_entity = command.entity();
         let remote_entity = converter.global_entity_to_remote_entity(&global_entity).unwrap();
-        self.remote_engine.send_command(remote_entity, command);
+        self.remote_engine.send_auth_command(remote_entity, command);
     }
 
-    pub fn on_entity_channel_opened(
+    pub fn spawn_entity(
         &mut self,
         // converter: &dyn LocalEntityAndGlobalEntityConverter,
         entity: &RemoteEntity
     ) {
-        self.waitlist.on_entity_channel_opened(&self.remote_engine, entity);
+        self.waitlist.spawn_entity(&self.remote_engine, entity);
+    }
+
+    pub fn despawn_entity(
+        &mut self,
+        _local_entity_map: &mut LocalEntityMap,
+        _entity: &RemoteEntity
+    ) {
+        // stubbed
     }
 
     pub fn take_incoming_events<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
@@ -263,23 +287,8 @@ impl RemoteWorldManager {
                     // do nothing
                 }
                 msg => {
-                    let msg_type = msg.get_type();
-                    let event = match msg_type {
-                        EntityMessageType::EnableDelegationResponse |
-                        EntityMessageType::MigrateResponse |
-                        EntityMessageType::RequestAuthority => {
-                            let msg = msg.to_host_message();
-                            msg.to_event(local_entity_map)
-                        }
-                        EntityMessageType::ReleaseAuthority => {
-                            let EntityMessage::ReleaseAuthority(_sub_id, remote_entity) = msg else {
-                                panic!("");
-                            };
-                            let global_entity = local_entity_map.global_entity_from_remote(&remote_entity).unwrap();
-                            EntityEvent::ReleaseAuthority(*global_entity)
-                        }
-                        _ => msg.to_event(local_entity_map)
-                    };
+                    // let msg_type = msg.get_type();
+                    let event = msg.to_event(local_entity_map);
                     self.incoming_events.push(event);
                 }
             }

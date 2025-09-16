@@ -6,7 +6,8 @@ use std::{
     time::Duration,
 };
 
-use crate::{world::host::user_diff_handler::UserDiffHandler, ComponentKind, EntityAndGlobalEntityConverter, GlobalEntity, GlobalWorldManagerType, Instant, WorldRefType, DiffMask, PacketIndex};
+use crate::{ComponentKind, DiffMask, EntityAndGlobalEntityConverter, GlobalEntity, GlobalWorldManagerType, Instant, PacketIndex, WorldRefType};
+use crate::world::update::user_diff_handler::UserDiffHandler;
 
 const DROP_UPDATE_RTT_FACTOR: f32 = 1.5;
 

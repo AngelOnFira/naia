@@ -47,7 +47,8 @@
 //! the canonical state graph above; thus consumers can apply events in
 //! arrival order without additional checks.
 
-use crate::{world::{host::host_world_manager::SubCommandId, entity::ordered_ids::OrderedIds, sync::entity_channel_receiver::EntityChannelState}, EntityMessage, MessageIndex};
+use crate::{world::{host::host_world_manager::SubCommandId, sync::entity_channel_receiver::EntityChannelState}, EntityMessage, MessageIndex};
+use crate::world::sync::ordered_ids::OrderedIds;
 
 pub(crate) struct AuthChannelReceiver {
     next_subcommand_id: SubCommandId,

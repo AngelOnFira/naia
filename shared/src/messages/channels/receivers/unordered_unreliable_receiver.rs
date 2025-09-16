@@ -8,7 +8,8 @@ use naia_socket_shared::Instant;
 use crate::{messages::{
     channels::{receivers::channel_receiver::{ChannelReceiver, MessageChannelReceiver}, senders::request_sender::LocalRequestId},
     message_kinds::MessageKinds,
-}, world::{remote::entity_waitlist::{RemoteEntityWaitlist, WaitlistStore}, local_world_manager::LocalWorldManager}, LocalEntityAndGlobalEntityConverter, LocalResponseId, MessageContainer};
+}, world::remote::remote_entity_waitlist::{RemoteEntityWaitlist, WaitlistStore}, LocalEntityAndGlobalEntityConverter, LocalResponseId, MessageContainer};
+use crate::world::local::local_world_manager::LocalWorldManager;
 
 pub struct UnorderedUnreliableReceiver {
     incoming_messages: VecDeque<MessageContainer>,

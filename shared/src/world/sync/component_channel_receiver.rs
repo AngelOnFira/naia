@@ -34,7 +34,8 @@
 
 use std::collections::VecDeque;
 
-use crate::{sequence_equal_or_less_than, world::{entity::ordered_ids::OrderedIds, sync::entity_channel_receiver::EntityChannelState}, ComponentKind, EntityMessage, EntityMessageType, MessageIndex};
+use crate::{sequence_equal_or_less_than, world::sync::entity_channel_receiver::EntityChannelState, ComponentKind, EntityMessage, EntityMessageType, MessageIndex};
+use crate::world::sync::ordered_ids::OrderedIds;
 
 pub(crate) struct ComponentChannelReceiver {
     /// Current authoritative presence flag

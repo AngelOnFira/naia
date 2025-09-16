@@ -11,10 +11,11 @@ use crate::{messages::{
             indexed_message_reader::IndexedMessageReader,
             reliable_receiver::ReliableReceiver,
         },
-        senders::request_sender::{LocalRequestOrResponseId, LocalRequestId},
+        senders::request_sender::{LocalRequestId, LocalRequestOrResponseId},
     },
     message_kinds::MessageKinds,
-}, types::MessageIndex, world::{local_world_manager::LocalWorldManager, remote::entity_waitlist::{RemoteEntityWaitlist, WaitlistStore}}, LocalEntityAndGlobalEntityConverter, LocalResponseId, MessageContainer, RequestOrResponse};
+}, types::MessageIndex, world::remote::remote_entity_waitlist::{RemoteEntityWaitlist, WaitlistStore}, LocalEntityAndGlobalEntityConverter, LocalResponseId, MessageContainer, RequestOrResponse};
+use crate::world::local::local_world_manager::LocalWorldManager;
 
 // Receiver Arranger Trait
 pub trait ReceiverArranger: Send + Sync {

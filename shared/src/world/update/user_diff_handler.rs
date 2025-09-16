@@ -8,7 +8,8 @@ use log::warn;
 
 use crate::{ComponentKind, DiffMask, GlobalEntity, GlobalWorldManagerType};
 
-use super::{global_diff_handler::GlobalDiffHandler, mut_channel::MutReceiver};
+use crate::world::update::global_diff_handler::GlobalDiffHandler;
+use crate::world::update::mut_channel::MutReceiver;
 
 #[derive(Clone)]
 pub struct UserDiffHandler {

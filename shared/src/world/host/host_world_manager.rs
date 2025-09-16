@@ -1,11 +1,9 @@
-use std::{hash::Hash, collections::{HashMap, HashSet}};
+use std::{collections::{HashMap, HashSet}, hash::Hash};
 
 use log::info;
 
-use crate::{messages::channels::receivers::reliable_receiver::ReliableReceiver, world::{
-    sync::{HostEngine, RemoteEngine, EntityChannelReceiver, EntityChannelSender},
-    host::entity_update_manager::EntityUpdateManager,
-}, EntityMessage, EntityMessageReceiver, GlobalEntity, HostType, ComponentKind, HostEntityGenerator, MessageIndex, EntityCommand, LocalEntityMap, HostEntity, EntityConverterMut, GlobalWorldManagerType, ShortMessageIndex, WorldMutType, GlobalEntitySpawner, EntityEvent, LocalEntityAndGlobalEntityConverter, OwnedLocalEntity};
+use crate::{messages::channels::receivers::reliable_receiver::ReliableReceiver, world::sync::{EntityChannelReceiver, EntityChannelSender, HostEngine, RemoteEngine}, ComponentKind, EntityCommand, EntityConverterMut, EntityEvent, EntityMessage, EntityMessageReceiver, GlobalEntity, GlobalEntitySpawner, GlobalWorldManagerType, HostEntity, HostEntityGenerator, HostType, LocalEntityAndGlobalEntityConverter, LocalEntityMap, MessageIndex, ShortMessageIndex, WorldMutType};
+use crate::world::update::entity_update_manager::EntityUpdateManager;
 
 pub type CommandId = MessageIndex;
 pub type SubCommandId = ShortMessageIndex;
@@ -82,14 +80,6 @@ impl HostWorldManager {
         self.host_engine.take_outgoing_commands()
     }
 
-    pub fn send_command(
-        &mut self,
-        converter: &dyn LocalEntityAndGlobalEntityConverter,
-        command: EntityCommand,
-    ) {
-        self.host_engine.send_command(converter, command);
-    }
-
     pub(crate) fn host_generate_entity(&mut self) -> HostEntity {
         self.entity_generator.generate_host_entity()
     }
@@ -109,68 +99,38 @@ impl HostWorldManager {
         self.entity_generator.host_remove_reserved_entity(global_entity)
     }
 
-    pub(crate) fn host_has_entity(&self, host_entity: &HostEntity) -> bool {
+    pub(crate) fn has_entity(&self, host_entity: &HostEntity) -> bool {
         self.get_host_world().contains_key(host_entity)
     }
 
     // used when Entity first comes into Connection's scope
-    pub fn host_init_entity(
+    pub fn init_entity(
         &mut self,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
         global_entity: &GlobalEntity,
         component_kinds: Vec<ComponentKind>,
     ) {
         // add entity
-        self.host_spawn_entity(converter, global_entity);
+        self.host_engine.send_command(converter, EntityCommand::Spawn(*global_entity));
         // add components
         for component_kind in component_kinds {
-            self.host_insert_component(converter, global_entity, &component_kind);
+            self.host_engine.send_command(converter, EntityCommand::InsertComponent(*global_entity, component_kind));
         }
     }
 
-    fn host_spawn_entity(
+    pub fn send_command(
         &mut self,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
-        global_entity: &GlobalEntity,
+        command: EntityCommand,
     ) {
-        self.host_engine.send_command(converter, EntityCommand::Spawn(*global_entity));
-    }
-
-    pub fn host_despawn_entity(
-        &mut self,
-        converter: &dyn LocalEntityAndGlobalEntityConverter,
-        global_entity: &GlobalEntity
-    ) {
-        self.host_engine.send_command(converter, EntityCommand::Despawn(*global_entity));
-    }
-
-    pub fn host_insert_component(
-        &mut self,
-        converter: &dyn LocalEntityAndGlobalEntityConverter,
-        global_entity: &GlobalEntity,
-        component_kind: &ComponentKind,
-    ) {
-        self.host_engine.send_command(converter, EntityCommand::InsertComponent(*global_entity, *component_kind));
-    }
-
-    pub fn host_remove_component(
-        &mut self,
-        converter: &dyn LocalEntityAndGlobalEntityConverter,
-        global_entity: &GlobalEntity,
-        component_kind: &ComponentKind,
-    ) {
-        self.host_engine.send_command(converter, EntityCommand::RemoveComponent(*global_entity, *component_kind));
-    }
-
-    pub fn remote_despawn_entity(&mut self, _global_entity: &GlobalEntity) {
-        todo!("close entity channel?");
+        self.host_engine.send_command(converter, command);
     }
 
     pub(crate) fn get_host_world(&self) -> &HashMap<HostEntity, EntityChannelSender> {
         self.host_engine.get_world()
     }
 
-    pub(crate) fn get_remote_world(&self) -> &HashMap<HostEntity, EntityChannelReceiver> {
+    pub(crate) fn get_delivered_world(&self) -> &HashMap<HostEntity, EntityChannelReceiver> {
         self.delivered_engine.get_world()
     }
 
@@ -178,11 +138,11 @@ impl HostWorldManager {
         let mut output = HashMap::new();
         for (host_entity, host_channel) in self.get_host_world() {
 
-            let Some(remote_channel) = self.get_remote_world().get(host_entity) else {
+            let Some(delivered_channel) = self.get_delivered_world().get(host_entity) else {
                 continue;
             };
             let host_component_kinds = host_channel.component_kinds();
-            let joined_component_kinds = remote_channel.component_kinds_intersection(host_component_kinds);
+            let joined_component_kinds = delivered_channel.component_kinds_intersection(host_component_kinds);
             if joined_component_kinds.is_empty() {
                 continue;
             }
@@ -193,16 +153,8 @@ impl HostWorldManager {
         output
     }
 
-    pub(crate) fn deliver_message(&mut self, command_id: CommandId, message: EntityMessage<OwnedLocalEntity>) {
-        let Some(local_entity) = message.entity() else {
-            return;
-        };
-        if local_entity.is_remote() {
-            return;
-        }
-        let host_entity = local_entity.host();
-        let host_message = message.with_entity(host_entity);
-        self.delivered_receiver.buffer_message(command_id, host_message);
+    pub(crate) fn deliver_message(&mut self, command_id: CommandId, message: EntityMessage<HostEntity>) {
+        self.delivered_receiver.buffer_message(command_id, message);
     }
 
     pub(crate) fn process_delivered_commands(
@@ -217,18 +169,18 @@ impl HostWorldManager {
         ) {
             match message {
                 EntityMessage::Spawn(host_entity) => {
-                    self.on_remote_spawn_entity(&host_entity);
+                    self.on_delivered_spawn_entity(&host_entity);
                 }
                 EntityMessage::Despawn(host_entity) => {
-                    self.on_remote_despawn_host_entity(local_entity_map, &host_entity);
+                    self.on_delivered_despawn_entity(local_entity_map, &host_entity);
                 }
                 EntityMessage::InsertComponent(host_entity, component_kind) => {
                     let global_entity = local_entity_map.global_entity_from_host(&host_entity).expect("Host entity not found in local entity map");
-                    self.on_remote_insert_component(entity_update_manager, global_entity, &component_kind);
+                    self.on_delivered_insert_component(entity_update_manager, global_entity, &component_kind);
                 }
                 EntityMessage::RemoveComponent(host_entity, component_kind) => {
                     let global_entity = local_entity_map.global_entity_from_host(&host_entity).expect("Host entity not found in local entity map");
-                    self.on_remote_remove_component(entity_update_manager, global_entity, &component_kind);
+                    self.on_delivered_remove_component(entity_update_manager, global_entity, &component_kind);
                 }
                 EntityMessage::Noop => {
                     // do nothing
@@ -299,22 +251,14 @@ impl HostWorldManager {
         }
     }
 
-    fn on_remote_spawn_entity(
+    fn on_delivered_spawn_entity(
         &mut self,
         _host_entity: &HostEntity,
     ) {
         // stubbed
     }
 
-    pub fn on_remote_despawn_global_entity(
-        &mut self,
-        local_entity_map: &mut LocalEntityMap,
-        global_entity: &GlobalEntity,
-    ) {
-        self.entity_generator.remove_by_global_entity(local_entity_map, global_entity);
-    }
-
-    pub fn on_remote_despawn_host_entity(
+    pub fn on_delivered_despawn_entity(
         &mut self,
         local_entity_map: &mut LocalEntityMap,
         host_entity: &HostEntity,
@@ -322,7 +266,7 @@ impl HostWorldManager {
         self.entity_generator.remove_by_host_entity(local_entity_map, host_entity);
     }
 
-    fn on_remote_insert_component(
+    fn on_delivered_insert_component(
         &mut self,
         entity_update_manager: &mut EntityUpdateManager,
         global_entity: &GlobalEntity,
@@ -331,7 +275,7 @@ impl HostWorldManager {
         entity_update_manager.register_component(global_entity, component_kind);
     }
 
-    fn on_remote_remove_component(
+    fn on_delivered_remove_component(
         &mut self,
         entity_update_manager: &mut EntityUpdateManager,
         global_entity: &GlobalEntity,

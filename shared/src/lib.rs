@@ -95,8 +95,6 @@ pub use messages::{
 pub use world::{
     component::{
         component_kinds::{ComponentKind, ComponentKinds},
-        component_update::{ComponentFieldUpdate, ComponentUpdate},
-        diff_mask::DiffMask,
         entity_property::EntityProperty,
         property::Property,
         property_mutate::{PropertyMutate, PropertyMutator},
@@ -116,34 +114,23 @@ pub use world::{
         host_auth_handler::HostAuthHandler,
     },
     entity::{
-        entity_message::EntityMessage,
-        entity_message_receiver::EntityMessageReceiver,
-        entity_message_type::EntityMessageType,
         entity_converters::{
             EntityAndGlobalEntityConverter, EntityConverterMut, FakeEntityConverter,
             GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter,
             LocalEntityAndGlobalEntityConverterMut,
         },
+        entity_message::EntityMessage,
+        entity_message_receiver::EntityMessageReceiver,
+        entity_message_type::EntityMessageType,
         error::EntityDoesNotExistError,
         global_entity::GlobalEntity,
         global_entity_map::{GlobalEntityMap, GlobalEntitySpawner},
-        local_entity::{HostEntity, OwnedLocalEntity, RemoteEntity},
         in_scope_entities::InScopeEntities,
     },
-    host::{
-        entity_command::EntityCommand,
-        global_diff_handler::GlobalDiffHandler,
-        host_world_manager::HostWorldManager,
-        mut_channel::{MutChannelType, MutReceiver},
-    },
-    host_entity_generator::HostEntityGenerator,
-    remote::{
-        entity_event::EntityEvent,
-        remote_world_manager::RemoteWorldManager,
-    },
+    host::host_world_manager::HostWorldManager,
+    remote::remote_world_manager::RemoteWorldManager,
     shared_global_world_manager::SharedGlobalWorldManager,
     world_type::{WorldMutType, WorldRefType},
-    local_entity_map::LocalEntityMap,
 };
 
 pub use bigmap::{BigMap, BigMapKey};
@@ -154,4 +141,13 @@ pub use messages::channels::senders::request_sender::{
 };
 pub use protocol::{Protocol, ProtocolPlugin};
 pub use types::{HostType, MessageIndex, PacketIndex, ShortMessageIndex, Tick};
-pub use wrapping_number::{sequence_greater_than, sequence_less_than, sequence_equal_or_greater_than, sequence_equal_or_less_than, wrapping_diff};
+pub use world::entity_command::EntityCommand;
+pub use world::entity_event::EntityEvent;
+pub use world::host::host_entity_generator::HostEntityGenerator;
+pub use world::local::local_entity::{HostEntity, OwnedLocalEntity, RemoteEntity};
+pub use world::local::local_entity_map::LocalEntityMap;
+pub use world::update::component_update::{ComponentFieldUpdate, ComponentUpdate};
+pub use world::update::diff_mask::DiffMask;
+pub use world::update::global_diff_handler::GlobalDiffHandler;
+pub use world::update::mut_channel::{MutChannelType, MutReceiver};
+pub use wrapping_number::{sequence_equal_or_greater_than, sequence_equal_or_less_than, sequence_greater_than, sequence_less_than, wrapping_diff};

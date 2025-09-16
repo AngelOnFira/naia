@@ -3,7 +3,6 @@ use naia_serde::SerdeErr;
 use crate::{world::{
     component::{
         component_kinds::ComponentKind,
-        component_update::{ComponentFieldUpdate, ComponentUpdate},
         replica_ref::{
             ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper,
         },
@@ -11,6 +10,7 @@ use crate::{world::{
     },
     entity::entity_converters::LocalEntityAndGlobalEntityConverter,
 }, ComponentKinds, EntityAndGlobalEntityConverter, GlobalWorldManagerType, ReplicatedComponent};
+use crate::world::update::component_update::{ComponentFieldUpdate, ComponentUpdate};
 
 /// Structures that implement the WorldMutType trait will be able to be loaded
 /// into the Server at which point the Server will use this interface to keep

@@ -6,11 +6,10 @@ use std::{
 use naia_socket_shared::Instant;
 
 use crate::{
-    world::{
-        entity::local_entity::{HostEntity, RemoteEntity},
-        local_entity_map::LocalEntityMap,
-    }, GlobalEntity, KeyGenerator
+    GlobalEntity, KeyGenerator
 };
+use crate::world::local::local_entity::{HostEntity, RemoteEntity};
+use crate::world::local::local_entity_map::LocalEntityMap;
 
 pub struct HostEntityGenerator {
     user_key: u64,

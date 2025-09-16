@@ -35,7 +35,7 @@ impl<E: Copy + Eq + PartialEq> EntityMessage<E> {
             Self::EnableDelegationResponse(_, entity) => Some(*entity),
             Self::DisableDelegation(_, entity) => Some(*entity),
             Self::RequestAuthority(_, entity) => Some(*entity),
-            Self::ReleaseAuthority(_, _) => panic!("EntityReleaseAuthority should not call `entity()`"),
+            Self::ReleaseAuthority(_, entity) => Some(*entity),
             Self::SetAuthority(_, entity, _) => Some(*entity),
             Self::MigrateResponse(_, entity, _) => Some(*entity),
             Self::Noop => None,
@@ -62,7 +62,7 @@ impl<E: Copy + Eq + PartialEq> EntityMessage<E> {
             Self::EnableDelegationResponse(sub_id, _) => EntityMessage::EnableDelegationResponse(sub_id, ()),
             Self::DisableDelegation(sub_id, _) => EntityMessage::DisableDelegation(sub_id, ()),
             Self::RequestAuthority(sub_id, _) => EntityMessage::RequestAuthority(sub_id, ()),
-            Self::ReleaseAuthority(_sub_id, _) => panic!("EntityReleaseAuthority should not call `strip_entity()`"),
+            Self::ReleaseAuthority(sub_id, _) => EntityMessage::ReleaseAuthority(sub_id, ()),
             Self::SetAuthority(sub_id, _, status) => EntityMessage::SetAuthority(sub_id, (), status),
             Self::MigrateResponse(sub_id, _, other_entity) => EntityMessage::MigrateResponse(sub_id, (), other_entity),
             Self::Noop => panic!("Cannot strip entity from a Noop message"),
@@ -81,7 +81,7 @@ impl<E: Copy + Eq + PartialEq> EntityMessage<E> {
             EntityMessage::EnableDelegationResponse(sub_id, _) => EntityMessage::EnableDelegationResponse(sub_id, entity),
             EntityMessage::DisableDelegation(sub_id, _) => EntityMessage::DisableDelegation(sub_id, entity),
             EntityMessage::RequestAuthority(sub_id, _) => EntityMessage::RequestAuthority(sub_id, entity),
-            EntityMessage::ReleaseAuthority(_sub_id, _) => panic!("EntityReleaseAuthority should not call `with_entity()`"),
+            EntityMessage::ReleaseAuthority(sub_id, _) => EntityMessage::ReleaseAuthority(sub_id, entity),
             EntityMessage::SetAuthority(sub_id, _, status) => EntityMessage::SetAuthority(sub_id, entity, status),
             EntityMessage::MigrateResponse(sub_id, _, other_entity) => EntityMessage::MigrateResponse(sub_id, entity, other_entity),
             EntityMessage::Noop => panic!("Cannot add entity to a Noop message"),
@@ -122,27 +122,27 @@ impl<E: Copy + Eq + PartialEq> EntityMessage<E> {
         }
     }
 }
-
+//
 impl EntityMessage<RemoteEntity> {
-    
-    pub fn to_host_message(self) -> EntityMessage<HostEntity> {
-        match self {
-            EntityMessage::EnableDelegationResponse(sub_id, entity) => {
-                EntityMessage::EnableDelegationResponse(sub_id, entity.to_host())
-            }
-            EntityMessage::MigrateResponse(sub_id, entity, other_entity) => {
-                EntityMessage::MigrateResponse(sub_id, entity.to_host(), other_entity)
-            }
-            EntityMessage::RequestAuthority(sub_id, entity) => {
-                EntityMessage::RequestAuthority(sub_id, entity.to_host())
-            }
-            EntityMessage::ReleaseAuthority(_, _) => panic!("EntityReleaseAuthority should not call `to_host_message()`"),
-            msg => {
-                panic!("No reason to convert message {:?} to HostEntity", msg);
-            }
-        }
-    }
-    
+//
+//     pub fn to_host_message(self) -> EntityMessage<HostEntity> {
+//         match self {
+//             EntityMessage::EnableDelegationResponse(sub_id, entity) => {
+//                 EntityMessage::EnableDelegationResponse(sub_id, entity.to_host())
+//             }
+//             EntityMessage::MigrateResponse(sub_id, entity, other_entity) => {
+//                 EntityMessage::MigrateResponse(sub_id, entity.to_host(), other_entity)
+//             }
+//             EntityMessage::RequestAuthority(sub_id, entity) => {
+//                 EntityMessage::RequestAuthority(sub_id, entity.to_host())
+//             }
+//             EntityMessage::ReleaseAuthority(_, _) => panic!("EntityReleaseAuthority should not call `to_host_message()`"),
+//             msg => {
+//                 panic!("No reason to convert message {:?} to HostEntity", msg);
+//             }
+//         }
+//     }
+//
     pub fn to_event(self, local_entity_map: &LocalEntityMap) -> EntityEvent {
         let remote_entity = self.entity().unwrap();
         let global_entity = *(local_entity_map.global_entity_from_remote(&remote_entity).unwrap());
@@ -162,24 +162,24 @@ impl EntityMessage<RemoteEntity> {
         }
     }
 }
-
-impl EntityMessage<HostEntity> {
-    pub fn to_event(self, local_entity_map: &LocalEntityMap) -> EntityEvent {
-        let host_entity = self.entity().unwrap();
-        let global_entity = *(local_entity_map.global_entity_from_host(&host_entity).unwrap());
-        match self {
-            EntityMessage::Publish(_, _) => EntityEvent::Publish(global_entity),
-            EntityMessage::Unpublish(_, _) => EntityEvent::Unpublish(global_entity),
-            EntityMessage::EnableDelegation(_, _) => EntityEvent::EnableDelegation(global_entity),
-            EntityMessage::EnableDelegationResponse(_, _) => EntityEvent::EnableDelegationResponse(global_entity),
-            EntityMessage::DisableDelegation(_, _) => EntityEvent::DisableDelegation(global_entity),
-            EntityMessage::RequestAuthority(_, _) => EntityEvent::RequestAuthority(global_entity),
-            EntityMessage::ReleaseAuthority(_, _) => EntityEvent::ReleaseAuthority(global_entity),
-            EntityMessage::SetAuthority(_, _, status) => EntityEvent::SetAuthority(global_entity, status),
-            EntityMessage::MigrateResponse(_, _, new_host_entity) => EntityEvent::MigrateResponse(global_entity, new_host_entity.to_remote()),
-            EntityMessage::Spawn(_) | EntityMessage::Despawn(_) |
-            EntityMessage::InsertComponent(_, _) | EntityMessage::RemoveComponent(_, _) => panic!("Handled elsewhere"),
-            EntityMessage::Noop => panic!("Cannot convert Noop message to an event"),
-        }
-    }
-}
+//
+// impl EntityMessage<HostEntity> {
+//     pub fn to_event(self, local_entity_map: &LocalEntityMap) -> EntityEvent {
+//         let host_entity = self.entity().unwrap();
+//         let global_entity = *(local_entity_map.global_entity_from_host(&host_entity).unwrap());
+//         match self {
+//             EntityMessage::Publish(_, _) => EntityEvent::Publish(global_entity),
+//             EntityMessage::Unpublish(_, _) => EntityEvent::Unpublish(global_entity),
+//             EntityMessage::EnableDelegation(_, _) => EntityEvent::EnableDelegation(global_entity),
+//             EntityMessage::EnableDelegationResponse(_, _) => EntityEvent::EnableDelegationResponse(global_entity),
+//             EntityMessage::DisableDelegation(_, _) => EntityEvent::DisableDelegation(global_entity),
+//             EntityMessage::RequestAuthority(_, _) => EntityEvent::RequestAuthority(global_entity),
+//             EntityMessage::ReleaseAuthority(_, _) => EntityEvent::ReleaseAuthority(global_entity),
+//             EntityMessage::SetAuthority(_, _, status) => EntityEvent::SetAuthority(global_entity, status),
+//             EntityMessage::MigrateResponse(_, _, new_host_entity) => EntityEvent::MigrateResponse(global_entity, new_host_entity.to_remote()),
+//             EntityMessage::Spawn(_) | EntityMessage::Despawn(_) |
+//             EntityMessage::InsertComponent(_, _) | EntityMessage::RemoveComponent(_, _) => panic!("Handled elsewhere"),
+//             EntityMessage::Noop => panic!("Cannot convert Noop message to an event"),
+//         }
+//     }
+// }

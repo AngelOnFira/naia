@@ -2,10 +2,9 @@ use std::collections::HashMap;
 
 use log::info;
 
-use crate::{world::{
-    local_entity_record::LocalEntityRecord,
-    entity::local_entity::{HostEntity, OwnedLocalEntity, RemoteEntity},
-}, EntityDoesNotExistError, GlobalEntity, HostType, LocalEntityAndGlobalEntityConverter};
+use crate::{EntityDoesNotExistError, GlobalEntity, HostType, LocalEntityAndGlobalEntityConverter};
+use crate::world::local::local_entity::{HostEntity, OwnedLocalEntity, RemoteEntity};
+use crate::world::local::local_entity_record::LocalEntityRecord;
 
 pub struct LocalEntityMap {
     host_type: HostType,

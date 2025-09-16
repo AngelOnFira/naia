@@ -103,7 +103,7 @@ impl<E: Copy + Hash + Eq + Debug> RemoteEngine<E> {
     }
     
     ///
-    pub fn send_command(&mut self, entity: E, command: EntityCommand) {
+    pub fn send_auth_command(&mut self, entity: E, command: EntityCommand) {
         if !self.entity_channels.contains_key(&entity) {
             panic!("Cannot send a command to an entity that does not exist in the engine: {:?}", entity);
         }
@@ -111,6 +111,14 @@ impl<E: Copy + Hash + Eq + Debug> RemoteEngine<E> {
         let entity_channel = self.entity_channels.get_mut(&entity).unwrap();
         entity_channel.send_command(command);
         entity_channel.drain_outgoing_messages_into(&mut self.outgoing_commands);
+    }
+
+    pub fn send_entity_command(&mut self, entity: E, _command: EntityCommand) {
+        if !self.entity_channels.contains_key(&entity) {
+            panic!("Cannot send a command to an entity that does not exist in the engine: {:?}", entity);
+        }
+
+        todo!("Handle Despawn, Insert, Remove commands here!");
     }
 }
 

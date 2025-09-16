@@ -635,20 +635,29 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         // are in each User's scope
         for (_user_key, user) in self.users.iter() {
             if let Some(connection) = self.user_connections.get_mut(&user.address()) {
-                if connection
+
+                let Ok(host_entity) = connection.base.world_manager.entity_converter().global_entity_to_host_entity(global_entity) else {
+                    // entity is not mapped to this connection
+                    continue;
+                };
+
+                if !connection
                     .base
                     .world_manager
-                    .host_has_entity(global_entity)
+                    .has_host_entity(&host_entity)
                 {
-                    // Send UpdateAuthority action through EntityActionEvent system
-                    connection
-                        .base
-                        .world_manager
-                        .host_send_set_auth(
-                            global_entity,
-                            EntityAuthStatus::Available,
-                        );
+                    continue;
                 }
+
+                // Send UpdateAuthority action through EntityActionEvent system
+                connection
+                    .base
+                    .world_manager
+                    .host_send_set_auth(
+                        global_entity,
+                        EntityAuthStatus::Available,
+                    );
+
 
                 // Clean up any remote entity that was mapped to the delegated host entity in this connection!
                 todo!();
@@ -781,54 +790,56 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         let success = self
             .global_world_manager
             .client_request_authority(&global_entity, &requester);
-        if success {
-            // entity authority was granted for origin user
-
-            {
-                // adding remote entity to host entity?
-                //self.add_redundant_remote_entity_to_host(origin_user, &global_entity, remote_entity);
-                todo!();
-            }
-
-            // for any users that have this entity in scope, send an `update_authority_status` message
-
-            // TODO: we can make this more efficient in the future by caching which Entities
-            // are in each User's scope
-            for (user_key, user) in self.users.iter() {
-                if let Some(connection) = self.user_connections.get_mut(&user.address()) {
-                    if connection
-                        .base
-                        .world_manager
-                        .host_has_entity(&global_entity)
-                    {
-                        let mut new_status: EntityAuthStatus = EntityAuthStatus::Denied;
-                        if origin_user == user_key {
-                            new_status = EntityAuthStatus::Granted;
-                        }
-
-                        // if new_status == EntityAuthStatus::Denied {
-                        //     warn!("Denying status of entity to user: `{:?}`", user_key);
-                        // } else {
-                        //     warn!("Granting status of entity to user: `{:?}`", user_key);
-                        // }
-
-                        // Send UpdateAuthority action through EntityActionEvent system
-                        connection
-                            .base
-                            .world_manager
-                            .host_send_set_auth(
-                                &global_entity,
-                                new_status,
-                            );
-                    }
-                }
-            }
-
-            self.incoming_world_events
-                .push_auth_grant(origin_user, &world_entity);
-        } else {
+        if !success {
             panic!("Failed to request authority for entity");
         }
+
+        // entity authority was granted for origin user
+
+        {
+            // adding remote entity to host entity?
+            //self.add_redundant_remote_entity_to_host(origin_user, &global_entity, remote_entity);
+            todo!();
+        }
+
+        // for any users that have this entity in scope, send an `update_authority_status` message
+
+        // TODO: we can make this more efficient in the future by caching which Entities
+        // are in each User's scope
+        for (user_key, user) in self.users.iter() {
+            let Some(connection) = self.user_connections.get_mut(&user.address()) else {
+                continue;
+            };
+            let Ok(host_entity) = connection.base.world_manager.entity_converter().global_entity_to_host_entity(&global_entity) else {
+                // entity is not mapped to this connection
+                continue;
+            };
+            if !connection.base.world_manager.has_host_entity(&host_entity) {
+                continue;
+            }
+
+            let mut new_status: EntityAuthStatus = EntityAuthStatus::Denied;
+            if origin_user == user_key {
+                new_status = EntityAuthStatus::Granted;
+            }
+
+            // if new_status == EntityAuthStatus::Denied {
+            //     warn!("Denying status of entity to user: `{:?}`", user_key);
+            // } else {
+            //     warn!("Granting status of entity to user: `{:?}`", user_key);
+            // }
+
+            // Send UpdateAuthority action through EntityActionEvent system
+            connection
+                .base
+                .world_manager
+                .host_send_set_auth(
+                    &global_entity,
+                    new_status,
+                );
+        }
+
+        self.incoming_world_events.push_auth_grant(origin_user, &world_entity);
     }
 
     fn entity_enable_delegation_response(
@@ -1139,14 +1150,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             .remove_entity_diff_handlers(global_entity);
     }
 
-    fn despawn_entity_from_all_connections(&mut self, entity: &GlobalEntity) {
+    fn despawn_entity_from_all_connections(&mut self, global_entity: &GlobalEntity) {
         // TODO: we can make this more efficient in the future by caching which Entities
         // are in each User's scope
         for (_, connection) in self.user_connections.iter_mut() {
-            if connection.base.world_manager.host_has_entity(entity) {
-                //remove entity from user connection
-                connection.base.world_manager.host_despawn_entity(entity);
+            if !connection.base.world_manager.has_global_entity(global_entity) {
+                continue;
             }
+            // remove entity from user connection
+            connection.base.world_manager.despawn_entity(global_entity);
         }
     }
 
@@ -1227,10 +1239,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             .global_world_manager
             .has_component_record(&global_entity, &component_kind)
         {
-            // warn!(
-            //     "Attempted to add component `{:?}` to entity `{:?}` that already has it, this can happen if a delegated entity's auth is transferred to the Server before the Server Adapter has been able to process the newly inserted Component. Skipping this action.",
-            //     component.name(), global_entity,
-            // );
+            warn!(
+                "Attempted to add component `{:?}` to entity `{:?}` that already has it, this can happen if a delegated entity's auth is transferred to the Server before the Server Adapter has been able to process the newly inserted Component. Skipping this action.",
+                component.name(), global_entity,
+            );
             return;
         }
 
@@ -1283,16 +1295,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             }
 
             // insert component into user's connection
-            if connection
+            if !connection
                 .base
                 .world_manager
-                .host_has_entity(global_entity)
-            {
-                connection
-                    .base
-                    .world_manager
-                    .host_insert_component(global_entity, &component_kind);
+                .has_global_entity(global_entity) {
+                // entity is not in scope for this connection
+                continue;
             }
+            connection
+                .base
+                .world_manager
+                .insert_component(global_entity, &component_kind);
         }
     }
 
@@ -1331,17 +1344,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         // TODO: should be able to make this more efficient by caching for every Entity
         // which scopes they are part of
         for (_, connection) in self.user_connections.iter_mut() {
-            if connection
+            if !connection
                 .base
                 .world_manager
-                .host_has_entity(global_entity)
-            {
-                // remove component from user connection
-                connection
-                    .base
-                    .world_manager
-                    .host_remove_component(global_entity, &component_kind);
+                .has_global_entity(global_entity) {
+                // entity is not in scope for this connection
+                continue;
             }
+            // remove component from user connection
+            connection
+                .base
+                .world_manager
+                .remove_component(global_entity, &component_kind);
         }
     }
 
@@ -1431,23 +1445,27 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             // TODO: we can make this more efficient in the future by caching which Entities
             // are in each User's scope
             for (_user_key, user) in self.users.iter() {
-                if let Some(connection) = self.user_connections.get_mut(&user.address()) {
-                    if connection
-                        .base
-                        .world_manager
-                        .host_has_entity(global_entity)
-                    {
-                        // Send EnableDelegationEntity action through EntityActionEvent system
-                        info!(
-                            "Sending EnableDelegation command for entity: {:?} for user: {:?}",
-                            global_entity, user.address()
-                        );
-                        connection
-                            .base
-                            .world_manager
-                            .send_enable_delegation(HostType::Server, client_origin.is_some(), global_entity);
-                    }
+                let Some(connection) = self.user_connections.get_mut(&user.address()) else {
+                    continue;
+                };
+
+                if !connection
+                    .base
+                    .world_manager
+                    .has_global_entity(global_entity) {
+                    // entity is not in scope for this connection
+                    continue;
                 }
+
+                // Send EnableDelegationEntity action through EntityActionEvent system
+                info!(
+                    "Sending EnableDelegation command for entity: {:?} for user: {:?}",
+                    global_entity, user.address()
+                );
+                connection
+                    .base
+                    .world_manager
+                    .send_enable_delegation(HostType::Server, client_origin.is_some(), global_entity);
             }
         }
 
@@ -1568,19 +1586,23 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             // TODO: we can make this more efficient in the future by caching which Entities
             // are in each User's scope
             for (_user_key, user) in self.users.iter() {
-                if let Some(connection) = self.user_connections.get_mut(&user.address()) {
-                    if connection
-                        .base
-                        .world_manager
-                        .host_has_entity(global_entity)
-                    {
-                        // Send DisableDelegationEntity action through EntityActionEvent system
-                        connection
-                            .base
-                            .world_manager
-                            .send_disable_delegation(global_entity);
-                    }
+                let Some(connection) = self.user_connections.get_mut(&user.address()) else {
+                    continue;
+                };
+
+                if !connection
+                    .base
+                    .world_manager
+                    .has_global_entity(global_entity) {
+                    // entity is not in scope for this connection
+                    continue;
                 }
+
+                // Send DisableDelegationEntity action through EntityActionEvent system
+                connection
+                    .base
+                    .world_manager
+                    .send_disable_delegation(global_entity);
             }
         }
 
@@ -1961,8 +1983,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                     connection
                         .base
                         .world_manager
-                        .on_entity_channel_opened( // connection.base.local_world_manager.entity_converter(),
-                                                   &global_entity);
+                        .remote_spawn_entity(&global_entity); // TODO: migrate to localworldmanager
                 }
                 EntityEvent::Despawn(global_entity) => {
                     let world_entity = self.global_entity_map.global_entity_to_entity(&global_entity).unwrap();
@@ -2137,7 +2158,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         // remove from host connection
                         let user = self.users.get(user_key).unwrap();
                         let connection = self.user_connections.get_mut(&user.address()).unwrap();
-                        connection.base.world_manager.on_remote_despawn_entity(
+                        connection.base.world_manager.remote_despawn_entity(
                             &global_entity
                         );
 
@@ -2264,7 +2285,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
     fn update_entity_scopes<W: WorldRefType<E>>(&mut self, world: &W) {
         for (_, room) in self.rooms.iter_mut() {
-            while let Some((removed_user, removed_entity)) = room.pop_entity_removal_queue() {
+            while let Some((removed_user, removed_global_entity)) = room.pop_entity_removal_queue() {
                 let Some(user) = self.users.get(&removed_user) else {
                     continue;
                 };
@@ -2274,7 +2295,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
                 // evaluate whether the Entity really needs to be despawned!
                 // what if the Entity shares another Room with this User? It shouldn't be despawned!
-                if let Some(entity_rooms) = self.entity_room_map.entity_get_rooms(&removed_entity) {
+                if let Some(entity_rooms) = self.entity_room_map.entity_get_rooms(&removed_global_entity) {
                     let user_rooms = user.room_keys();
                     let has_room_in_common = entity_rooms.intersection(user_rooms).next().is_some();
                     if has_room_in_common {
@@ -2283,17 +2304,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 }
 
                 // check if host has entity, because it may have been removed from room before despawning, and we don't want to double despawn
-                if connection
+                if !connection
                     .base
                     .world_manager
-                    .host_has_entity(&removed_entity)
-                {
-                    //remove entity from user connection
-                    connection
-                        .base
-                        .world_manager
-                        .host_despawn_entity(&removed_entity);
+                    .has_global_entity(&removed_global_entity) {
+                    // entity is not in scope for this connection
+                    continue;
                 }
+
+                // remove entity from user connection
+                connection
+                    .base
+                    .world_manager
+                    .despawn_entity(&removed_global_entity);
             }
         }
 
@@ -2326,7 +2349,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                     let currently_in_scope = connection
                         .base
                         .world_manager
-                        .host_has_entity(global_entity);
+                        .has_global_entity(global_entity);
 
                     let should_be_in_scope = if let Some(in_scope) =
                         self.entity_scope_map.get(user_key, global_entity)
@@ -2364,7 +2387,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         connection
                             .base
                             .world_manager
-                            .host_despawn_entity(global_entity);
+                            .despawn_entity(global_entity);
                     }
                 }
             }

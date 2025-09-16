@@ -864,7 +864,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             connection
                 .base
                 .world_manager
-                .host_despawn_entity(&global_entity);
+                .despawn_entity(&global_entity);
         }
 
         // Remove from ECS Record
@@ -922,12 +922,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             if connection
                 .base
                 .world_manager
-                .host_has_entity(&global_entity)
+                .has_global_entity(&global_entity)
             {
                 connection
                     .base
                     .world_manager
-                    .host_insert_component(&global_entity, &component_kind);
+                    .insert_component(&global_entity, &component_kind);
             } else {
                 warn!("Attempting to insert component into a non-existent entity in the server connection. This should not happen.");
             }
@@ -983,7 +983,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             connection
                 .base
                 .world_manager
-                .host_remove_component(&global_entity, &component_kind);
+                .remove_component(&global_entity, &component_kind);
         }
 
         // cleanup all other loose ends
@@ -1546,7 +1546,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     connection
                         .base
                         .world_manager
-                        .on_entity_channel_opened(&global_entity);
+                        .remote_spawn_entity(&global_entity); // TODO: move to localworld?
                 }
                 EntityEvent::Despawn(global_entity) => {
                     let world_entity = self
@@ -1658,7 +1658,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         .world_manager
                         .send_enable_delegation_response(
                             &global_entity,
-                        );
+                        ); // TODO: move to localworld?
                 }
                 EntityEvent::EnableDelegationResponse(_) => {
                     panic!("Client should never receive an EnableDelegationEntityResponse event");

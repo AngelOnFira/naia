@@ -10,10 +10,10 @@ use crate::{bigmap::BigMapKey, world::{
     entity::{
         error::EntityDoesNotExistError,
         global_entity::GlobalEntity,
-        local_entity::{HostEntity, OwnedLocalEntity, RemoteEntity},
     },
-    host::mut_channel::MutChannelType,
-}, ComponentKind, ComponentKinds, GlobalDiffHandler, InScopeEntities, HostEntityGenerator, PropertyMutator, LocalEntityMap};
+}, ComponentKind, ComponentKinds, GlobalDiffHandler, HostEntityGenerator, InScopeEntities, LocalEntityMap, PropertyMutator};
+use crate::world::local::local_entity::{HostEntity, OwnedLocalEntity, RemoteEntity};
+use crate::world::update::mut_channel::MutChannelType;
 
 pub trait GlobalWorldManagerType : InScopeEntities<GlobalEntity> {
     fn component_kinds(&self, entity: &GlobalEntity) -> Option<Vec<ComponentKind>>;

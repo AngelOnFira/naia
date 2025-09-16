@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
-use crate::{world::{entity::ordered_ids::OrderedIds, sync::{auth_channel::AuthChannel, entity_channel_receiver::EntityChannelState}}, ComponentKind, EntityCommand, EntityMessage, EntityMessageType, HostEntity, HostType, MessageIndex};
+use crate::{world::sync::{auth_channel::AuthChannel, entity_channel_receiver::EntityChannelState}, ComponentKind, EntityCommand, EntityMessage, EntityMessageType, HostEntity, HostType, MessageIndex};
+use crate::world::sync::ordered_ids::OrderedIds;
 
 pub struct EntityChannelSender {
     state: EntityChannelState,

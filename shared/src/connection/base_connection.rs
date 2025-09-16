@@ -6,14 +6,12 @@ use naia_socket_shared::Instant;
 use crate::{messages::{
     channels::channel_kinds::ChannelKinds, message_manager::MessageManager
 }, types::{HostType, PacketIndex}, world::{
-    local_world_manager::LocalWorldManager,
     entity::entity_converters::GlobalWorldManagerType,
-    host::{
-        host_world_manager::CommandId,
-        host_world_writer::HostWorldWriter,
-    },
-    remote::remote_world_reader::RemoteWorldReader,
+    host::host_world_manager::CommandId,
 }, AckManager, ComponentKind, ComponentKinds, ConnectionConfig, EntityAndGlobalEntityConverter, EntityCommand, GlobalEntity, MessageKinds, PacketNotifiable, PacketType, StandardHeader, Tick, Timer, WorldRefType};
+use crate::world::local::local_world_manager::LocalWorldManager;
+use crate::world::world_reader::WorldReader;
+use crate::world::world_writer::WorldWriter;
 
 /// Represents a connection to a remote host, and provides functionality to
 /// manage the connection and the communications to it
@@ -150,7 +148,7 @@ impl BaseConnection {
 
         // write world events
         if write_world_events {
-            HostWorldWriter::write_into_packet(
+            WorldWriter::write_into_packet(
                 component_kinds,
                 now,
                 writer,
@@ -186,7 +184,7 @@ impl BaseConnection {
 
         // read world events
         if read_world_events {
-            RemoteWorldReader::read_world_events(
+            WorldReader::read_world_events(
                 &mut self.world_manager,
                 component_kinds,
                 tick,

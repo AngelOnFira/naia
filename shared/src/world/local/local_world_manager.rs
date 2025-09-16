@@ -1,17 +1,13 @@
-use std::{time::Duration, net::SocketAddr, sync::RwLockReadGuard, hash::Hash, collections::{HashMap, VecDeque, HashSet}};
+use std::{collections::{HashMap, HashSet, VecDeque}, hash::Hash, net::SocketAddr, sync::RwLockReadGuard, time::Duration};
 
 use naia_socket_shared::Instant;
 
-use crate::{
-    sequence_list::SequenceList,
-    messages::channels::receivers::reliable_receiver::ReliableReceiver, types::{HostType, PacketIndex}, world::{
-        entity::entity_converters::GlobalWorldManagerType,
-        host::{
-        host_world_manager::{HostWorldManager, CommandId},
-        entity_update_manager::EntityUpdateManager
-    },
-        remote::entity_waitlist::{RemoteEntityWaitlist, WaitlistStore},
-}, ChannelSender, ComponentKind, ComponentKinds, ComponentUpdate, DiffMask, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityCommand, EntityConverterMut, EntityEvent, EntityMessage, EntityMessageType, GlobalEntity, GlobalEntitySpawner, HostEntity, LocalEntityAndGlobalEntityConverter, LocalEntityMap, MessageIndex, OwnedLocalEntity, PacketNotifiable, ReliableSender, RemoteEntity, RemoteWorldManager, Replicate, Tick, WorldMutType, WorldRefType};
+use crate::{messages::channels::receivers::reliable_receiver::ReliableReceiver, sequence_list::SequenceList, types::{HostType, PacketIndex}, world::{
+    entity::entity_converters::GlobalWorldManagerType,
+    host::host_world_manager::{CommandId, HostWorldManager},
+    remote::remote_entity_waitlist::{RemoteEntityWaitlist, WaitlistStore},
+}, ChannelSender, ComponentKind, ComponentKinds, ComponentUpdate, DiffMask, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityCommand, EntityConverterMut, EntityEvent, EntityMessage, EntityMessageType, GlobalEntity, GlobalEntitySpawner, HostEntity, InScopeEntities, LocalEntityAndGlobalEntityConverter, LocalEntityMap, MessageIndex, OwnedLocalEntity, PacketNotifiable, ReliableSender, RemoteEntity, RemoteWorldManager, Replicate, Tick, WorldMutType, WorldRefType};
+use crate::world::update::entity_update_manager::EntityUpdateManager;
 
 const RESEND_COMMAND_RTT_FACTOR: f32 = 1.5;
 const COMMAND_RECORD_TTL: Duration = Duration::from_secs(60);
@@ -85,29 +81,24 @@ impl LocalWorldManager {
         )
     }
 
-    pub(crate) fn contains_remote_entity(&self, remote_entity: &RemoteEntity) -> bool {
-        self.entity_map.contains_remote_entity(remote_entity)
-    }
-
-    pub fn remote_entities(&self) -> Vec<GlobalEntity> {
-        self.entity_map.remote_entities()
-    }
-
-    pub fn insert_with_remote_entity(&mut self, global_entity: GlobalEntity, remote: RemoteEntity) {
-        self.entity_map.insert_with_remote_entity(global_entity, remote);
-    }
-
-    pub(crate) fn global_entity_from_remote(&self, remote_entity: &RemoteEntity) -> Option<&GlobalEntity> {
-        self.entity_map.global_entity_from_remote(remote_entity)
-    }
-
-    // Host-focused
-
-    pub fn host_has_entity(&self, global_entity: &GlobalEntity) -> bool {
-        let Ok(host_entity) = self.entity_map.global_entity_to_host_entity(global_entity) else {
+    pub fn has_global_entity(&self, global_entity: &GlobalEntity) -> bool {
+        let Ok(local_entity) = self.entity_map.global_entity_to_owned_entity(global_entity) else {
             return false;
         };
-        self.host.host_has_entity(&host_entity)
+        return self.has_local_entity(&local_entity);
+    }
+    
+    pub fn has_local_entity(&self, local_entity: &OwnedLocalEntity) -> bool {
+        match local_entity {
+            OwnedLocalEntity::Host(host_entity) => self.host.has_entity(&HostEntity::new(*host_entity)),
+            OwnedLocalEntity::Remote(remote_entity) => self.remote.has_entity(&RemoteEntity::new(*remote_entity)),
+        }
+    }
+    
+    // Host-focused
+    
+    pub fn has_host_entity(&self, host_entity: &HostEntity) -> bool {
+        self.host.has_entity(&host_entity)
     }
 
     pub fn host_init_entity(
@@ -119,11 +110,7 @@ impl LocalWorldManager {
             let host_entity = self.host.host_generate_entity();
             self.entity_map.insert_with_host_entity(*global_entity, host_entity);
         }
-        self.host.host_init_entity(&self.entity_map, global_entity, component_kinds);
-    }
-
-    pub fn host_despawn_entity(&mut self, global_entity: &GlobalEntity) {
-        self.host.host_despawn_entity(&self.entity_map, global_entity)
+        self.host.init_entity(&self.entity_map, global_entity, component_kinds);
     }
 
     // should be remote? or maybe not, this is after migration? only server sends this
@@ -168,14 +155,6 @@ impl LocalWorldManager {
         self.host.host_removed_reserved_entity(global_entity)
     }
 
-    pub fn on_remote_despawn_entity(
-        &mut self,
-        global_entity: &GlobalEntity,
-    ) {
-        self.host.remote_despawn_entity(global_entity);
-        self.host.on_remote_despawn_global_entity(&mut self.entity_map, global_entity);
-    }
-
     pub(crate) fn insert_sent_command_packet(&mut self, packet_index: &PacketIndex, now: Instant) {
         if !self
             .sent_command_packets
@@ -199,13 +178,21 @@ impl LocalWorldManager {
 
     // Remote-focused
 
+    pub(crate) fn has_remote_entity(&self, remote_entity: &RemoteEntity) -> bool {
+        self.remote.has_entity(remote_entity)
+    }
+
+    pub fn remote_entities(&self) -> Vec<GlobalEntity> {
+        self.entity_map.remote_entities()
+    }
+
     // only client sends this, after receiving enabledelegation message from server
     pub fn send_enable_delegation_response(
         &mut self,
         global_entity: &GlobalEntity,
     ) {
         let command = EntityCommand::EnableDelegationResponse(None, *global_entity);
-        self.remote.send_command(&self.entity_map, command);
+        self.remote.send_auth_command(&self.entity_map, command);
     }
 
     pub fn remote_send_request_auth(
@@ -213,7 +200,7 @@ impl LocalWorldManager {
         global_entity: &GlobalEntity,
     ) {
         let command = EntityCommand::RequestAuthority(None, *global_entity);
-        self.remote.send_command(&self.entity_map, command);
+        self.remote.send_auth_command(&self.entity_map, command);
     }
 
     pub fn remote_send_release_auth(
@@ -221,7 +208,7 @@ impl LocalWorldManager {
         global_entity: &GlobalEntity,
     ) {
         let command = EntityCommand::ReleaseAuthority(None, *global_entity);
-        self.remote.send_command(&self.entity_map, command);
+        self.remote.send_auth_command(&self.entity_map, command);
     }
 
     pub fn entity_waitlist_mut(&mut self) -> &mut RemoteEntityWaitlist {
@@ -239,11 +226,10 @@ impl LocalWorldManager {
     pub(crate) fn insert_received_update(
         &mut self,
         tick: Tick,
-        global_entity: &GlobalEntity,
+        local_entity: &OwnedLocalEntity,
         component_update: ComponentUpdate
     ) {
-        let entity = self.entity_map.global_entity_to_owned_entity(global_entity).unwrap();
-        self.incoming_updates.push((tick, entity, component_update));
+        self.incoming_updates.push((tick, *local_entity, component_update));
     }
 
     pub fn take_incoming_events<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
@@ -304,12 +290,20 @@ impl LocalWorldManager {
         incoming_events
     }
 
-    pub fn on_entity_channel_opened(
+    pub fn remote_spawn_entity(
         &mut self,
         global_entity: &GlobalEntity
     ) {
         let remote_entity = self.entity_map.global_entity_to_remote_entity(global_entity).unwrap();
-        self.remote.on_entity_channel_opened(&remote_entity);
+        self.remote.spawn_entity(&remote_entity);
+    }
+
+    pub fn remote_despawn_entity(
+        &mut self,
+        global_entity: &GlobalEntity,
+    ) {
+        let remote_entity = self.entity_map.global_entity_to_remote_entity(global_entity).unwrap();
+        self.remote.despawn_entity(&mut self.entity_map, &remote_entity);
     }
 
     // Update-focused
@@ -337,22 +331,45 @@ impl LocalWorldManager {
 
     // Joint router
 
-    // todo: should work on delegated client-owned entities too
-    pub fn host_insert_component(
-        &mut self,
-        global_entity: &GlobalEntity,
-        component_kind: &ComponentKind,
-    ) {
-        self.host.host_insert_component(&self.entity_map, global_entity, component_kind);
+    pub fn despawn_entity(&mut self, global_entity: &GlobalEntity) {
+        let Ok(local_entity) = self.entity_map.global_entity_to_owned_entity(global_entity) else {
+            panic!("Attempting to despawn entity which does not exist in local entity map! {:?}", global_entity);
+        };
+        if local_entity.is_host() {
+            self.host.send_command(&self.entity_map, EntityCommand::Despawn(*global_entity));
+        } else {
+            self.remote.send_entity_command(&self.entity_map, EntityCommand::Despawn(*global_entity));
+        }
     }
 
-    // todo: should work on delegated client-owned entities too
-    pub fn host_remove_component(
+    pub fn insert_component(
         &mut self,
         global_entity: &GlobalEntity,
         component_kind: &ComponentKind,
     ) {
-        self.host.host_remove_component(&self.entity_map, global_entity, component_kind);
+        let Ok(local_entity) = self.entity_map.global_entity_to_owned_entity(global_entity) else {
+            panic!("Attempting to insert component for entity which does not exist in local entity map! {:?}", global_entity);
+        };
+        if local_entity.is_host() {
+            self.host.send_command(&self.entity_map, EntityCommand::InsertComponent(*global_entity, *component_kind));
+        } else {
+            self.remote.send_entity_command(&self.entity_map, EntityCommand::InsertComponent(*global_entity, *component_kind));
+        }
+    }
+
+    pub fn remove_component(
+        &mut self,
+        global_entity: &GlobalEntity,
+        component_kind: &ComponentKind,
+    ) {
+        let Ok(local_entity) = self.entity_map.global_entity_to_owned_entity(global_entity) else {
+            panic!("Attempting to remove component for entity which does not exist in local entity map! {:?}", global_entity);
+        };
+        if local_entity.is_host() {
+            self.host.send_command(&self.entity_map, EntityCommand::RemoveComponent(*global_entity, *component_kind));
+        } else {
+            self.remote.send_entity_command(&self.entity_map, EntityCommand::RemoveComponent(*global_entity, *component_kind));
+        }
     }
 
     pub fn send_publish(
@@ -374,7 +391,7 @@ impl LocalWorldManager {
         if host_owned {
             self.host.send_command(&self.entity_map, command);
         } else {
-            self.remote.send_command(self.entity_map.entity_converter(), command);
+            self.remote.send_auth_command(self.entity_map.entity_converter(), command);
         }
     }
 
@@ -396,7 +413,7 @@ impl LocalWorldManager {
         if host_owned {
             self.host.send_command(&self.entity_map, command);
         } else {
-            self.remote.send_command(self.entity_map.entity_converter(), command);
+            self.remote.send_auth_command(self.entity_map.entity_converter(), command);
         }
     }
 
@@ -428,7 +445,7 @@ impl LocalWorldManager {
         if host_owned {
             self.host.send_command(&self.entity_map, command);
         } else {
-            self.remote.send_command(self.entity_map.entity_converter(), command);
+            self.remote.send_auth_command(self.entity_map.entity_converter(), command);
         }
     }
 
@@ -537,8 +554,26 @@ impl LocalWorldManager {
         {
             for (command_id, command) in command_list {
                 if self.sender.deliver_message(&command_id).is_some() {
-                    self.host.deliver_message(command_id, command);
+                    self.deliver_message(command_id, command);
                 }
+            }
+        }
+    }
+    
+    fn deliver_message(&mut self, id: CommandId, msg: EntityMessage<OwnedLocalEntity>) {
+        let Some(local_entity) = msg.entity() else {
+            panic!("Delivered message without an entity! Message: {:?}", msg);
+        };
+        match local_entity {
+            OwnedLocalEntity::Host(host_entity) => {
+                // Host entity message
+                let host_entity = HostEntity::new(host_entity);
+                self.host.deliver_message(id, msg.with_entity(host_entity));
+            }
+            OwnedLocalEntity::Remote(remote_entity) => {
+                // Remote entity message
+                let remote_entity = RemoteEntity::new(remote_entity);
+                self.remote.deliver_message(id, msg.with_entity(remote_entity));
             }
         }
     }

@@ -1,6 +1,7 @@
 #![cfg(test)]
 
-use crate::{EntityAuthStatus, world::{sync::RemoteEngine, component::component_kinds::ComponentKind, entity::{entity_message::EntityMessage, local_entity::RemoteEntity}}, HostType};
+use crate::{world::{component::component_kinds::ComponentKind, entity::entity_message::EntityMessage, sync::RemoteEngine}, EntityAuthStatus};
+use crate::world::local::local_entity::RemoteEntity;
 use crate::world::sync::config::EngineConfig;
 
 struct AssertList {

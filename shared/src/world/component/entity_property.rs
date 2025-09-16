@@ -9,8 +9,8 @@ use crate::{world::entity::{
         LocalEntityAndGlobalEntityConverterMut,
     },
     global_entity::GlobalEntity,
-    local_entity::OwnedLocalEntity,
 }, EntityAuthAccessor, PropertyMutator, RemoteEntity};
+use crate::world::local::local_entity::OwnedLocalEntity;
 
 #[derive(Clone)]
 enum EntityRelation {

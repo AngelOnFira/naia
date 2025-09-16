@@ -2,12 +2,15 @@ pub mod component;
 pub mod delegation;
 pub mod entity;
 pub mod host;
-pub mod local_entity_map;
-pub mod host_entity_generator;
 pub mod remote;
 pub mod shared_global_world_manager;
 pub mod world_type;
 pub mod sync;
-pub mod local_world_manager;
+pub mod update;
 
-mod local_entity_record;
+pub mod world_writer;
+pub mod world_reader;
+pub mod local;
+pub mod entity_command;
+pub mod entity_event;
+

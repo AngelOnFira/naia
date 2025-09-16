@@ -11,7 +11,8 @@ use crate::{messages::{
         indexed_message_reader::IndexedMessageReader,
     }, senders::request_sender::LocalRequestId},
     message_kinds::MessageKinds,
-}, sequence_greater_than, types::MessageIndex, world::{local_world_manager::LocalWorldManager, remote::entity_waitlist::{RemoteEntityWaitlist, WaitlistStore}}, LocalEntityAndGlobalEntityConverter, LocalResponseId, MessageContainer};
+}, sequence_greater_than, types::MessageIndex, world::remote::remote_entity_waitlist::{RemoteEntityWaitlist, WaitlistStore}, LocalEntityAndGlobalEntityConverter, LocalResponseId, MessageContainer};
+use crate::world::local::local_world_manager::LocalWorldManager;
 
 pub struct SequencedUnreliableReceiver {
     newest_received_message_index: Option<MessageIndex>,

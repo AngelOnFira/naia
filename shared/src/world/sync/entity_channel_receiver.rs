@@ -74,12 +74,9 @@
 //! entity had its own perfect *ordered* stream—while the network enjoys the
 //! performance of a single unordered reliable channel.
 
-use std::{hash::Hash, collections::{HashMap, HashSet}};
+use std::{collections::{HashMap, HashSet}, hash::Hash};
 
-use crate::{EntityCommand, sequence_less_than, world::{
-    sync::component_channel_receiver::ComponentChannelReceiver,
-    entity::ordered_ids::OrderedIds
-}, ComponentKind, EntityMessage, EntityMessageType, HostType, MessageIndex};
+use crate::{sequence_less_than, world::sync::component_channel_receiver::ComponentChannelReceiver, ComponentKind, EntityCommand, EntityMessage, EntityMessageType, HostType, MessageIndex};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum EntityChannelState {
@@ -269,6 +266,7 @@ impl EntityChannelReceiver {
 use std::hash::BuildHasher;
 
 use crate::world::sync::auth_channel::AuthChannel;
+use crate::world::sync::ordered_ids::OrderedIds;
 
 fn intersection_keys<K, V, SA, SB>(
     a: &HashSet<K, SA>,

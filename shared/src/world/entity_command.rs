@@ -1,5 +1,7 @@
 use crate::{world::host::host_world_manager::SubCommandId, ComponentKind, EntityAuthStatus, EntityMessageType, GlobalEntity, HostEntity};
 
+// TODO! make this agnostic to type of entity
+
 // command to sync entities from host -> remote
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum EntityCommand {

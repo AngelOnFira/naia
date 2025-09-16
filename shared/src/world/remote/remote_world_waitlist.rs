@@ -9,7 +9,7 @@ use naia_socket_shared::Instant;
 
 use crate::{world::{
     entity::in_scope_entities::InScopeEntities,
-    remote::entity_waitlist::{RemoteEntityWaitlist, WaitlistHandle, WaitlistStore},
+    remote::remote_entity_waitlist::{RemoteEntityWaitlist, WaitlistHandle, WaitlistStore},
 }, ComponentFieldUpdate, ComponentKind, ComponentKinds, ComponentUpdate, EntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverter, OwnedLocalEntity, RemoteEntity, Replicate, Tick, WorldMutType};
 
 pub struct RemoteWorldWaitlist {
@@ -91,7 +91,7 @@ impl RemoteWorldWaitlist {
         output
     }
 
-    pub fn on_entity_channel_opened(
+    pub fn spawn_entity(
         &mut self,
         in_scope_entities: &dyn InScopeEntities<RemoteEntity>,
         // converter: &dyn LocalEntityAndGlobalEntityConverter,

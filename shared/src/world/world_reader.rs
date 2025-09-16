@@ -2,14 +2,16 @@ use log::warn;
 
 use crate::{
     messages::channels::receivers::indexed_message_reader::IndexedMessageReader,
-    world::{host::host_world_manager::SubCommandId, local_world_manager::LocalWorldManager, entity::local_entity::RemoteEntity},
-    BitReader, ComponentKind, ComponentKinds, EntityMessage, EntityMessageType, EntityAuthStatus,
-    HostEntity, MessageIndex, Serde, SerdeErr, Tick, OwnedLocalEntity
+    world::host::host_world_manager::SubCommandId,
+    BitReader, ComponentKind, ComponentKinds, EntityAuthStatus, EntityMessage, EntityMessageType,
+    HostEntity, MessageIndex, OwnedLocalEntity, Serde, SerdeErr, Tick
 };
+use crate::world::local::local_entity::RemoteEntity;
+use crate::world::local::local_world_manager::LocalWorldManager;
 
-pub struct RemoteWorldReader;
+pub struct WorldReader;
 
-impl RemoteWorldReader {
+impl WorldReader {
 
     // Reading
 
@@ -275,14 +277,14 @@ impl RemoteWorldReader {
                 break;
             }
 
-            let remote_entity = RemoteEntity::de(reader)?;
+            let local_entity = OwnedLocalEntity::de(reader)?;
 
             Self::read_update(
                 world_manager,
                 component_kinds,
                 tick,
                 reader,
-                &remote_entity,
+                &local_entity,
             )?;
         }
 
@@ -295,7 +297,7 @@ impl RemoteWorldReader {
         component_kinds: &ComponentKinds,
         tick: &Tick,
         reader: &mut BitReader,
-        remote_entity: &RemoteEntity,
+        local_entity: &OwnedLocalEntity,
     ) -> Result<(), SerdeErr> {
         loop {
             // read update continue bit
@@ -307,10 +309,8 @@ impl RemoteWorldReader {
             let component_update = component_kinds.read_create_update(reader)?;
 
             // At this point, the WorldChannel/EntityReceiver should guarantee the Entity is in scope, correct?
-            if world_manager.contains_remote_entity(remote_entity) {
-                let global_entity = *world_manager.global_entity_from_remote(remote_entity).unwrap();
-
-                world_manager.insert_received_update(*tick, &global_entity, component_update);
+            if world_manager.has_local_entity(local_entity) {
+                world_manager.insert_received_update(*tick, local_entity, component_update);
             } else {
                 warn!("read_update(): SKIPPED READ UPDATE!");
             }

@@ -73,3 +73,4 @@ pub use entity_channel_sender::EntityChannelSender;
 #[cfg(test)]
 pub mod tests;
 mod auth_channel;
+pub mod ordered_ids;

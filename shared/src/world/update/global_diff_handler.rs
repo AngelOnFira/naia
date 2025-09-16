@@ -2,7 +2,7 @@ use std::{collections::HashMap, net::SocketAddr};
 
 use crate::{ComponentKind, ComponentKinds, GlobalEntity, GlobalWorldManagerType};
 
-use super::mut_channel::{MutChannel, MutReceiver, MutReceiverBuilder, MutSender};
+use crate::world::update::mut_channel::{MutChannel, MutReceiver, MutReceiverBuilder, MutSender};
 
 pub struct GlobalDiffHandler {
     mut_receiver_builders: HashMap<(GlobalEntity, ComponentKind), MutReceiverBuilder>,

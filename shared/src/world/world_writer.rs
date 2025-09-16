@@ -9,18 +9,18 @@ use log::info;
 use crate::{
     messages::channels::senders::indexed_message_writer::IndexedMessageWriter,
     world::{
-        local_world_manager::LocalWorldManager,
-        host::host_world_manager::CommandId,
         entity::entity_converters::GlobalWorldManagerType,
+        host::host_world_manager::CommandId,
     },
-    BitWrite, BitWriter, ComponentKind, ComponentKinds, ConstBitLength, EntityMessage, EntityMessageType,
-    EntityAndGlobalEntityConverter, GlobalEntity,
-    Instant, MessageIndex, PacketIndex, Serde, WorldRefType, EntityCommand,
+    BitWrite, BitWriter, ComponentKind, ComponentKinds, ConstBitLength, EntityAndGlobalEntityConverter, EntityCommand,
+    EntityMessage, EntityMessageType,
+    GlobalEntity, Instant, MessageIndex, PacketIndex, Serde, WorldRefType,
 };
+use crate::world::local::local_world_manager::LocalWorldManager;
 
-pub struct HostWorldWriter;
+pub struct WorldWriter;
 
-impl HostWorldWriter {
+impl WorldWriter {
     fn write_command_id(
         writer: &mut dyn BitWrite,
         last_id_opt: &mut Option<CommandId>,
@@ -225,7 +225,7 @@ impl HostWorldWriter {
                     .global_entity_to_entity(global_entity)
                     .unwrap();
 
-                if !world_manager.host_has_entity(global_entity) || !world.has_component_of_kind(&world_entity, component_kind)
+                if !world_manager.has_global_entity(global_entity) || !world.has_component_of_kind(&world_entity, component_kind)
                 {
                     EntityMessageType::Noop.ser(writer);
 
@@ -270,7 +270,7 @@ impl HostWorldWriter {
                 }
             }
             EntityCommand::RemoveComponent(global_entity, component_kind) => {
-                if !world_manager.host_has_entity(global_entity) {
+                if !world_manager.has_global_entity(global_entity) {
                     EntityMessageType::Noop.ser(writer);
 
                     // if we are actually writing this packet
@@ -659,9 +659,9 @@ impl HostWorldWriter {
 
         for global_entity in all_update_entities {
             // get LocalEntity
-            let host_entity = world_manager
+            let local_entity = world_manager
                 .entity_converter()
-                .global_entity_to_host_entity(&global_entity)
+                .global_entity_to_owned_entity(&global_entity)
                 .unwrap();
 
             // get World Entity
@@ -674,7 +674,8 @@ impl HostWorldWriter {
             // write UpdateContinue bit
             counter.write_bit(true);
             // write LocalEntity
-            host_entity.ser(&mut counter);
+            local_entity.ser(&mut counter);
+
             if counter.overflowed() {
                 break;
             }
@@ -683,8 +684,9 @@ impl HostWorldWriter {
             writer.reserve_bits(1);
             // write UpdateContinue bit
             true.ser(writer);
-            // write HostEntity
-            host_entity.ser(writer);
+            // write LocalEntity
+            local_entity.ser(writer);
+
             // write Components
             Self::write_update(
                 component_kinds,
