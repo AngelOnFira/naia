@@ -52,7 +52,7 @@ impl RemoteWorldManager {
     }
 
     pub(crate) fn deliver_message(&mut self, _command_id: CommandId, _message: EntityMessage<RemoteEntity>) {
-        todo!()
+        // so far, it seems like we don't need to do anything specific when delivering a remote-entity message.. we'll see
     }
 
     pub(crate) fn entity_waitlist_queue<T>(
@@ -115,7 +115,7 @@ impl RemoteWorldManager {
         let remote_entity = converter.global_entity_to_remote_entity(&global_entity).unwrap();
         self.remote_engine.send_entity_command(remote_entity, command);
     }
-    
+
     pub(crate) fn send_auth_command(
         &mut self,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
