@@ -2,7 +2,7 @@ use std::{collections::{HashMap, HashSet}, hash::Hash};
 
 use log::info;
 
-use crate::{messages::channels::receivers::reliable_receiver::ReliableReceiver, world::sync::{EntityChannelReceiver, EntityChannelSender, HostEngine, RemoteEngine}, ComponentKind, EntityCommand, EntityConverterMut, EntityEvent, EntityMessage, EntityMessageReceiver, GlobalEntity, GlobalEntitySpawner, GlobalWorldManagerType, HostEntity, HostEntityGenerator, HostType, LocalEntityAndGlobalEntityConverter, LocalEntityMap, MessageIndex, ShortMessageIndex, WorldMutType};
+use crate::{messages::channels::receivers::reliable_receiver::ReliableReceiver, world::sync::{RemoteEntityChannel, HostEntityChannel, HostEngine, RemoteEngine}, ComponentKind, EntityCommand, EntityConverterMut, EntityEvent, EntityMessage, EntityMessageReceiver, GlobalEntity, GlobalEntitySpawner, GlobalWorldManagerType, HostEntity, HostEntityGenerator, HostType, LocalEntityAndGlobalEntityConverter, LocalEntityMap, MessageIndex, ShortMessageIndex, WorldMutType};
 use crate::world::update::entity_update_manager::EntityUpdateManager;
 
 pub type CommandId = MessageIndex;
@@ -126,11 +126,11 @@ impl HostWorldManager {
         self.host_engine.send_command(converter, command);
     }
 
-    pub(crate) fn get_host_world(&self) -> &HashMap<HostEntity, EntityChannelSender> {
+    pub(crate) fn get_host_world(&self) -> &HashMap<HostEntity, HostEntityChannel> {
         self.host_engine.get_world()
     }
 
-    pub(crate) fn get_delivered_world(&self) -> &HashMap<HostEntity, EntityChannelReceiver> {
+    pub(crate) fn get_delivered_world(&self) -> &HashMap<HostEntity, RemoteEntityChannel> {
         self.delivered_engine.get_world()
     }
 

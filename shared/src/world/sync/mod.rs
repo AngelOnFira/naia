@@ -57,18 +57,18 @@
 
 mod config;
 mod remote_engine;
-mod entity_channel_receiver;
-mod component_channel_receiver;
+mod remote_entity_channel;
+mod remote_component_channel;
 mod auth_channel_receiver;
 
 mod host_engine;
-mod entity_channel_sender;
+mod host_entity_channel;
 mod auth_channel_sender;
 
 pub use remote_engine::RemoteEngine;
-pub use entity_channel_receiver::EntityChannelReceiver;
+pub use remote_entity_channel::RemoteEntityChannel;
 pub use host_engine::HostEngine;
-pub use entity_channel_sender::EntityChannelSender;
+pub use host_entity_channel::HostEntityChannel;
 
 #[cfg(test)]
 pub mod tests;

@@ -49,7 +49,7 @@
 
 use log::info;
 
-use crate::{world::{host::host_world_manager::SubCommandId, sync::entity_channel_receiver::EntityChannelState}, EntityMessage, MessageIndex};
+use crate::{world::{host::host_world_manager::SubCommandId, sync::remote_entity_channel::EntityChannelState}, EntityMessage, MessageIndex};
 use crate::world::sync::ordered_ids::OrderedIds;
 
 pub(crate) struct AuthChannelReceiver {

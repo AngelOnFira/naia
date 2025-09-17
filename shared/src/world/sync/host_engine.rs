@@ -2,12 +2,12 @@ use std::collections::HashMap;
 
 use log::info;
 
-use crate::{world::sync::{EntityChannelSender, config::EngineConfig}, HostType, EntityCommand, EntityMessageType, EntityMessage, HostEntity, MessageIndex, LocalEntityAndGlobalEntityConverter};
+use crate::{world::sync::{HostEntityChannel, config::EngineConfig}, HostType, EntityCommand, EntityMessageType, EntityMessage, HostEntity, MessageIndex, LocalEntityAndGlobalEntityConverter};
 
 pub struct HostEngine {
     host_type: HostType,
     pub config: EngineConfig,
-    entity_channels: HashMap<HostEntity, EntityChannelSender>,
+    entity_channels: HashMap<HostEntity, HostEntityChannel>,
 
     incoming_events: Vec<EntityMessage<HostEntity>>,
     outgoing_commands: Vec<EntityCommand>,
@@ -34,7 +34,7 @@ impl HostEngine {
         std::mem::take(&mut self.outgoing_commands)
     }
 
-    pub(crate) fn get_world(&self) -> &HashMap<HostEntity, EntityChannelSender> {
+    pub(crate) fn get_world(&self) -> &HashMap<HostEntity, HostEntityChannel> {
         &self.entity_channels
     }
 
@@ -85,7 +85,7 @@ impl HostEngine {
                 info!("Creating entity channel for host entity: {:?}", host_entity);
                 
                 self.entity_channels
-                    .insert(host_entity, EntityChannelSender::new(self.host_type));
+                    .insert(host_entity, HostEntityChannel::new(self.host_type));
 
                 self.outgoing_commands.push(command);
                 return;

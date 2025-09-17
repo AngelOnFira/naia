@@ -4,7 +4,7 @@ use log::info;
 
 use crate::{world::sync::{ordered_ids::OrderedIds, auth_channel::AuthChannel}, ComponentKind, EntityCommand, EntityMessage, EntityMessageType, HostEntity, HostType, MessageIndex};
 
-pub struct EntityChannelSender {
+pub struct HostEntityChannel {
     component_channels: HashSet<ComponentKind>,
     auth_channel: AuthChannel,
 
@@ -13,7 +13,7 @@ pub struct EntityChannelSender {
     outgoing_commands: Vec<EntityCommand>,
 }
 
-impl EntityChannelSender {
+impl HostEntityChannel {
     pub(crate) fn new(host_type: HostType) -> Self {
         Self {
             component_channels: HashSet::new(),

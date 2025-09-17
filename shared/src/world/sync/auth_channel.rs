@@ -1,5 +1,5 @@
 use crate::{
-    world::sync::{entity_channel_receiver::EntityChannelState, auth_channel_sender::AuthChannelSender, auth_channel_receiver::AuthChannelReceiver},
+    world::sync::{remote_entity_channel::EntityChannelState, auth_channel_sender::AuthChannelSender, auth_channel_receiver::AuthChannelReceiver},
     EntityAuthStatus, EntityCommand, EntityMessage,
     EntityMessageType, HostType, MessageIndex,
 };
@@ -12,7 +12,9 @@ pub(crate) enum EntityAuthChannelState {
 }
 
 pub(crate) struct AuthChannel {
+    host_type: HostType,
     state: EntityAuthChannelState,
+    auth_status: Option<EntityAuthStatus>,
     sender: AuthChannelSender,
     receiver: AuthChannelReceiver,
 }
@@ -24,7 +26,9 @@ impl AuthChannel {
             HostType::Server => EntityAuthChannelState::Published,
         };
         Self {
+            host_type,
             state,
+            auth_status: None,
             sender: AuthChannelSender::new(),
             receiver: AuthChannelReceiver::new(),
         }
@@ -34,57 +38,56 @@ impl AuthChannel {
         &mut self,
         command: &EntityCommand,
     ) {
+        let entity = command.entity();
+
         match command.get_type() {
             EntityMessageType::Publish => {
                 if self.state != EntityAuthChannelState::Unpublished {
-                    panic!("Cannot publish an entity that is already published");
+                    panic!("Cannot publish Entity: {:?} that is already published", entity);
                 }
                 self.state = EntityAuthChannelState::Published;
             }
             EntityMessageType::Unpublish => {
                 if self.state != EntityAuthChannelState::Published {
-                    panic!("Cannot unpublish an entity that is not published");
+                    panic!("Cannot unpublish Entity: {:?} that is not published", entity);
                 }
                 self.state = EntityAuthChannelState::Unpublished;
             }
             EntityMessageType::EnableDelegation => {
                 if self.state != EntityAuthChannelState::Published {
-                    panic!("Cannot enable delegation on an entity that is not published");
+                    panic!("Cannot enable delegation on Entity: {:?} that is not published", entity);
                 }
                 self.state = EntityAuthChannelState::Delegated;
+                self.auth_status = Some(EntityAuthStatus::Available);
             }
             EntityMessageType::DisableDelegation => {
                 if self.state != EntityAuthChannelState::Delegated {
-                    panic!("Cannot disable delegation on an entity that is not delegated");
+                    panic!("Cannot disable delegation on Entity: {:?} that is not delegated", entity);
                 }
                 self.state = EntityAuthChannelState::Published;
             }
             EntityMessageType::SetAuthority => {
                 if self.state != EntityAuthChannelState::Delegated {
-                    panic!("Cannot set authority on an entity that is not delegated");
+                    panic!("Cannot set authority on Entity: {:?} that is not delegated", entity);
                 }
 
-                let EntityCommand::SetAuthority(_, _entity, status) = command else {
+                let EntityCommand::SetAuthority(_, _entity, next_status) = command else {
                     panic!("Expected SetAuthority command");
                 };
 
-                match status {
-                    EntityAuthStatus::Available => {
-                        todo!()
+                match (self.auth_status.unwrap(), next_status) {
+                    (EntityAuthStatus::Available, EntityAuthStatus::Granted) |
+                    (EntityAuthStatus::Available, EntityAuthStatus::Denied) |
+                    (EntityAuthStatus::Denied, EntityAuthStatus::Available) |
+                    (EntityAuthStatus::Granted, EntityAuthStatus::Available) => {
+                        // valid transition!
                     }
-                    EntityAuthStatus::Requested => {
-                        todo!()
-                    }
-                    EntityAuthStatus::Granted => {
-                        todo!()
-                    }
-                    EntityAuthStatus::Releasing => {
-                        todo!()
-                    }
-                    EntityAuthStatus::Denied => {
-                        todo!()
+                    (from_status, to_status) => {
+                        panic!("Invalid authority transition from {:?} to {:?}", from_status, to_status);
                     }
                 }
+
+                self.auth_status = Some(*next_status);
             }
             _ => {
                 panic!("Unsupported command type for AuthChannelSender");
@@ -104,12 +107,8 @@ impl AuthChannel {
     }
 
     /// Is invoked by `EntityChannel` when the entity despawns; this wipes all buffered state so a future *re‑spawn* starts clean.
-    pub(crate) fn receiver_reset(&mut self) {
-        self.receiver.reset();
-    }
-
-    pub(crate) fn receiver_reset_next_subcommand_id(&mut self) {
-        self.receiver.reset_next_subcommand_id();
+    pub(crate) fn reset(&mut self) {
+        *self = Self::new(self.host_type);
     }
 
     pub(crate) fn receiver_drain_messages_into(

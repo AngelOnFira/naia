@@ -76,7 +76,7 @@
 
 use std::{collections::{HashMap, HashSet}, hash::Hash};
 
-use crate::{sequence_less_than, world::sync::component_channel_receiver::ComponentChannelReceiver, ComponentKind, EntityCommand, EntityMessage, EntityMessageType, HostType, MessageIndex};
+use crate::{sequence_less_than, world::sync::remote_component_channel::RemoteComponentChannel, ComponentKind, EntityCommand, EntityMessage, EntityMessageType, HostType, MessageIndex};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum EntityChannelState {
@@ -84,11 +84,11 @@ pub(crate) enum EntityChannelState {
     Spawned,
 }
 
-pub struct EntityChannelReceiver {
+pub struct RemoteEntityChannel {
     state: EntityChannelState,
     last_epoch_id: Option<MessageIndex>,
     
-    component_channels: HashMap<ComponentKind, ComponentChannelReceiver>,
+    component_channels: HashMap<ComponentKind, RemoteComponentChannel>,
     auth_channel: AuthChannel,
     
     buffered_messages: OrderedIds<EntityMessage<()>>,
@@ -96,7 +96,7 @@ pub struct EntityChannelReceiver {
     outgoing_commands: Vec<EntityCommand>,
 }
 
-impl EntityChannelReceiver {
+impl RemoteEntityChannel {
     pub(crate) fn new(host_type: HostType) -> Self {
         Self {
             state: EntityChannelState::Despawned,
@@ -194,7 +194,6 @@ impl EntityChannelReceiver {
 
                     // Drain the auth channel and append the messages to the outgoing events
                     self.auth_channel.receiver_buffer_pop_front_until_and_including(id);
-                    self.auth_channel.receiver_reset_next_subcommand_id();
 
                     self.auth_channel.receiver_process_messages(self.state);
                     self.auth_channel.receiver_drain_messages_into(&mut self.incoming_messages);
@@ -216,7 +215,7 @@ impl EntityChannelReceiver {
                     self.state = EntityChannelState::Despawned;
                     self.last_epoch_id = Some(id);
 
-                    self.auth_channel.receiver_reset();
+                    self.auth_channel.reset();
                     self.component_channels.clear();
 
                     self.pop_front_into_outgoing();
@@ -231,7 +230,7 @@ impl EntityChannelReceiver {
                     let component_kind = msg.component_kind().unwrap();
                     let component_channel = self.component_channels
                         .entry(component_kind)
-                        .or_insert_with(ComponentChannelReceiver::new);
+                        .or_insert_with(RemoteComponentChannel::new);
 
                     component_channel.accept_message(self.state, id, msg);
                     component_channel.drain_messages_into(&component_kind, &mut self.incoming_messages);

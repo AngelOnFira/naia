@@ -34,10 +34,10 @@
 
 use std::collections::VecDeque;
 
-use crate::{sequence_equal_or_less_than, world::sync::entity_channel_receiver::EntityChannelState, ComponentKind, EntityMessage, EntityMessageType, MessageIndex};
+use crate::{sequence_equal_or_less_than, world::sync::remote_entity_channel::EntityChannelState, ComponentKind, EntityMessage, EntityMessageType, MessageIndex};
 use crate::world::sync::ordered_ids::OrderedIds;
 
-pub(crate) struct ComponentChannelReceiver {
+pub(crate) struct RemoteComponentChannel {
     /// Current authoritative presence flag
     inserted: bool,
     /// The *newest* message that was valid; guards against replay / re‑order.
@@ -47,7 +47,7 @@ pub(crate) struct ComponentChannelReceiver {
     incoming_messages: VecDeque<EntityMessageType>,
 }
 
-impl ComponentChannelReceiver {
+impl RemoteComponentChannel {
     pub(crate) fn new() -> Self {
         Self {
             inserted: false,

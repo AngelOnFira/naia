@@ -3,7 +3,7 @@
 //! The **`Engine<E>`** is the *single entry/exit point* between the raw,
 //! unordered stream of `EntityMessage<E>` packets on the wire and the
 //! **ordered, per‑entity event queue** your game logic consumes.
-//! It owns *one* [`EntityChannelReceiver`] per live entity and two lightweight
+//! It owns *one* [`RemoteEntityChannel`] per live entity and two lightweight
 //! collections for runtime bookkeeping:
 //!
 //! | Field | Purpose |
@@ -31,13 +31,13 @@
 
 use std::{fmt::Debug, hash::Hash, collections::HashMap};
 
-use crate::{world::{sync::{entity_channel_receiver::EntityChannelReceiver, config::EngineConfig}, entity::entity_message::EntityMessage}, EntityMessageType, HostType, InScopeEntities, MessageIndex, RemoteEntity};
+use crate::{world::{sync::{remote_entity_channel::RemoteEntityChannel, config::EngineConfig}, entity::entity_message::EntityMessage}, EntityMessageType, HostType, InScopeEntities, MessageIndex, RemoteEntity};
 use crate::EntityCommand;
 
 pub struct RemoteEngine<E: Copy + Hash + Eq + Debug> {
     host_type: HostType,
     pub config: EngineConfig,
-    entity_channels: HashMap<E, EntityChannelReceiver>,
+    entity_channels: HashMap<E, RemoteEntityChannel>,
     
     incoming_events: Vec<EntityMessage<E>>,
     outgoing_commands: Vec<EntityCommand>,
@@ -66,7 +66,7 @@ impl<E: Copy + Hash + Eq + Debug> RemoteEngine<E> {
         std::mem::take(&mut self.outgoing_commands)
     }
 
-    pub(crate) fn get_world(&self) -> &HashMap<E, EntityChannelReceiver> {
+    pub(crate) fn get_world(&self) -> &HashMap<E, RemoteEntityChannel> {
         &self.entity_channels
     }
 
@@ -92,7 +92,7 @@ impl<E: Copy + Hash + Eq + Debug> RemoteEngine<E> {
         // If the entity channel does not exist, create it
         let entity_channel = self.entity_channels
             .entry(entity)
-            .or_insert_with(|| { EntityChannelReceiver::new(self.host_type) });
+            .or_insert_with(|| { RemoteEntityChannel::new(self.host_type) });
 
         // if log {
         //     info!("Engine::accept_message(id={}, entity={:?}, msgType={:?})", id, entity, msg.get_type());
