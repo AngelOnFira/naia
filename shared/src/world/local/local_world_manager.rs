@@ -295,6 +295,48 @@ impl LocalWorldManager {
         incoming_events
     }
 
+    pub fn register_authed_entity(
+        &mut self,
+        global_manager: &dyn GlobalWorldManagerType,
+        global_entity: &GlobalEntity,
+    ) {
+        info!("Registering authed entity: {:?}", global_entity);
+        
+        if let Ok(remote_entity) = self.entity_map.global_entity_to_remote_entity(global_entity) {
+            self.remote.register_authed_entity(&remote_entity);
+        }
+
+        let Some(component_kinds) = global_manager.component_kinds(global_entity) else {
+            // entity has no components yet
+            return;
+        };
+
+        for component_kind in component_kinds.iter() {
+            self.updater.register_component(global_entity, component_kind);
+        }
+    }
+
+    pub fn deregister_authed_entity(
+        &mut self,
+        global_manager: &dyn GlobalWorldManagerType,
+        global_entity: &GlobalEntity,
+    ) {
+        info!("Deregistering delegated entity updates for {:?}", global_entity);
+
+        if let Ok(remote_entity) = self.entity_map.global_entity_to_remote_entity(global_entity) {
+            self.remote.deregister_authed_entity(&remote_entity);
+        }
+
+        let Some(component_kinds) = global_manager.component_kinds(global_entity) else {
+            // entity has no components yet
+            return;
+        };
+
+        for component_kind in component_kinds.iter() {
+            self.updater.deregister_component(global_entity, component_kind);
+        }
+    }
+
     pub fn remote_spawn_entity(
         &mut self,
         global_entity: &GlobalEntity

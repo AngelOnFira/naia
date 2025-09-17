@@ -27,7 +27,7 @@ pub struct RemoteWorldManager {
 
     // For Server, this is None
     // For Client, it reflects the delegated RemoteEntities it has temporary authority over
-    delegated_world_opt: Option<HashSet<RemoteEntity>>,
+    authed_entities_opt: Option<HashSet<RemoteEntity>>,
 
     // incoming messages
     incoming_events: Vec<EntityEvent>,
@@ -45,7 +45,7 @@ impl RemoteWorldManager {
         };
         Self {
             remote_engine: RemoteEngine::new(host_type),
-            delegated_world_opt,
+            authed_entities_opt: delegated_world_opt,
             incoming_events: Vec::new(),
             waitlist: RemoteWorldWaitlist::new(),
         }
@@ -77,16 +77,32 @@ impl RemoteWorldManager {
         self.waitlist.entity_waitlist_mut()
     }
 
+    pub(crate) fn register_authed_entity(&mut self, remote_entity: &RemoteEntity) {
+        let Some(authed_entities) = self.authed_entities_opt.as_mut() else {
+            return;
+        };
+
+        authed_entities.insert(*remote_entity);
+    }
+
+    pub(crate) fn deregister_authed_entity(&mut self, remote_entity: &RemoteEntity) {
+        let Some(authed_entities) = self.authed_entities_opt.as_mut() else {
+            return;
+        };
+
+        authed_entities.remove(remote_entity);
+    }
+
     pub(crate) fn append_updatable_world(
         &self,
         local_converter: &dyn LocalEntityAndGlobalEntityConverter,
         updatable_world: &mut HashMap<GlobalEntity, HashSet<ComponentKind>>,
     ) {
-        let Some(host_world) = self.delegated_world_opt.as_ref() else {
+        let Some(authed_entities) = self.authed_entities_opt.as_ref() else {
             return;
         };
 
-        for remote_entity in host_world {
+        for remote_entity in authed_entities {
             let Some(remote_channel) = self.remote_engine.get_world().get(remote_entity) else {
                 continue;
             };

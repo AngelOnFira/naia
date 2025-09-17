@@ -1138,13 +1138,35 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         match (old_auth_status, new_auth_status) {
             (EntityAuthStatus::Requested, EntityAuthStatus::Granted) => {
                 // Granted Authority
-                
+
+                // start tracking updates for this entity
+                self.server_connection
+                    .as_mut()
+                    .unwrap()
+                    .base
+                    .world_manager
+                    .register_authed_entity(
+                        &self.global_world_manager,
+                        global_entity
+                    );
+
                 // push outgoing event
                 self.incoming_world_events.push_auth_grant(*world_entity);
             }
             (EntityAuthStatus::Releasing, EntityAuthStatus::Available)
             | (EntityAuthStatus::Granted, EntityAuthStatus::Available) => {
                 // Lost Authority
+
+                // stop tracking updates for this entity
+                self.server_connection
+                    .as_mut()
+                    .unwrap()
+                    .base
+                    .world_manager
+                    .deregister_authed_entity(
+                        &self.global_world_manager,
+                        global_entity
+                    );
 
                 // push outgoing event
                 self.incoming_world_events.push_auth_reset(*world_entity);
@@ -1161,25 +1183,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 // granted auth response arrived while we are releasing auth!
                 self.global_world_manager
                     .entity_update_authority(global_entity, EntityAuthStatus::Available);
-
-                // get rid of reserved host entity
-                let Some(connection) = &mut self.server_connection else {
-                    return;
-                };
-                connection
-                    .base
-                    .world_manager
-                    .host_remove_reserved_entity(global_entity);
             }
-            (EntityAuthStatus::Available, EntityAuthStatus::Available) => {
-                // auth was released before it was granted, continue as normal
-                warn!(
-                    "-- Entity {:?} updated authority, not handled -- {:?} -> {:?}",
-                    global_entity, old_auth_status, new_auth_status
-                );
-            }
+            (EntityAuthStatus::Available, EntityAuthStatus::Available) |
             (EntityAuthStatus::Denied, EntityAuthStatus::Denied) => {
-                // sometimes this happens when a new connection is established
+                // auth was released before it was granted, continue as normal
                 warn!(
                     "-- Entity {:?} updated authority, not handled -- {:?} -> {:?}",
                     global_entity, old_auth_status, new_auth_status
