@@ -47,8 +47,6 @@
 //! the canonical state graph above; thus consumers can apply events in
 //! arrival order without additional checks.
 
-use log::info;
-
 use crate::{world::{host::host_world_manager::SubCommandId, sync::remote_entity_channel::EntityChannelState}, EntityMessage, MessageIndex};
 use crate::world::sync::ordered_ids::OrderedIds;
 
@@ -121,7 +119,7 @@ impl AuthChannelReceiver {
                 panic!("Expected a subcommand ID in the message: {:?}", msg);
             };
 
-            info!("AuthChannelReceiver::process_messages(peeked subcommand_id={}, next_subcommand_id={})", subcommand_id, self.next_subcommand_id);
+            // info!("AuthChannelReceiver::process_messages(peeked subcommand_id={}, next_subcommand_id={})", subcommand_id, self.next_subcommand_id);
             
             if subcommand_id != self.next_subcommand_id {
                 // If the subcommand ID does not match the next expected ID, we stop processing
@@ -133,7 +131,7 @@ impl AuthChannelReceiver {
 
             let (_, msg) = self.buffered_messages.pop_front().unwrap();
 
-            info!("AuthChannelReceiver::process_messages(subcommand_id={}, msgType={:?})", subcommand_id, msg.get_type());
+            // info!("AuthChannelReceiver::process_messages(subcommand_id={}, msgType={:?})", subcommand_id, msg.get_type());
 
             self.incoming_messages.push(msg);
         }

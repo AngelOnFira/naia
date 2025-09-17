@@ -159,6 +159,8 @@ impl GlobalWorldManager {
         global_entity: &GlobalEntity,
         component_kind: &ComponentKind,
     ) {
+        // info!("Remote inserting component {:?} for {:?}", component_kind, global_entity);
+
         if !self.entity_records.contains_key(global_entity) {
             panic!("entity does not exist!");
         }
@@ -240,6 +242,8 @@ impl GlobalWorldManager {
     }
 
     pub(crate) fn entity_enable_delegation(&mut self, global_entity: &GlobalEntity) {
+        // info!("Enabling delegation for {:?}", global_entity);
+
         let Some(record) = self.entity_records.get_mut(global_entity) else {
             panic!("entity record does not exist!");
         };

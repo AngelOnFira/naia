@@ -1,7 +1,5 @@
 use std::collections::HashMap;
 
-use log::info;
-
 use crate::{world::sync::{HostEntityChannel, config::EngineConfig}, HostType, EntityCommand, EntityMessageType, EntityMessage, HostEntity, MessageIndex, LocalEntityAndGlobalEntityConverter};
 
 pub struct HostEngine {
@@ -55,7 +53,7 @@ impl HostEngine {
 
         let host_entity = msg.entity().unwrap();
 
-        info!("HostEngine::receive_message(id={}, entity={:?}, msgType={:?})", id, host_entity, msg.get_type());
+        // info!("HostEngine::receive_message(id={}, entity={:?}, msgType={:?})", id, host_entity, msg.get_type());
 
         let Some(entity_channel) = self.entity_channels.get_mut(&host_entity) else {
             panic!("Cannot accept message for an entity that does not exist in the engine. Message: {:?}", msg);
@@ -72,7 +70,7 @@ impl HostEngine {
         let global_entity = command.entity();
         let host_entity = converter.global_entity_to_host_entity(&global_entity).unwrap();
 
-        info!("HostEngine::send_command(global entity={:?}, host_entity={:?}, command={:?})", global_entity, host_entity, command.get_type());
+        // info!("HostEngine::send_command(global entity={:?}, host_entity={:?}, command={:?})", global_entity, host_entity, command.get_type());
 
         match command.get_type() {
             EntityMessageType::Spawn => {
@@ -80,7 +78,7 @@ impl HostEngine {
                     panic!("Cannot spawn an entity that already exists in the engine");
                 }
                 // If the entity channel does not exist, create it
-                info!("Creating entity channel for host entity: {:?}", host_entity);
+                // info!("Creating entity channel for host entity: {:?}", host_entity);
                 
                 self.entity_channels
                     .insert(host_entity, HostEntityChannel::new(self.host_type));

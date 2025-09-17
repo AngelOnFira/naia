@@ -4,8 +4,6 @@ use std::{
     hash::Hash,
 };
 
-use log::info;
-
 use crate::{
     messages::channels::senders::indexed_message_writer::IndexedMessageWriter,
     world::{
@@ -171,7 +169,7 @@ impl WorldWriter {
     ) {
         let (command_id, command) = next_send_commands.front().unwrap();
 
-        info!("Writing (command_id: {:?}), command {:?} into packet {:?}", command_id, command, packet_index);
+        // info!("Writing (command_id: {:?}), command {:?} into packet {:?}", command_id, command, packet_index);
 
         // write command id
         Self::write_command_id(writer, last_written_id, command_id);
@@ -689,6 +687,10 @@ impl WorldWriter {
             true.ser(writer);
             // write LocalEntity
             local_entity.ser(writer);
+
+            // for component_kind in next_send_updates.get(&global_entity).unwrap() {
+            //     info!("Writing update for global_entity: {:?}, local_entity {:?}, component kind {:?}", global_entity, local_entity, component_kinds.kind_to_name(component_kind));
+            // }
 
             // write Components
             Self::write_update(

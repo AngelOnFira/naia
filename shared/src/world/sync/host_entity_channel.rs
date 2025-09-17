@@ -1,7 +1,5 @@
 use std::collections::HashSet;
 
-use log::info;
-
 use crate::{world::sync::{ordered_ids::OrderedIds, auth_channel::AuthChannel}, ComponentKind, EntityCommand, EntityMessage, EntityMessageType, HostEntity, HostType, MessageIndex};
 
 pub struct HostEntityChannel {
@@ -76,7 +74,7 @@ impl HostEntityChannel {
         let mut received_messages = Vec::new();
         for rmsg in std::mem::take(&mut self.incoming_messages) {
 
-            info!("EntityChannelSender::drain_incoming_messages_into(entity={:?}, msgType={:?})", entity, rmsg.get_type());
+            // info!("EntityChannelSender::drain_incoming_messages_into(entity={:?}, msgType={:?})", entity, rmsg.get_type());
 
             received_messages.push(rmsg.with_entity(entity));
         }
@@ -113,7 +111,7 @@ impl HostEntityChannel {
                 EntityMessageType::MigrateResponse => {
                     let (id, msg) = self.buffered_messages.pop_front().unwrap();
 
-                    info!("EntityChannelSender::process_messages(id={}, msgType={:?})", id, msg.get_type());
+                    // info!("EntityChannelSender::process_messages(id={}, msgType={:?})", id, msg.get_type());
 
                     self.auth_channel.receiver_receive_message(None, id, msg);
                     self.auth_channel.receiver_drain_messages_into(&mut self.incoming_messages);

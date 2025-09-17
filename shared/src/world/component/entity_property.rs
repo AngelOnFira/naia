@@ -327,7 +327,7 @@ impl EntityProperty {
             // LocalEntity is reversed on write, don't worry here
             let local_entity = OwnedLocalEntity::de(reader)?;
 
-            info!("EntityProperty::new_read() local_entity: {:?}", local_entity);
+            // info!("EntityProperty::new_read() local_entity: {:?}", local_entity);
 
             if let Ok(global_entity) = local_entity.convert_to_global(converter) {
                 let mut new_impl = RemoteCreatedRelation::new_empty();
@@ -759,14 +759,14 @@ impl HostCreatedRelation {
             return;
         };
 
-        info!("HostCreatedRelation::write() `global_entity`: {:?}", global_entity);
+        // info!("HostCreatedRelation::write() `global_entity`: {:?}", global_entity);
 
         let Ok(owned_local_entity) = converter.get_or_reserve_entity(global_entity) else {
             false.ser(writer);
             return;
         };
 
-        info!("HostCreatedRelation::write() writing `local_entity`: {:?}", owned_local_entity);
+        // info!("HostCreatedRelation::write() writing `local_entity`: {:?}", owned_local_entity);
 
         // Must reverse the LocalEntity because the Host<->Remote
         // relationship inverts after this data goes over the wire

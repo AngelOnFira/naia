@@ -3,8 +3,6 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use log::{info, warn};
-
 use crate::{bigmap::BigMapKey, world::{
     delegation::auth_channel::EntityAuthAccessor,
     entity::{
@@ -211,13 +209,13 @@ impl<'a, 'b> LocalEntityAndGlobalEntityConverterMut for EntityConverterMut<'a, '
             .local_entity_map
             .global_entity_to_owned_entity(global_entity);
         if result.is_ok() {
-            info!("get_or_reserve_entity(). `global_entity`: {:?} --> `owned_entity`: {:?}", global_entity, result);
+            // info!("get_or_reserve_entity(). `global_entity`: {:?} --> `owned_entity`: {:?}", global_entity, result);
             return result;
         }
 
         let host_entity = self.host_entity_generator.host_reserve_entity(self.local_entity_map, global_entity);
 
-        warn!("get_or_reserve_entity() `global_entity` {:?} is not owned by user, attempting to reserve. `host_entity`: {:?}", global_entity, host_entity);
+        // warn!("get_or_reserve_entity() `global_entity` {:?} is not owned by user, attempting to reserve. `host_entity`: {:?}", global_entity, host_entity);
 
         return Ok(host_entity.copy_to_owned());
     }

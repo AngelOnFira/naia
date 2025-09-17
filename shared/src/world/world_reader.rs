@@ -277,7 +277,7 @@ impl WorldReader {
                 break;
             }
 
-            let local_entity = OwnedLocalEntity::de(reader)?;
+            let local_entity = OwnedLocalEntity::de(reader)?.to_reversed();
 
             Self::read_update(
                 world_manager,
@@ -310,9 +310,10 @@ impl WorldReader {
 
             // At this point, the WorldChannel/EntityReceiver should guarantee the Entity is in scope, correct?
             if world_manager.has_local_entity(local_entity) {
+                // info!("read_update(): READ UPDATE for entity {:?}, component {:?}", local_entity, component_update.kind);
                 world_manager.insert_received_update(*tick, local_entity, component_update);
             } else {
-                warn!("read_update(): SKIPPED READ UPDATE!");
+                warn!("read_update(): SKIPPED READ UPDATE for entity {:?}, component {:?}!", local_entity, component_update.kind);
             }
         }
 

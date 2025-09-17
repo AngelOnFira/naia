@@ -1083,6 +1083,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         global_entity: &GlobalEntity,
         world_entity: &E,
     ) {
+        // info!("client.entity_complete_delegation({:?})", global_entity);
+        
         world.entity_enable_delegation(
             &self.protocol.component_kinds,
             &self.global_entity_map,

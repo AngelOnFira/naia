@@ -1,7 +1,5 @@
 use std::{collections::{HashMap, HashSet}, hash::Hash};
 
-use log::info;
-
 use crate::{messages::channels::receivers::reliable_receiver::ReliableReceiver, world::sync::{RemoteEntityChannel, HostEntityChannel, HostEngine, RemoteEngine}, ComponentKind, EntityCommand, EntityConverterMut, EntityEvent, EntityMessage, EntityMessageReceiver, GlobalEntity, GlobalEntitySpawner, GlobalWorldManagerType, HostEntity, HostEntityGenerator, HostType, LocalEntityAndGlobalEntityConverter, LocalEntityMap, MessageIndex, ShortMessageIndex, WorldMutType};
 use crate::world::update::entity_update_manager::EntityUpdateManager;
 
@@ -203,7 +201,7 @@ impl HostWorldManager {
     ) {
         // execute the action and emit an event
         for message in incoming_messages {
-            info!("Processing EntityMessage<HostEntity>: {:?}", message);
+            // info!("Processing EntityMessage<HostEntity>: {:?}", message);
             match message {
                 EntityMessage::Spawn(_) => {
                     todo!("Implement EntityMessage::<HostEntity>::Spawn handling");

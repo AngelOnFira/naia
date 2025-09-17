@@ -1,4 +1,3 @@
-use log::info;
 
 use crate::{world::host::host_world_manager::SubCommandId, EntityCommand};
 
@@ -21,7 +20,7 @@ impl AuthChannelSender {
     ) {
         command.set_subcommand_id(self.next_subcommand_id);
 
-        info!("AuthChannelSender sending command. SubId: {:?}, Command: {:?}", self.next_subcommand_id, command);
+        // info!("AuthChannelSender sending command. SubId: {:?}, Command: {:?}", self.next_subcommand_id, command);
         
         self.next_subcommand_id = self.next_subcommand_id.wrapping_add(1);
         

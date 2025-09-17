@@ -1,7 +1,5 @@
 use std::{collections::{HashMap, HashSet, VecDeque}, hash::Hash, net::SocketAddr, sync::RwLockReadGuard, time::Duration};
 
-use log::info;
-
 use naia_socket_shared::Instant;
 
 use crate::{messages::channels::receivers::reliable_receiver::ReliableReceiver, sequence_list::SequenceList, types::{HostType, PacketIndex}, world::{
@@ -219,7 +217,7 @@ impl LocalWorldManager {
 
     pub(crate) fn receiver_buffer_message(&mut self, id: MessageIndex, msg: EntityMessage<OwnedLocalEntity>) {
 
-        info!("LocalWorldManager::read(id={}, msg={:?})", id, msg);
+        // info!("LocalWorldManager::read(id={}, msg={:?})", id, msg);
 
         self.receiver.buffer_message(id, msg);
     }
@@ -300,7 +298,7 @@ impl LocalWorldManager {
         global_manager: &dyn GlobalWorldManagerType,
         global_entity: &GlobalEntity,
     ) {
-        info!("Registering authed entity: {:?}", global_entity);
+        // info!("Registering authed entity: {:?}", global_entity);
         
         if let Ok(remote_entity) = self.entity_map.global_entity_to_remote_entity(global_entity) {
             self.remote.register_authed_entity(&remote_entity);
@@ -321,7 +319,7 @@ impl LocalWorldManager {
         global_manager: &dyn GlobalWorldManagerType,
         global_entity: &GlobalEntity,
     ) {
-        info!("Deregistering delegated entity updates for {:?}", global_entity);
+        // info!("Deregistering delegated entity updates for {:?}", global_entity);
 
         if let Ok(remote_entity) = self.entity_map.global_entity_to_remote_entity(global_entity) {
             self.remote.deregister_authed_entity(&remote_entity);
