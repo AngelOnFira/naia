@@ -657,17 +657,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         global_entity,
                         EntityAuthStatus::Available,
                     );
-
-
-                // Clean up any remote entity that was mapped to the delegated host entity in this connection!
-                todo!();
-                // if connection
-                //     .base
-                //     .world_manager
-                //     .has_both_host_and_remote_entity(global_entity)
-                // {
-                //     Self::remove_redundant_remote_entity_from_host(connection, global_entity);
-                // }
             }
         }
     }
@@ -795,12 +784,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         }
 
         // entity authority was granted for origin user
-
-        {
-            // adding remote entity to host entity?
-            //self.add_redundant_remote_entity_to_host(origin_user, &global_entity, remote_entity);
-            // todo!();
-        }
 
         // for any users that have this entity in scope, send an `update_authority_status` message
 
@@ -2041,16 +2024,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                                 &world_entity,
                                 &component_kind,
                             );
-
-                            // track remote component on the originating connection for the time being
-                            todo!();
-                            // let user = self.users.get(user_key).unwrap();
-                            // let addr = user.address();
-                            // let connection = self.user_connections.get_mut(&addr).unwrap();
-                            // connection
-                            //     .base
-                            //     .host_world_manager
-                            //     .track_remote_component(&global_entity, &component_kind);
                         }
 
                         self.insert_new_component_into_entity_scopes(

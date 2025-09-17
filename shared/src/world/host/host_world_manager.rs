@@ -232,9 +232,6 @@ impl HostWorldManager {
                 EntityMessage::SetAuthority(_, _, _) => {
                     todo!("Implement EntityMessage::<HostEntity>::SetAuthority handling");
                 }
-                EntityMessage::ReleaseAuthority(_, _) => {
-                    todo!("Implement EntityMessage::<HostEntity>::ReleaseAuthority handling");
-                }
                 EntityMessage::MigrateResponse(_, _, _) => {
                     todo!("Implement EntityMessage::<HostEntity>::MigrateResponse handling");
                 }
@@ -244,6 +241,7 @@ impl HostWorldManager {
                 // Whitelisted incoming messages:
                 // 1. EntityMessage::EnableDelegationResponse
                 // 2. EntityMessage::RequestAuthority
+                // 3. EntityMessage::ReleaseAuthority
                 msg => {
                     let event = msg.to_event(local_entity_map);
                     self.incoming_events.push(event);
