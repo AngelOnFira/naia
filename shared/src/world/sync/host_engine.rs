@@ -54,14 +54,12 @@ impl HostEngine {
         }
 
         let host_entity = msg.entity().unwrap();
-        
+
+        info!("HostEngine::receive_message(id={}, entity={:?}, msgType={:?})", id, host_entity, msg.get_type());
+
         let Some(entity_channel) = self.entity_channels.get_mut(&host_entity) else {
             panic!("Cannot accept message for an entity that does not exist in the engine. Message: {:?}", msg);
         };
-
-        // if log {
-        info!("HostEngine::receive_message(id={}, entity={:?}, msgType={:?})", id, host_entity, msg.get_type());
-        // }
 
         entity_channel.receive_message(id, msg.strip_entity());
         entity_channel.drain_incoming_messages_into(host_entity, &mut self.incoming_events);

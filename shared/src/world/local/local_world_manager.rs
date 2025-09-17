@@ -1,5 +1,7 @@
 use std::{collections::{HashMap, HashSet, VecDeque}, hash::Hash, net::SocketAddr, sync::RwLockReadGuard, time::Duration};
 
+use log::info;
+
 use naia_socket_shared::Instant;
 
 use crate::{messages::channels::receivers::reliable_receiver::ReliableReceiver, sequence_list::SequenceList, types::{HostType, PacketIndex}, world::{
@@ -216,6 +218,9 @@ impl LocalWorldManager {
     }
 
     pub(crate) fn receiver_buffer_message(&mut self, id: MessageIndex, msg: EntityMessage<OwnedLocalEntity>) {
+
+        info!("LocalWorldManager::read(id={}, msg={:?})", id, msg);
+
         self.receiver.buffer_message(id, msg);
     }
 

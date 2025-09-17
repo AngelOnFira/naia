@@ -171,7 +171,7 @@ impl WorldWriter {
     ) {
         let (command_id, command) = next_send_commands.front().unwrap();
 
-        info!("Writing command {:?} of type {:?} into packet {:?}", command_id, command.get_type(), packet_index);
+        info!("Writing (command_id: {:?}), command {:?} into packet {:?}", command_id, command, packet_index);
 
         // write command id
         Self::write_command_id(writer, last_written_id, command_id);
@@ -511,6 +511,9 @@ impl WorldWriter {
 
                 // write message type
                 EntityMessageType::ReleaseAuthority.ser(writer);
+
+                // write subcommand id
+                sub_id.ser(writer);
 
                 // get remote entity
                 let remote_entity = world_manager
