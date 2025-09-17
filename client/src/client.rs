@@ -1138,40 +1138,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         match (old_auth_status, new_auth_status) {
             (EntityAuthStatus::Requested, EntityAuthStatus::Granted) => {
                 // Granted Authority
-
-                todo!();
-
-                // let Some(connection) = &mut self.server_connection else {
-                //     return;
-                // };
-                // // Migrate Entity from Remote -> Host connection
-                // let component_kinds = self
-                //     .global_world_manager
-                //     .component_kinds(global_entity)
-                //     .unwrap();
-                // connection.base.world_manager.host.track_remote_entity(
-                //     &mut connection.base.world_manager.local,
-                //     global_entity,
-                //     component_kinds,
-                // );
-
+                
                 // push outgoing event
                 self.incoming_world_events.push_auth_grant(*world_entity);
             }
             (EntityAuthStatus::Releasing, EntityAuthStatus::Available)
             | (EntityAuthStatus::Granted, EntityAuthStatus::Available) => {
                 // Lost Authority
-
-                todo!();
-
-                // Remove Entity from Host connection
-                // let Some(connection) = &mut self.server_connection else {
-                //     return;
-                // };
-                // connection
-                // .base
-                // .world_manager.host
-                // .untrack_remote_entity(&mut connection.base.world_manager.local, global_entity);
 
                 // push outgoing event
                 self.incoming_world_events.push_auth_reset(*world_entity);
