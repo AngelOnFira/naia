@@ -129,14 +129,14 @@ impl AuthChannel {
 
     pub(crate) fn receiver_receive_message(
         &mut self,
-        entity_state: EntityChannelState,
+        entity_state_opt: Option<EntityChannelState>,
         id: MessageIndex,
         msg: EntityMessage<()>,
     ) {
-        self.receiver.receive_message(entity_state, id, msg);
+        self.receiver.receive_message(entity_state_opt, id, msg);
     }
 
     pub(crate) fn receiver_process_messages(&mut self, entity_state: EntityChannelState) {
-        self.receiver.process_messages(entity_state);
+        self.receiver.process_messages(Some(entity_state));
     }
 }

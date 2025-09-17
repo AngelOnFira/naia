@@ -799,7 +799,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         {
             // adding remote entity to host entity?
             //self.add_redundant_remote_entity_to_host(origin_user, &global_entity, remote_entity);
-            todo!();
+            // todo!();
         }
 
         // for any users that have this entity in scope, send an `update_authority_status` message
@@ -847,28 +847,45 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         user_key: &UserKey,
         global_entity: &GlobalEntity,
     ) {
-        if self.global_world_manager.entity_is_delegated(global_entity) {
-            let Some(auth_status) = self
-                .global_world_manager
-                .entity_authority_status(global_entity)
-            else {
-                panic!("Entity should have an Auth status if it is delegated..")
-            };
-            if auth_status != EntityAuthStatus::Available {
-                // Send UpdateAuthority action through EntityActionEvent system
-                if let Some(user) = self.users.get(user_key) {
-                    if let Some(connection) = self.user_connections.get_mut(&user.address()) {
-                        connection
-                            .base
-                            .world_manager
-                            .host_send_set_auth(
-                                global_entity,
-                                auth_status,
-                            );
-                    }
-                }
-            }
+        if !self.global_world_manager.entity_is_delegated(global_entity) {
+            warn!("Entity {:?} is not delegated, cannot send authority status", global_entity);
+            return;
         }
+        let Some(auth_status) = self
+            .global_world_manager
+            .entity_authority_status(global_entity)
+        else {
+            panic!("Entity should have an Auth status if it is delegated..")
+        };
+        if auth_status == EntityAuthStatus::Available {
+            // no need to send any message, this is the default on the client after enabling delegation
+            return;
+        }
+
+        // NOTES:
+
+        // We do not need to send auth messages to any other user with this entity in scope.
+        // Because a separate EnableEntityDelegation message is sent to all users with this entity in scope already
+        // this is their individual responses
+
+        // So... the only reason we have a message of this type is to send an updated auth status to the client
+        // after they have received the enable delegation message.
+        // TODO: We should perform this action on ACKed delivery of this message, rather than waiting for a response like this
+
+        // Send UpdateAuthority action through EntityActionEvent system
+        let Some(user) = self.users.get(user_key) else {
+            panic!("User does not exist: {:?}", user_key);
+        };
+        let Some(connection) = self.user_connections.get_mut(&user.address()) else {
+            panic!("User is not connected: {:?}", user_key);
+        };
+        connection
+            .base
+            .world_manager
+            .host_send_set_auth(
+                global_entity,
+                auth_status,
+            );
     }
 
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!

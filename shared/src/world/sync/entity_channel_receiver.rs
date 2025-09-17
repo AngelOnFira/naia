@@ -241,9 +241,9 @@ impl EntityChannelReceiver {
                 EntityMessageType::SetAuthority => {
                     let (id, msg) = self.buffered_messages.pop_front().unwrap();
                     
-                    // info!("EntityChannel::accept_message(id={}, msgType={:?})", id, msg.get_type());
+                    info!("EntityChannelReceiver::process_messages(id={}, msgType={:?})", id, msg.get_type());
 
-                    self.auth_channel.receiver_receive_message(self.state, id, msg);
+                    self.auth_channel.receiver_receive_message(Some(self.state), id, msg);
                     self.auth_channel.receiver_drain_messages_into(&mut self.incoming_messages);
                 }
                 EntityMessageType::Noop => {
@@ -264,6 +264,8 @@ impl EntityChannelReceiver {
 
 // This function computes the intersection of keys between a `HashSet` and a `HashMap`.
 use std::hash::BuildHasher;
+
+use log::info;
 
 use crate::world::sync::auth_channel::AuthChannel;
 use crate::world::sync::ordered_ids::OrderedIds;

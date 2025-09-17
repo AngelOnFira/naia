@@ -53,7 +53,7 @@ impl HostWorldManager {
         &mut self,
         spawner: &mut dyn GlobalEntitySpawner<E>,
         global_world_manager: &dyn GlobalWorldManagerType,
-        local_entity_map: &mut LocalEntityMap,
+        local_entity_map: &LocalEntityMap,
         world: &mut W,
         incoming_messages: Vec<(MessageIndex, EntityMessage<HostEntity>)>,
     ) -> Vec<EntityEvent> {
@@ -197,7 +197,7 @@ impl HostWorldManager {
         &mut self,
         _spawner: &mut dyn GlobalEntitySpawner<E>,
         _global_world_manager: &dyn GlobalWorldManagerType,
-        _local_entity_map: &mut LocalEntityMap,
+        local_entity_map: &LocalEntityMap,
         _world: &mut W,
         incoming_messages: Vec<EntityMessage<HostEntity>>,
     ) {
@@ -232,20 +232,21 @@ impl HostWorldManager {
                 EntityMessage::SetAuthority(_, _, _) => {
                     todo!("Implement EntityMessage::<HostEntity>::SetAuthority handling");
                 }
-                EntityMessage::RequestAuthority(_, _) => {
-                    todo!("Implement EntityMessage::<HostEntity>::RequestAuthority handling");
-                }
                 EntityMessage::ReleaseAuthority(_, _) => {
                     todo!("Implement EntityMessage::<HostEntity>::ReleaseAuthority handling");
-                }
-                EntityMessage::EnableDelegationResponse(_, _) => {
-                    todo!("Implement EntityMessage::<HostEntity>::EnableDelegationResponse handling");
                 }
                 EntityMessage::MigrateResponse(_, _, _) => {
                     todo!("Implement EntityMessage::<HostEntity>::MigrateResponse handling");
                 }
                 EntityMessage::Noop => {
                     // do nothing
+                }
+                // Whitelisted incoming messages:
+                // 1. EntityMessage::EnableDelegationResponse
+                // 2. EntityMessage::RequestAuthority
+                msg => {
+                    let event = msg.to_event(local_entity_map);
+                    self.incoming_events.push(event);
                 }
             }
         }

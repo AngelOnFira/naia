@@ -47,6 +47,8 @@
 //! the canonical state graph above; thus consumers can apply events in
 //! arrival order without additional checks.
 
+use log::info;
+
 use crate::{world::{host::host_world_manager::SubCommandId, sync::entity_channel_receiver::EntityChannelState}, EntityMessage, MessageIndex};
 use crate::world::sync::ordered_ids::OrderedIds;
 
@@ -92,19 +94,21 @@ impl AuthChannelReceiver {
 
     pub(crate) fn receive_message(
         &mut self,
-        entity_state: EntityChannelState,
+        entity_state_opt: Option<EntityChannelState>,
         id: MessageIndex,
         msg: EntityMessage<()>,
     ) {
         self.buffered_messages.push_back(id, msg);
-        self.process_messages(entity_state);
+        self.process_messages(entity_state_opt);
     }
     
-    pub(crate) fn process_messages(&mut self, entity_state: EntityChannelState) {
-        
-        if entity_state != EntityChannelState::Spawned {
-            // If the entity is not spawned, we do not process any messages
-            return;
+    pub(crate) fn process_messages(&mut self, entity_state_opt: Option<EntityChannelState>) {
+
+        if let Some(entity_state) = entity_state_opt {
+            if entity_state != EntityChannelState::Spawned {
+                // If the entity is not spawned, we do not process any messages
+                return;
+            }
         }
         
         loop {
@@ -116,13 +120,21 @@ impl AuthChannelReceiver {
             let Some(subcommand_id) = msg.subcommand_id() else {
                 panic!("Expected a subcommand ID in the message: {:?}", msg);
             };
+
+            info!("AuthChannelReceiver::process_messages(peeked subcommand_id={}, next_subcommand_id={})", subcommand_id, self.next_subcommand_id);
             
             if subcommand_id != self.next_subcommand_id {
                 // If the subcommand ID does not match the next expected ID, we stop processing
                 break;
             }
 
+            // Move to the next expected subcommand ID
+            self.next_subcommand_id = self.next_subcommand_id.wrapping_add(1);
+
             let (_, msg) = self.buffered_messages.pop_front().unwrap();
+
+            info!("AuthChannelReceiver::process_messages(subcommand_id={}, msgType={:?})", subcommand_id, msg.get_type());
+
             self.incoming_messages.push(msg);
         }
     }

@@ -268,7 +268,7 @@ impl LocalWorldManager {
         let host_events = self.host.take_incoming_events(
             spawner,
             global_world_manager,
-            &mut self.entity_map,
+            &self.entity_map,
             world,
             incoming_host_messages,
         );

@@ -1,10 +1,10 @@
 use std::collections::HashSet;
 
-use crate::{world::sync::{auth_channel::AuthChannel, entity_channel_receiver::EntityChannelState}, ComponentKind, EntityCommand, EntityMessage, EntityMessageType, HostEntity, HostType, MessageIndex};
-use crate::world::sync::ordered_ids::OrderedIds;
+use log::info;
+
+use crate::{world::sync::{ordered_ids::OrderedIds, auth_channel::AuthChannel}, ComponentKind, EntityCommand, EntityMessage, EntityMessageType, HostEntity, HostType, MessageIndex};
 
 pub struct EntityChannelSender {
-    state: EntityChannelState,
     component_channels: HashSet<ComponentKind>,
     auth_channel: AuthChannel,
 
@@ -16,7 +16,6 @@ pub struct EntityChannelSender {
 impl EntityChannelSender {
     pub(crate) fn new(host_type: HostType) -> Self {
         Self {
-            state: EntityChannelState::Despawned,
             component_channels: HashSet::new(),
             auth_channel: AuthChannel::new(host_type),
 
@@ -76,6 +75,9 @@ impl EntityChannelSender {
         // Drain the entity channel and append the messages to the outgoing events
         let mut received_messages = Vec::new();
         for rmsg in std::mem::take(&mut self.incoming_messages) {
+
+            info!("EntityChannelSender::drain_incoming_messages_into(entity={:?}, msgType={:?})", entity, rmsg.get_type());
+
             received_messages.push(rmsg.with_entity(entity));
         }
         outgoing_events.append(&mut received_messages);
@@ -111,16 +113,16 @@ impl EntityChannelSender {
                 EntityMessageType::MigrateResponse => {
                     let (id, msg) = self.buffered_messages.pop_front().unwrap();
 
-                    // info!("EntityChannel::accept_message(id={}, msgType={:?})", id, msg.get_type());
+                    info!("EntityChannelSender::process_messages(id={}, msgType={:?})", id, msg.get_type());
 
-                    self.auth_channel.receiver_receive_message(self.state, id, msg);
+                    self.auth_channel.receiver_receive_message(None, id, msg);
                     self.auth_channel.receiver_drain_messages_into(&mut self.incoming_messages);
                 }
                 EntityMessageType::Noop => {
                     // Drop it
                 }
                 msg => {
-                    panic!("EntityChannel::accept_message() received an unexpected message type: {:?}", msg);
+                    panic!("EntityChannelSender::process_messages() received an unexpected message type: {:?}", msg);
                 }
             }
         }
