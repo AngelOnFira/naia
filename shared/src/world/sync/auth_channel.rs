@@ -66,6 +66,14 @@ impl AuthChannel {
                 }
                 self.state = EntityAuthChannelState::Published;
             }
+            EntityMessageType::ReleaseAuthority => {
+                if self.state != EntityAuthChannelState::Delegated {
+                    panic!("Cannot release authority on Entity: {:?} that is not delegated", entity);
+                }
+
+                // This is actually valid, because it should be possible for a client to ReleaseAuthority right after EnableDelegation, so that auth isn't automatically set to Granted
+                self.auth_status = Some(EntityAuthStatus::Available);
+            }
             EntityMessageType::SetAuthority => {
                 if self.state != EntityAuthChannelState::Delegated {
                     panic!("Cannot set authority on Entity: {:?} that is not delegated", entity);

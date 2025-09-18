@@ -216,10 +216,10 @@ impl WorldReader {
                 // read subcommand id
                 let sub_command_id = SubCommandId::de(reader)?;
 
-                // read host entity
-                let host_entity = HostEntity::de(reader)?;
+                // read local entity
+                let local_entity = OwnedLocalEntity::de(reader)?.to_reversed();
 
-                world_manager.receiver_buffer_message(message_id, EntityMessage::ReleaseAuthority(sub_command_id, host_entity.copy_to_owned()));
+                world_manager.receiver_buffer_message(message_id, EntityMessage::ReleaseAuthority(sub_command_id, local_entity));
             }
             EntityMessageType::EnableDelegationResponse => {
                 

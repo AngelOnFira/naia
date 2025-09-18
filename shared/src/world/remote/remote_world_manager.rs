@@ -138,7 +138,7 @@ impl RemoteWorldManager {
         command: EntityCommand
     ) {
         let global_entity = command.entity();
-        let remote_entity = converter.global_entity_to_remote_entity(&global_entity).unwrap();
+        let remote_entity = converter.global_entity_to_remote_entity(&global_entity).unwrap(); // error triggered here
         self.remote_engine.send_auth_command(remote_entity, command);
     }
 

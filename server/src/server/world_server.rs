@@ -1444,7 +1444,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
             // TODO: we can make this more efficient in the future by caching which Entities
             // are in each User's scope
-            for (_user_key, user) in self.users.iter() {
+            for (user_key, user) in self.users.iter() {
+
+                if let Some(client_key) = &client_origin {
+                    if user_key == client_key {
+                        // skip sending to origin client, will be handled below
+                        continue;
+                    }
+                }
+
                 let Some(connection) = self.user_connections.get_mut(&user.address()) else {
                     continue;
                 };

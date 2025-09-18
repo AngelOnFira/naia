@@ -237,6 +237,7 @@ impl RemoteEntityChannel {
                 }
                 EntityMessageType::Publish | EntityMessageType::Unpublish |
                 EntityMessageType::EnableDelegation | EntityMessageType::DisableDelegation |
+                EntityMessageType::ReleaseAuthority | // NOTE: This should be possible because a client might want to release authority right after enabling delegation
                 EntityMessageType::SetAuthority => {
                     let (id, msg) = self.buffered_messages.pop_front().unwrap();
                     

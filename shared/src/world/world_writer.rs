@@ -513,21 +513,22 @@ impl WorldWriter {
                 // write subcommand id
                 sub_id.ser(writer);
 
-                // get remote entity
-                let remote_entity = world_manager
+                // get local entity
+                // NOTE: this is actually valid because it should be possible to ReleaseAuthority right after EnableDelegation, so that auth isn't automatically set to Granted
+                let local_entity = world_manager
                     .entity_converter()
-                    .global_entity_to_remote_entity(global_entity)
+                    .global_entity_to_owned_entity(global_entity)
                     .unwrap();
 
-                // write remote entity
-                remote_entity.ser(writer);
+                // write local entity
+                local_entity.ser(writer);
 
                 // if we are writing to this packet, add it to record
                 if is_writing {
                     world_manager.record_command_written(
                         packet_index,
                         command_id,
-                        EntityMessage::ReleaseAuthority(*sub_id, remote_entity.copy_to_owned()),
+                        EntityMessage::ReleaseAuthority(*sub_id, local_entity),
                     );
                 }
             }

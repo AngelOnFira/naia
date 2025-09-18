@@ -506,16 +506,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         self.global_world_manager
             .host_spawn_entity(&global_entity);
 
-        if let Some(connection) = &mut self.server_connection {
-            let component_kinds = self
+        let Some(connection) = &mut self.server_connection else {
+            return;
+        };
+        let component_kinds = self
                 .global_world_manager
                 .component_kinds(&global_entity)
                 .unwrap();
-            connection.base.world_manager.host_init_entity(
-                &global_entity,
-                component_kinds,
-            );
-        }
+        connection.base.world_manager.host_init_entity(
+            &global_entity,
+            component_kinds,
+        );
     }
 
     /// Retrieves an EntityRef that exposes read-only operations for the
