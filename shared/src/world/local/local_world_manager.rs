@@ -120,14 +120,14 @@ impl LocalWorldManager {
     ) {
         todo!();
 
-        // Add remote entity to Host World
+        // // Migrate remote entity to Host World
         // let new_host_entity = connection.base.host_world_manager.track_remote_entity(
         //     &mut connection.base.local_world_manager,
         //     global_entity,
         //     component_kinds,
         // );
-
-        // let command = EntityCommand::MigrateResponse(None, *global_entity, new_host_entity);
+        //
+        // let command = EntityCommand::MigrateResponse(None, *global_entity, auth_status);
         // self.host.send_command(&self.entity_map, command);
     }
 
@@ -200,14 +200,6 @@ impl LocalWorldManager {
         global_entity: &GlobalEntity,
     ) {
         let command = EntityCommand::RequestAuthority(None, *global_entity);
-        self.remote.send_auth_command(&self.entity_map, command);
-    }
-
-    pub fn remote_send_release_auth(
-        &mut self,
-        global_entity: &GlobalEntity,
-    ) {
-        let command = EntityCommand::ReleaseAuthority(None, *global_entity);
         self.remote.send_auth_command(&self.entity_map, command);
     }
 
@@ -501,6 +493,20 @@ impl LocalWorldManager {
         // only server should ever be able to call this, on host-owned (server-owned) entities
         let command = EntityCommand::DisableDelegation(None, *global_entity);
         self.host.send_command(&self.entity_map, command);
+    }
+
+    pub fn remote_send_release_auth(
+        &mut self,
+        global_entity: &GlobalEntity,
+    ) {
+        let command = EntityCommand::ReleaseAuthority(None, *global_entity);
+
+        let host_owned = self.entity_map.global_entity_to_owned_entity(global_entity).unwrap().is_host();
+        if host_owned {
+            self.host.send_command(&self.entity_map, command);
+        } else {
+            self.remote.send_auth_command(self.entity_map.entity_converter(), command);
+        }
     }
 
     // Joint
