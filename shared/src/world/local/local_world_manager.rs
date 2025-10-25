@@ -130,8 +130,9 @@ impl LocalWorldManager {
         let new_host_entity = self.host.host_generate_entity();
         self.entity_map.insert_with_host_entity(*global_entity, new_host_entity);
 
-        let remote_entity_channel = self.remote.remove_entity_channel(&old_remote_entity);
-        self.remote.despawn_entity(&mut self.entity_map, &remote_entity);
+        // TODO: Implement proper entity migration
+        // let remote_entity_channel = self.remote.remove_entity_channel(&old_remote_entity);
+        self.remote.despawn_entity(&mut self.entity_map, &old_remote_entity);
         new_host_entity
     }
 
