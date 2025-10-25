@@ -102,7 +102,7 @@ impl HostWorldManager {
     }
 
     // used when Entity first comes into Connection's scope
-    pub fn init_entity(
+    pub fn init_entity_send_host_commands(
         &mut self,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
         global_entity: &GlobalEntity,

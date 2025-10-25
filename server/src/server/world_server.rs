@@ -1557,10 +1557,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         };
 
         // Send EntityMigrateResponse action through EntityActionEvent system
+        let new_host_entity = connection
+            .base
+            .world_manager
+            .migrate_entity_remote_to_host(global_entity);
         connection
             .base
             .world_manager
-            .host_send_migrate_response(global_entity);
+            .host_send_migrate_response(global_entity, &new_host_entity);
 
         self.global_world_manager
             .entity_enable_delegation(&global_entity);

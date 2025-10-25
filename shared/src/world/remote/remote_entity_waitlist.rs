@@ -92,7 +92,7 @@ impl RemoteEntityWaitlist {
         waitlist_store.collect_ready_items(&mut self.ready_handles)
     }
 
-    pub fn add_entity(
+    pub fn spawn_entity(
         &mut self,
         in_scope_entities: &dyn InScopeEntities<RemoteEntity>,
         // converter: &dyn LocalEntityAndGlobalEntityConverter,
@@ -122,6 +122,10 @@ impl RemoteEntityWaitlist {
             self.ready_handles.insert(outgoing_handle);
             self.remove_waiting_handle(&outgoing_handle);
         }
+    }
+    
+    pub fn despawn_entity(&mut self, _entity: &RemoteEntity) {
+        // stub
     }
 
     pub fn remove_waiting_handle(&mut self, handle: &WaitlistHandle) {

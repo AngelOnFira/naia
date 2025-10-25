@@ -153,9 +153,9 @@ impl RemoteWorldManager {
     pub fn despawn_entity(
         &mut self,
         _local_entity_map: &mut LocalEntityMap,
-        _entity: &RemoteEntity
+        entity: &RemoteEntity
     ) {
-        // stubbed
+        self.waitlist.despawn_entity(entity);
     }
 
     pub fn take_incoming_events<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(

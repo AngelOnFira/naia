@@ -107,28 +107,42 @@ impl LocalWorldManager {
         component_kinds: Vec<ComponentKind>,
     ) {
         if self.entity_map.global_entity_to_host_entity(global_entity).is_err() {
+            // this is done because `host_reserve_entity()` may have been called previously!
             let host_entity = self.host.host_generate_entity();
             self.entity_map.insert_with_host_entity(*global_entity, host_entity);
         }
-        self.host.init_entity(&self.entity_map, global_entity, component_kinds);
+        self.host.init_entity_send_host_commands(&self.entity_map, global_entity, component_kinds);
     }
 
-    // should be remote? or maybe not, this is after migration? only server sends this
+    pub fn migrate_entity_remote_to_host(
+        &mut self,
+        global_entity: &GlobalEntity,
+    ) -> HostEntity {
+        let Some(local_entity_record) = self.entity_map.remove_by_global_entity(global_entity) else {
+            panic!("Attempting to migrate entity which does not exist in local entity map! {:?}", global_entity);
+        };
+        if !local_entity_record.is_remote_owned() {
+            panic!("Attempting to migrate entity which is not remote-owned! {:?}", global_entity);
+        }
+        let old_remote_entity = local_entity_record.remote_entity();
+
+        // create new host entity, insert into local entity map
+        let new_host_entity = self.host.host_generate_entity();
+        self.entity_map.insert_with_host_entity(*global_entity, new_host_entity);
+
+        let remote_entity_channel = self.remote.remove_entity_channel(&old_remote_entity);
+        self.remote.despawn_entity(&mut self.entity_map, &remote_entity);
+        new_host_entity
+    }
+
+    // only server sends this
     pub fn host_send_migrate_response(
         &mut self,
-        _global_entity: &GlobalEntity,
+        global_entity: &GlobalEntity,
+        new_host_entity: &HostEntity,
     ) {
-        todo!();
-
-        // // Migrate remote entity to Host World
-        // let new_host_entity = connection.base.host_world_manager.track_remote_entity(
-        //     &mut connection.base.local_world_manager,
-        //     global_entity,
-        //     component_kinds,
-        // );
-        //
-        // let command = EntityCommand::MigrateResponse(None, *global_entity, auth_status);
-        // self.host.send_command(&self.entity_map, command);
+        let command = EntityCommand::MigrateResponse(None, *global_entity, *new_host_entity);
+        self.host.send_command(&self.entity_map, command);
     }
 
     pub fn host_send_set_auth(
@@ -460,10 +474,10 @@ impl LocalWorldManager {
         origin_is_owning_client: bool,
         global_entity: &GlobalEntity,
     ) {
-        let is_delegated = self.entity_map.global_entity_is_delegated(global_entity);
-        if is_delegated {
-            panic!("Entity {:?} is already delegated!", global_entity);
-        }
+        // let is_delegated = self.entity_map.global_entity_is_delegated(global_entity);
+        // if is_delegated {
+        //     panic!("Entity {:?} is already delegated!", global_entity);
+        // }
         let Ok(local_entity) = self.entity_map.global_entity_to_owned_entity(global_entity) else {
             panic!("Attempting to enable delegation for entity which does not exist in local entity map! {:?}", global_entity);
         };

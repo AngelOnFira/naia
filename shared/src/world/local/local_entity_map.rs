@@ -157,12 +157,12 @@ impl LocalEntityMap {
             .collect::<Vec<GlobalEntity>>()
     }
 
-    pub(crate) fn global_entity_is_delegated(&self, global_entity: &GlobalEntity) -> bool {
-        if let Some(record) = self.global_to_local.get(global_entity) {
-            return record.is_delegated();
-        }
-        false
-    }
+    // pub(crate) fn global_entity_is_delegated(&self, global_entity: &GlobalEntity) -> bool {
+    //     if let Some(record) = self.global_to_local.get(global_entity) {
+    //         return record.is_delegated();
+    //     }
+    //     false
+    // }
 
     pub fn entity_converter(&self) -> &dyn LocalEntityAndGlobalEntityConverter {
         self

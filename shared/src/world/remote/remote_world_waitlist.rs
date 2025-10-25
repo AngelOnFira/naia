@@ -97,7 +97,14 @@ impl RemoteWorldWaitlist {
         // converter: &dyn LocalEntityAndGlobalEntityConverter,
         entity: &RemoteEntity
     ) {
-        self.entity_waitlist.add_entity(in_scope_entities, entity);
+        self.entity_waitlist.spawn_entity(in_scope_entities, entity);
+    }
+    
+    pub fn despawn_entity(
+        &mut self,
+        entity: &RemoteEntity
+    ) {
+        self.entity_waitlist.despawn_entity(entity);
     }
 
     pub(crate) fn process_remove(&mut self, entity: &RemoteEntity, component_kind: &ComponentKind) -> bool {
