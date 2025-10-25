@@ -121,6 +121,20 @@ impl<E: Copy + Eq + PartialEq> EntityMessage<E> {
             _ => None,
         }
     }
+
+    pub fn apply_entity_redirect<O: Copy + Eq + PartialEq>(
+        self,
+        old_entity: &E,
+        new_entity: &O
+    ) -> EntityMessage<O> {
+        if let Some(entity) = self.entity() {
+            if entity == *old_entity {
+                return self.with_entity(*new_entity);
+            }
+        }
+        // If no entity or entity doesn't match, return a message with the new entity
+        self.with_entity(*new_entity)
+    }
 }
 //
 impl EntityMessage<RemoteEntity> {

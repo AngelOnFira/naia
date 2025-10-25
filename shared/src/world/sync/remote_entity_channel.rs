@@ -272,6 +272,18 @@ impl RemoteEntityChannel {
             .map(|(kind, _)| *kind)
             .collect()
     }
+
+    pub(crate) fn force_drain_all_buffers(&mut self) {
+        // Force-drain entity-level buffered messages
+        while let Some((_, msg)) = self.buffered_messages.pop_front() {
+            self.incoming_messages.push(msg);
+        }
+
+        // Force-drain all component channels
+        for (_, component_channel) in self.component_channels.iter_mut() {
+            component_channel.force_drain_buffers(self.state);
+        }
+    }
 }
 
 // This function computes the intersection of keys between a `HashSet` and a `HashMap`.

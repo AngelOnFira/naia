@@ -108,4 +108,20 @@ impl HostEngine {
         entity_channel.send_command(command);
         entity_channel.drain_outgoing_messages_into(&mut self.outgoing_commands);
     }
+
+    pub(crate) fn remove_entity_channel(&mut self, entity: &HostEntity) -> HostEntityChannel {
+        self.entity_channels.remove(entity)
+            .expect("Cannot remove entity channel that doesn't exist")
+    }
+
+    pub(crate) fn insert_entity_channel(
+        &mut self,
+        entity: HostEntity,
+        channel: HostEntityChannel
+    ) {
+        if self.entity_channels.contains_key(&entity) {
+            panic!("Cannot insert entity channel that already exists");
+        }
+        self.entity_channels.insert(entity, channel);
+    }
 }

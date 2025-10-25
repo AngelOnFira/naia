@@ -13,7 +13,7 @@ use crate::{world::{
         remote_entity_waitlist::{RemoteEntityWaitlist, WaitlistStore},
         remote_world_waitlist::RemoteWorldWaitlist,
     },
-    sync::RemoteEngine,
+    sync::{RemoteEngine, RemoteEntityChannel},
 }, ComponentKind, ComponentKinds, ComponentUpdate, EntityAndGlobalEntityConverter, EntityCommand, EntityMessage, EntityMessageReceiver, GlobalEntity, GlobalEntitySpawner, GlobalWorldManagerType, HostType, LocalEntityAndGlobalEntityConverter, LocalEntityMap, MessageIndex, OwnedLocalEntity, Replicate, Tick, WorldMutType};
 use crate::world::entity_event::EntityEvent;
 use crate::world::host::host_world_manager::CommandId;
@@ -470,6 +470,24 @@ impl RemoteWorldManager {
                 component_kind,
             ));
         }
+    }
+
+    pub(crate) fn force_drain_entity_buffers(&mut self, remote_entity: &RemoteEntity) {
+        let Some(channel) = self.remote_engine.get_world_mut().get_mut(remote_entity) else {
+            panic!("Cannot force-drain non-existent entity");
+        };
+        channel.force_drain_all_buffers();
+    }
+
+    pub(crate) fn extract_component_kinds(&self, remote_entity: &RemoteEntity) -> HashSet<ComponentKind> {
+        let Some(channel) = self.remote_engine.get_world().get(remote_entity) else {
+            panic!("Cannot extract component kinds from non-existent entity");
+        };
+        channel.extract_inserted_component_kinds()
+    }
+
+    pub(crate) fn remove_entity_channel(&mut self, remote_entity: &RemoteEntity) -> RemoteEntityChannel {
+        self.remote_engine.remove_entity_channel(remote_entity)
     }
 }
 

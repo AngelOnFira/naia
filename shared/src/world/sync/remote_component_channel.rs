@@ -145,4 +145,18 @@ impl RemoteComponentChannel {
     pub(crate) fn is_inserted(&self) -> bool {
         self.inserted
     }
+
+    pub(crate) fn force_drain_buffers(&mut self, _entity_state: EntityChannelState) {
+        // Force-drain all buffered operations regardless of FSM state
+        while let Some((id, insert)) = self.buffered_messages.pop_front() {
+            if insert {
+                self.incoming_messages.push_back(EntityMessageType::InsertComponent);
+            } else {
+                self.incoming_messages.push_back(EntityMessageType::RemoveComponent);
+            }
+            // Update the inserted state to reflect the final operation
+            self.inserted = insert;
+            self.last_epoch_id = Some(id);
+        }
+    }
 }

@@ -120,6 +120,22 @@ impl<E: Copy + Hash + Eq + Debug> RemoteEngine<E> {
 
         todo!("Handle Despawn, Insert, Remove commands here!");
     }
+
+    pub(crate) fn remove_entity_channel(&mut self, entity: &E) -> RemoteEntityChannel {
+        self.entity_channels.remove(entity)
+            .expect("Cannot remove entity channel that doesn't exist")
+    }
+
+    pub(crate) fn insert_entity_channel(&mut self, entity: E, channel: RemoteEntityChannel) {
+        if self.entity_channels.contains_key(&entity) {
+            panic!("Cannot insert entity channel that already exists");
+        }
+        self.entity_channels.insert(entity, channel);
+    }
+
+    pub(crate) fn get_world_mut(&mut self) -> &mut HashMap<E, RemoteEntityChannel> {
+        &mut self.entity_channels
+    }
 }
 
 impl InScopeEntities<RemoteEntity> for RemoteEngine<RemoteEntity> {

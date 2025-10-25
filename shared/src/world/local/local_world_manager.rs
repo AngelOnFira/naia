@@ -6,6 +6,7 @@ use crate::{messages::channels::receivers::reliable_receiver::ReliableReceiver, 
     entity::entity_converters::GlobalWorldManagerType,
     host::host_world_manager::{CommandId, HostWorldManager},
     remote::remote_entity_waitlist::{RemoteEntityWaitlist, WaitlistStore},
+    sync::HostEntityChannel,
 }, ChannelSender, ComponentKind, ComponentKinds, ComponentUpdate, DiffMask, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityCommand, EntityConverterMut, EntityEvent, EntityMessage, EntityMessageType, GlobalEntity, GlobalEntitySpawner, HostEntity, InScopeEntities, LocalEntityAndGlobalEntityConverter, LocalEntityMap, MessageIndex, OwnedLocalEntity, PacketNotifiable, ReliableSender, RemoteEntity, RemoteWorldManager, Replicate, Tick, WorldMutType, WorldRefType};
 use crate::world::update::entity_update_manager::EntityUpdateManager;
 
@@ -130,9 +131,35 @@ impl LocalWorldManager {
         let new_host_entity = self.host.host_generate_entity();
         self.entity_map.insert_with_host_entity(*global_entity, new_host_entity);
 
-        // TODO: Implement proper entity migration
-        // let remote_entity_channel = self.remote.remove_entity_channel(&old_remote_entity);
+        // Step 1: Force-drain all buffers in RemoteEntityChannel
+        self.remote.force_drain_entity_buffers(&old_remote_entity);
+
+        // Step 2: Extract component state from RemoteEntityChannel
+        let component_kinds = self.remote.extract_component_kinds(&old_remote_entity);
+
+        // Step 3: Remove RemoteEntityChannel from RemoteEngine
+        let _old_remote_channel = self.remote.remove_entity_channel(&old_remote_entity);
+
+        // Step 4: Create new HostEntityChannel with extracted component state
+        let new_host_channel = HostEntityChannel::new_with_components(
+            HostType::Server, // TODO: Get actual host_type from entity_map
+            component_kinds
+        );
+
+        // Step 5: Insert new HostEntityChannel into HostEngine
+        self.host.insert_entity_channel(new_host_entity, new_host_channel);
+
+        // Step 6: Install entity redirect in LocalEntityMap
+        let old_entity = OwnedLocalEntity::Remote(old_remote_entity.value());
+        let new_entity = OwnedLocalEntity::Host(new_host_entity.value());
+        self.entity_map.install_entity_redirect(old_entity, new_entity);
+
+        // Step 7: Update all references in sent_command_packets
+        self.update_sent_command_entity_refs(global_entity, old_entity, new_entity);
+
+        // Step 8: Clean up old remote entity
         self.remote.despawn_entity(&mut self.entity_map, &old_remote_entity);
+
         new_host_entity
     }
 
@@ -640,6 +667,24 @@ impl LocalWorldManager {
                 // Remote entity message
                 let remote_entity = RemoteEntity::new(remote_entity);
                 self.remote.deliver_message(id, msg.with_entity(remote_entity));
+            }
+        }
+    }
+
+    fn update_sent_command_entity_refs(
+        &mut self,
+        global_entity: &GlobalEntity,
+        old_entity: OwnedLocalEntity,
+        new_entity: OwnedLocalEntity
+    ) {
+        // Iterate through sent_command_packets and update entity references
+        for (_, (_, commands)) in self.sent_command_packets.iter_mut() {
+            for (_, message) in commands.iter_mut() {
+                if let Some(entity) = message.entity() {
+                    if entity == old_entity {
+                        *message = message.clone().with_entity(new_entity);
+                    }
+                }
             }
         }
     }

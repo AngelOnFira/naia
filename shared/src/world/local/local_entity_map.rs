@@ -7,6 +7,7 @@ pub struct LocalEntityMap {
     global_to_local: HashMap<GlobalEntity, LocalEntityRecord>,
     host_to_global: HashMap<HostEntity, GlobalEntity>,
     remote_to_global: HashMap<RemoteEntity, GlobalEntity>,
+    entity_redirects: HashMap<OwnedLocalEntity, OwnedLocalEntity>,
 }
 
 impl LocalEntityAndGlobalEntityConverter for LocalEntityMap {
@@ -73,6 +74,7 @@ impl LocalEntityMap {
             global_to_local: HashMap::new(),
             host_to_global: HashMap::new(),
             remote_to_global: HashMap::new(),
+            entity_redirects: HashMap::new(),
         }
     }
 
@@ -166,5 +168,20 @@ impl LocalEntityMap {
 
     pub fn entity_converter(&self) -> &dyn LocalEntityAndGlobalEntityConverter {
         self
+    }
+
+    pub(crate) fn install_entity_redirect(
+        &mut self,
+        old_entity: OwnedLocalEntity,
+        new_entity: OwnedLocalEntity
+    ) {
+        self.entity_redirects.insert(old_entity, new_entity);
+    }
+
+    pub(crate) fn apply_entity_redirect(
+        &self,
+        entity: &OwnedLocalEntity
+    ) -> OwnedLocalEntity {
+        self.entity_redirects.get(entity).copied().unwrap_or(*entity)
     }
 }
