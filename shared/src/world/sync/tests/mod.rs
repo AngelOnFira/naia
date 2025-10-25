@@ -5,3 +5,4 @@
 #![cfg(test)]
 
 mod engine;
+mod migration;

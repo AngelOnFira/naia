@@ -141,4 +141,8 @@ impl RemoteComponentChannel {
         self.inserted = inserted;
         self.last_epoch_id = Some(last_epoch_id);
     }
+
+    pub(crate) fn is_inserted(&self) -> bool {
+        self.inserted
+    }
 }

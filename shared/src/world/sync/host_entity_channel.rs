@@ -125,4 +125,21 @@ impl HostEntityChannel {
             }
         }
     }
+
+    pub(crate) fn new_with_components(
+        host_type: HostType,
+        component_kinds: HashSet<ComponentKind>
+    ) -> Self {
+        Self {
+            component_channels: component_kinds,
+            auth_channel: AuthChannel::new(host_type),
+            buffered_messages: OrderedIds::new(),
+            incoming_messages: Vec::new(),
+            outgoing_commands: Vec::new(),
+        }
+    }
+
+    pub(crate) fn extract_outgoing_commands(&mut self) -> Vec<EntityCommand> {
+        std::mem::take(&mut self.outgoing_commands)
+    }
 }

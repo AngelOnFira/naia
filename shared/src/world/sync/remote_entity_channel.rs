@@ -260,6 +260,18 @@ impl RemoteEntityChannel {
         let (_, msg) = self.buffered_messages.pop_front().unwrap();
         self.incoming_messages.push(msg);
     }
+
+    pub(crate) fn get_state(&self) -> EntityChannelState {
+        self.state
+    }
+
+    pub(crate) fn extract_inserted_component_kinds(&self) -> HashSet<ComponentKind> {
+        self.component_channels
+            .iter()
+            .filter(|(_, channel)| channel.is_inserted())
+            .map(|(kind, _)| *kind)
+            .collect()
+    }
 }
 
 // This function computes the intersection of keys between a `HashSet` and a `HashMap`.
