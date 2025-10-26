@@ -74,3 +74,4 @@ pub use host_entity_channel::HostEntityChannel;
 pub mod tests;
 mod auth_channel;
 pub mod ordered_ids;
+pub mod bevy_integration;
