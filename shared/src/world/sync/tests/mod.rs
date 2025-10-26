@@ -8,3 +8,4 @@ mod engine;
 mod migration;
 mod bulletproof_migration;
 mod integration_migration;
+mod real_migration_tests;
