@@ -9,8 +9,18 @@ use crate::{
     HostType,
 };
 use crate::world::local::local_entity::RemoteEntity;
-use crate::{GlobalEntity, HostEntity, OwnedLocalEntity, LocalEntityMap};
+use crate::{GlobalEntity, HostEntity, OwnedLocalEntity, LocalEntityMap, BigMapKey};
 use crate::world::local::local_world_manager::LocalWorldManager;
+use crate::world::entity::entity_converters::GlobalWorldManagerType;
+use std::collections::HashSet;
+
+// BULLETPROOF: Test implementation of GlobalWorldManagerType
+struct TestGlobalWorldManager;
+impl GlobalWorldManagerType for TestGlobalWorldManager {
+    fn get_in_scope_entities(&self) -> HashSet<GlobalEntity> {
+        HashSet::new()
+    }
+}
 
 /// Helper function to create a component kind for testing
 fn component_kind<T: 'static>() -> ComponentKind {
@@ -151,7 +161,7 @@ fn migrate_entity_remote_to_host_success() {
         &None,
         HostType::Server,
         1,
-        &crate::world::entity::entity_converters::GlobalWorldManagerType::Server
+        &TestGlobalWorldManager as &dyn GlobalWorldManagerType
     );
     let global_entity = GlobalEntity::from_u64(1);
     
@@ -186,7 +196,7 @@ fn migrate_with_buffered_operations() {
         &None,
         HostType::Server,
         1,
-        &crate::world::entity::entity_converters::GlobalWorldManagerType::Server
+        &TestGlobalWorldManager as &dyn GlobalWorldManagerType
     );
     let global_entity = GlobalEntity::from_u64(1);
     let remote_entity = RemoteEntity::new(42);
@@ -209,7 +219,7 @@ fn migrate_with_buffered_operations() {
 fn remote_entity_channel_force_drain_all_buffers() {
     // Test that we can force-drain all entity-level and component-level buffers
     let mut channel = RemoteEntityChannel::new(HostType::Server);
-    let entity = RemoteEntity::new(1);
+    let _entity = RemoteEntity::new(1);
     let comp1 = component_kind::<TestComponent1>();
     let comp2 = component_kind::<TestComponent2>();
     
@@ -251,7 +261,7 @@ fn entity_message_apply_redirects() {
 #[test]
 fn force_drain_resolves_all_buffers() {
     let mut channel = RemoteEntityChannel::new(HostType::Client);
-    let entity = RemoteEntity::new(1);
+    let _entity = RemoteEntity::new(1);
     let comp = component_kind::<TestComponent1>();
     
     // Setup: spawn + buffer some out-of-order operations
@@ -319,7 +329,7 @@ fn migrate_nonexistent_entity_panics() {
         &None,
         HostType::Server,
         1,
-        &crate::world::entity::entity_converters::GlobalWorldManagerType::Server
+        &TestGlobalWorldManager as &dyn GlobalWorldManagerType
     );
     let fake_entity = GlobalEntity::from_u64(999);
     
@@ -333,7 +343,7 @@ fn migrate_host_entity_panics() {
         &None,
         HostType::Server,
         1,
-        &crate::world::entity::entity_converters::GlobalWorldManagerType::Server
+        &TestGlobalWorldManager as &dyn GlobalWorldManagerType
     );
     let global_entity = GlobalEntity::from_u64(1);
     

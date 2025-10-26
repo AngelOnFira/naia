@@ -312,6 +312,11 @@ impl RemoteEntityChannel {
         comp_channel.set_inserted(true, epoch_id);
         self.component_channels.insert(component_kind, comp_channel);
     }
+
+    /// BULLETPROOF: Extract all incoming events for testing and validation
+    pub(crate) fn take_incoming_events(&mut self) -> Vec<EntityMessage<()>> {
+        std::mem::take(&mut self.incoming_messages)
+    }
 }
 
 // This function computes the intersection of keys between a `HashSet` and a `HashMap`.
