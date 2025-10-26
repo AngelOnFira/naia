@@ -1,13 +1,13 @@
 use std::collections::HashMap;
 
-use crate::{world::local::{local_entity_record::LocalEntityRecord, local_entity::{HostEntity, OwnedLocalEntity, RemoteEntity}}, EntityDoesNotExistError, GlobalEntity, HostType, LocalEntityAndGlobalEntityConverter};
+use crate::{world::local::{local_entity_record::LocalEntityRecord, local_entity::{HostEntity, OwnedLocalEntity, RemoteEntity}}, EntityDoesNotExistError, GlobalEntity, HostType, Instant, LocalEntityAndGlobalEntityConverter};
 
 pub struct LocalEntityMap {
     host_type: HostType,
     global_to_local: HashMap<GlobalEntity, LocalEntityRecord>,
     host_to_global: HashMap<HostEntity, GlobalEntity>,
     remote_to_global: HashMap<RemoteEntity, GlobalEntity>,
-    entity_redirects: HashMap<OwnedLocalEntity, OwnedLocalEntity>,
+    entity_redirects: HashMap<OwnedLocalEntity, (OwnedLocalEntity, Instant)>,
 }
 
 impl LocalEntityAndGlobalEntityConverter for LocalEntityMap {
@@ -76,6 +76,10 @@ impl LocalEntityMap {
             remote_to_global: HashMap::new(),
             entity_redirects: HashMap::new(),
         }
+    }
+
+    pub fn host_type(&self) -> HostType {
+        self.host_type
     }
 
     pub fn insert_with_host_entity(&mut self, global_entity: GlobalEntity, host_entity: HostEntity) {
@@ -175,13 +179,25 @@ impl LocalEntityMap {
         old_entity: OwnedLocalEntity,
         new_entity: OwnedLocalEntity
     ) {
-        self.entity_redirects.insert(old_entity, new_entity);
+        let now = Instant::now();
+        self.entity_redirects.insert(old_entity, (new_entity, now));
     }
 
     pub(crate) fn apply_entity_redirect(
         &self,
         entity: &OwnedLocalEntity
     ) -> OwnedLocalEntity {
-        self.entity_redirects.get(entity).copied().unwrap_or(*entity)
+        self.entity_redirects
+            .get(entity)
+            .map(|(new_entity, _)| *new_entity)
+            .unwrap_or(*entity)
+    }
+
+    pub(crate) fn cleanup_old_redirects(&mut self, now: &Instant, ttl_seconds: u64) {
+        use std::time::Duration;
+        let ttl_duration = Duration::from_secs(ttl_seconds);
+        self.entity_redirects.retain(|_, (_, timestamp)| {
+            timestamp.elapsed(now) < ttl_duration
+        });
     }
 }

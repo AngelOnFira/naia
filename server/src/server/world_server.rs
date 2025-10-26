@@ -9,7 +9,7 @@ use std::{
 
 use log::{info, warn};
 
-use naia_shared::{handshake::HandshakeHeader, BigMap, BitReader, BitWriter, Channel, ChannelKind, ChannelKinds, ComponentKind, ComponentKinds, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityDoesNotExistError, GlobalEntity, GlobalEntityMap, GlobalEntitySpawner, GlobalRequestId, GlobalResponseId, GlobalWorldManagerType, Instant, Message, MessageContainer, MessageKinds, PacketType, Protocol, Replicate, ReplicatedComponent, Request, Response, ResponseReceiveKey, ResponseSendKey, Serde, SerdeErr, SharedGlobalWorldManager, StandardHeader, Tick, Timer, WorldMutType, WorldRefType, EntityEvent, HostType};
+use naia_shared::{handshake::HandshakeHeader, BigMap, BitReader, BitWriter, Channel, ChannelKind, ChannelKinds, ComponentKind, ComponentKinds, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityCommand, EntityDoesNotExistError, GlobalEntity, GlobalEntityMap, GlobalEntitySpawner, GlobalRequestId, GlobalResponseId, GlobalWorldManagerType, Instant, Message, MessageContainer, MessageKinds, PacketType, Protocol, Replicate, ReplicatedComponent, Request, Response, ResponseReceiveKey, ResponseSendKey, Serde, SerdeErr, SharedGlobalWorldManager, StandardHeader, Tick, Timer, WorldMutType, WorldRefType, EntityEvent, HostType};
 
 use crate::{
     connection::{connection::Connection, io::Io, tick_buffer_messages::TickBufferMessages},
@@ -1556,11 +1556,26 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             panic!("connection does not exist")
         };
 
-        // Send EntityMigrateResponse action through EntityActionEvent system
-        let new_host_entity = connection
+        // Step 1: Migrate entity from RemoteEntity to HostEntity
+        // This creates the HostEntity in HostEngine so it can receive commands
+        let new_host_entity = match connection
             .base
             .world_manager
-            .migrate_entity_remote_to_host(global_entity);
+            .migrate_entity_remote_to_host(global_entity) {
+            Ok(entity) => entity,
+            Err(e) => {
+                panic!("Failed to migrate entity during delegation: {}", e);
+            }
+        };
+
+        // Step 2: Send EnableDelegation to transition AuthChannel state to Delegated
+        // CRITICAL: Must be AFTER migration (so HostEntity exists) but BEFORE MigrateResponse
+        connection
+            .base
+            .world_manager
+            .host_send_enable_delegation(global_entity);
+
+        // Step 3: Send MigrateResponse to client (valid because entity is now Delegated)
         connection
             .base
             .world_manager

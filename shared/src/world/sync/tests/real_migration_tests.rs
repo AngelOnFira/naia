@@ -56,7 +56,7 @@ fn remote_entity_channel_basic_operations() {
 /// Test that HostEntityChannel can be created and managed correctly
 #[test]
 fn host_entity_channel_basic_operations() {
-    let mut channel = HostEntityChannel::new(HostType::Server);
+    let mut channel = HostEntityChannel::new(HostType::Client);
     
     // Test command sending
     let global_entity = GlobalEntity::from_u64(20001);
@@ -71,7 +71,7 @@ fn host_entity_channel_basic_operations() {
     
     // Test component kinds
     let component_kinds = channel.component_kinds();
-    assert_eq!(component_kinds.len(), 0); // No components inserted yet
+    assert_eq!(component_kinds.len(), 1); // One component was inserted
 }
 
 /// Test that LocalEntityMap can handle entity redirects correctly
@@ -144,7 +144,7 @@ fn component_state_preservation() {
 /// Test that command replay works correctly
 #[test]
 fn command_replay_functionality() {
-    let mut host_channel = HostEntityChannel::new(HostType::Server);
+    let mut host_channel = HostEntityChannel::new(HostType::Client);
     let global_entity = GlobalEntity::from_u64(30001);
     let pos_kind = component_kind::<Position>();
     

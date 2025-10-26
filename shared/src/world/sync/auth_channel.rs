@@ -97,8 +97,33 @@ impl AuthChannel {
 
                 self.auth_status = Some(*next_status);
             }
-            _ => {
-                panic!("Unsupported command type for AuthChannelSender");
+            EntityMessageType::RequestAuthority => {
+                // Client is requesting authority for a delegated entity
+                if self.state != EntityAuthChannelState::Delegated {
+                    panic!("Cannot request authority on Entity: {:?} that is not delegated", entity);
+                }
+                // Auth status will be updated by server's SetAuthority response
+            }
+            EntityMessageType::EnableDelegationResponse => {
+                // Server is responding to delegation request
+                // This is valid for entities that were just delegated
+                if self.state != EntityAuthChannelState::Delegated {
+                    panic!("Cannot send EnableDelegationResponse for Entity: {:?} that is not delegated", entity);
+                }
+            }
+            EntityMessageType::MigrateResponse => {
+                // Server is responding with entity migration information
+                // This happens during delegation when entity ID changes
+                // Valid for delegated entities
+                if self.state != EntityAuthChannelState::Delegated {
+                    panic!("Cannot send MigrateResponse for Entity: {:?} that is not delegated", entity);
+                }
+            }
+            EntityMessageType::Noop => {
+                // No-op command, always valid
+            }
+            e => {
+                panic!("Unsupported command type for AuthChannelSender: {:?}", e);
             }
         }
     }
@@ -130,6 +155,7 @@ impl AuthChannel {
         self.receiver.buffer_pop_front_until_and_including(id);
     }
 
+    #[allow(dead_code)]
     pub(crate) fn receiver_buffer_pop_front_until_and_excluding(&mut self, id: MessageIndex) {
         self.receiver.buffer_pop_front_until_and_excluding(id);
     }

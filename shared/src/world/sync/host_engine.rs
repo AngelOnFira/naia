@@ -114,6 +114,14 @@ impl HostEngine {
             .expect("Cannot remove entity channel that doesn't exist")
     }
 
+    pub(crate) fn extract_entity_commands(&mut self, entity: &HostEntity) -> Vec<EntityCommand> {
+        if let Some(channel) = self.entity_channels.get_mut(entity) {
+            channel.extract_outgoing_commands()
+        } else {
+            Vec::new()
+        }
+    }
+
     pub(crate) fn insert_entity_channel(
         &mut self,
         entity: HostEntity,

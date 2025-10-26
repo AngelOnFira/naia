@@ -10,3 +10,4 @@ mod bulletproof_migration;
 mod integration_migration;
 mod real_migration_tests;
 mod perfect_migration_tests;
+mod command_validation_tests;

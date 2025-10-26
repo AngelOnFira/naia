@@ -172,7 +172,7 @@ impl LocalWorldManager {
         // BULLETPROOF: Step 4: Create new HostEntityChannel with extracted component state
         // This creates the new server-side entity channel with preserved state
         let new_host_channel = HostEntityChannel::new_with_components(
-            HostType::Server, // TODO: Get actual host_type from entity_map
+            self.entity_map.host_type(),
             component_kinds
         );
 
@@ -195,6 +195,15 @@ impl LocalWorldManager {
         self.remote.despawn_entity(&mut self.entity_map, &old_remote_entity);
 
         Ok(new_host_entity)
+    }
+
+    // only server sends this
+    pub fn host_send_enable_delegation(
+        &mut self,
+        global_entity: &GlobalEntity,
+    ) {
+        let command = EntityCommand::EnableDelegation(None, *global_entity);
+        self.host.send_command(&self.entity_map, command);
     }
 
     // only server sends this
@@ -254,6 +263,7 @@ impl LocalWorldManager {
 
     // Remote-focused
 
+    #[allow(dead_code)]
     pub(crate) fn has_remote_entity(&self, remote_entity: &RemoteEntity) -> bool {
         self.remote.has_entity(remote_entity)
     }
@@ -601,14 +611,17 @@ impl LocalWorldManager {
                     pop = true;
                 }
             } else {
-                return;
+                break;
             }
             if pop {
                 self.sent_command_packets.pop_front();
             } else {
-                return;
+                break;
             }
         }
+
+        // Also cleanup old entity redirects with the same TTL
+        self.entity_map.cleanup_old_redirects(now, 60);
     }
 
     pub fn take_outgoing_events<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
@@ -705,7 +718,7 @@ impl LocalWorldManager {
         }
     }
 
-    fn update_sent_command_entity_refs(
+    pub fn update_sent_command_entity_refs(
         &mut self,
         _global_entity: &GlobalEntity,
         old_entity: OwnedLocalEntity,
@@ -726,10 +739,8 @@ impl LocalWorldManager {
     pub fn extract_host_entity_commands(&mut self, global_entity: &GlobalEntity) -> Vec<EntityCommand> {
         // Get host_entity from entity_map
         let host_entity = self.entity_map.global_entity_to_host_entity(global_entity).unwrap();
-        // Get host_entity_channel from host engine
-        let channel = self.host.get_entity_channel(&host_entity).unwrap();
-        // TODO: Need to get mutable reference to extract commands
-        Vec::new() // Placeholder until we can get mutable access
+        // Extract commands from host engine
+        self.host.extract_entity_commands(&host_entity)
     }
 
     pub fn extract_host_component_kinds(&self, global_entity: &GlobalEntity) -> HashSet<ComponentKind> {
@@ -742,11 +753,12 @@ impl LocalWorldManager {
     }
 
     pub fn remove_host_entity(&mut self, global_entity: &GlobalEntity) {
-        // Remove from entity_map
-        self.entity_map.remove_by_global_entity(global_entity);
-        // Remove from host engine
+        // Lookup host_entity FIRST before removing from entity_map
         let host_entity = self.entity_map.global_entity_to_host_entity(global_entity).unwrap();
+        // Remove from host engine
         self.host.remove_entity_channel(&host_entity);
+        // Remove from entity_map LAST
+        self.entity_map.remove_by_global_entity(global_entity);
     }
 
     pub fn insert_remote_entity(
@@ -773,9 +785,13 @@ impl LocalWorldManager {
         self.entity_map.install_entity_redirect(old, new);
     }
 
+    pub fn apply_entity_redirect(&self, entity: OwnedLocalEntity) -> OwnedLocalEntity {
+        self.entity_map.apply_entity_redirect(&entity)
+    }
+
     pub fn replay_entity_command(&mut self, global_entity: &GlobalEntity, command: EntityCommand) {
         // Send command through appropriate channel (should be remote after migration)
-        let remote_entity = self.entity_map.global_entity_to_remote_entity(global_entity).unwrap();
+        let _remote_entity = self.entity_map.global_entity_to_remote_entity(global_entity).unwrap();
         self.remote.send_entity_command(&self.entity_map, command);
     }
 }

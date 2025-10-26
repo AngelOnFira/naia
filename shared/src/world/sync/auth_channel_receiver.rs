@@ -66,10 +66,12 @@ impl AuthChannelReceiver {
     }
 
     /// Is invoked by `EntityChannel` when the entity despawns; this wipes all buffered state so a future *re‑spawn* starts clean.
+    #[allow(dead_code)]
     pub(crate) fn reset(&mut self) {
         *self = Self::new();
     }
 
+    #[allow(dead_code)]
     pub(crate) fn reset_next_subcommand_id(&mut self) {
         self.next_subcommand_id = 0;
     }
@@ -86,6 +88,7 @@ impl AuthChannelReceiver {
         self.buffered_messages.pop_front_until_and_including(id);
     }
 
+    #[allow(dead_code)]
     pub(crate) fn buffer_pop_front_until_and_excluding(&mut self, id: MessageIndex) {
         self.buffered_messages.pop_front_until_and_excluding(id);
     }

@@ -94,13 +94,17 @@ impl WorldReader {
             }
             EntityMessageType::Despawn => {
                 // read local entity
-                let local_entity = OwnedLocalEntity::de(reader)?.to_reversed();
+                let mut local_entity = OwnedLocalEntity::de(reader)?.to_reversed();
+                // apply redirect if entity was migrated
+                local_entity = world_manager.apply_entity_redirect(local_entity);
 
                 world_manager.receiver_buffer_message(message_id, EntityMessage::Despawn(local_entity));
             }
             EntityMessageType::InsertComponent => {
                 // read local entity
-                let local_entity = OwnedLocalEntity::de(reader)?.to_reversed();
+                let mut local_entity = OwnedLocalEntity::de(reader)?.to_reversed();
+                // apply redirect if entity was migrated
+                local_entity = world_manager.apply_entity_redirect(local_entity);
                 
                 // read component
                 let converter = world_manager.entity_converter();
@@ -119,7 +123,9 @@ impl WorldReader {
             }
             EntityMessageType::RemoveComponent => {
                 // read local entity
-                let local_entity = OwnedLocalEntity::de(reader)?.to_reversed();
+                let mut local_entity = OwnedLocalEntity::de(reader)?.to_reversed();
+                // apply redirect if entity was migrated
+                local_entity = world_manager.apply_entity_redirect(local_entity);
                 
                 // read component kind
                 let component_kind = ComponentKind::de(component_kinds, reader)?;
@@ -135,7 +141,9 @@ impl WorldReader {
                 let sub_command_id = SubCommandId::de(reader)?;
 
                 // read local entity
-                let local_entity = OwnedLocalEntity::de(reader)?.to_reversed();
+                let mut local_entity = OwnedLocalEntity::de(reader)?.to_reversed();
+                // apply redirect if entity was migrated
+                local_entity = world_manager.apply_entity_redirect(local_entity);
 
                 world_manager.receiver_buffer_message(message_id, EntityMessage::Publish(sub_command_id, local_entity));
             }
@@ -145,7 +153,9 @@ impl WorldReader {
                 let sub_command_id = SubCommandId::de(reader)?;
 
                 // read local entity
-                let local_entity = OwnedLocalEntity::de(reader)?.to_reversed();
+                let mut local_entity = OwnedLocalEntity::de(reader)?.to_reversed();
+                // apply redirect if entity was migrated
+                local_entity = world_manager.apply_entity_redirect(local_entity);
 
                 world_manager.receiver_buffer_message(message_id, EntityMessage::Unpublish(sub_command_id, local_entity));
             }
@@ -155,7 +165,9 @@ impl WorldReader {
                 let sub_command_id = SubCommandId::de(reader)?;
 
                 // read local entity
-                let local_entity = OwnedLocalEntity::de(reader)?.to_reversed();
+                let mut local_entity = OwnedLocalEntity::de(reader)?.to_reversed();
+                // apply redirect if entity was migrated
+                local_entity = world_manager.apply_entity_redirect(local_entity);
 
                 world_manager.receiver_buffer_message(message_id, EntityMessage::EnableDelegation(sub_command_id, local_entity));
             }
@@ -217,7 +229,9 @@ impl WorldReader {
                 let sub_command_id = SubCommandId::de(reader)?;
 
                 // read local entity
-                let local_entity = OwnedLocalEntity::de(reader)?.to_reversed();
+                let mut local_entity = OwnedLocalEntity::de(reader)?.to_reversed();
+                // apply redirect if entity was migrated
+                local_entity = world_manager.apply_entity_redirect(local_entity);
 
                 world_manager.receiver_buffer_message(message_id, EntityMessage::ReleaseAuthority(sub_command_id, local_entity));
             }
@@ -277,7 +291,9 @@ impl WorldReader {
                 break;
             }
 
-            let local_entity = OwnedLocalEntity::de(reader)?.to_reversed();
+            let mut local_entity = OwnedLocalEntity::de(reader)?.to_reversed();
+            // apply redirect if entity was migrated
+            local_entity = world_manager.apply_entity_redirect(local_entity);
 
             Self::read_update(
                 world_manager,

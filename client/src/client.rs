@@ -2,7 +2,7 @@ use std::{any::Any, collections::VecDeque, hash::Hash, net::SocketAddr, time::Du
 
 use log::{info, warn};
 
-use naia_shared::{BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityDoesNotExistError, EntityEvent, FakeEntityConverter, GameInstant, GlobalEntity, GlobalEntityMap, GlobalEntitySpawner, GlobalRequestId, GlobalResponseId, GlobalWorldManagerType, HostType, Instant, Message, MessageContainer, PacketType, Protocol, Replicate, ReplicatedComponent, Request, Response, ResponseReceiveKey, ResponseSendKey, Serde, SharedGlobalWorldManager, SocketConfig, StandardHeader, Tick, WorldMutType, WorldRefType};
+use naia_shared::{BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityDoesNotExistError, EntityEvent, FakeEntityConverter, GameInstant, GlobalEntity, GlobalEntityMap, GlobalEntitySpawner, GlobalRequestId, GlobalResponseId, GlobalWorldManagerType, HostType, Instant, Message, MessageContainer, OwnedLocalEntity, PacketType, Protocol, Replicate, ReplicatedComponent, Request, Response, ResponseReceiveKey, ResponseSendKey, Serde, SharedGlobalWorldManager, SocketConfig, StandardHeader, Tick, WorldMutType, WorldRefType};
 
 use super::{client_config::ClientConfig, error::NaiaClientError, world_events::WorldEvents};
 use crate::{
@@ -1671,8 +1671,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     let world_entity = match self
                         .global_entity_map
                         .global_entity_to_entity(&global_entity) {
-                        Some(entity) => entity,
-                        None => {
+                        Ok(entity) => entity,
+                        Err(_) => {
                             eprintln!("ERROR: Received MigrateResponse for unknown global entity: {:?}", global_entity);
                             return;
                         }
@@ -1688,8 +1688,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     let old_host_entity = match connection.base.world_manager
                         .entity_converter()
                         .global_entity_to_host_entity(&global_entity) {
-                        Some(entity) => entity,
-                        None => {
+                        Ok(entity) => entity,
+                        Err(_) => {
                             eprintln!("ERROR: Entity {:?} does not exist as HostEntity before migration", global_entity);
                             return;
                         }

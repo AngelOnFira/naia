@@ -128,6 +128,10 @@ impl HostWorldManager {
         self.host_engine.get_world()
     }
 
+    pub(crate) fn extract_entity_commands(&mut self, host_entity: &HostEntity) -> Vec<EntityCommand> {
+        self.host_engine.extract_entity_commands(host_entity)
+    }
+
     pub(crate) fn get_delivered_world(&self) -> &HashMap<HostEntity, RemoteEntityChannel> {
         self.delivered_engine.get_world()
     }

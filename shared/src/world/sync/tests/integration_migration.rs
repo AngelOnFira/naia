@@ -83,7 +83,8 @@ fn server_side_migration_complete_flow() {
     // MIGRATION: Insert new HostEntityChannel
     host_engine.insert_entity_channel(host_entity, new_host_channel);
     
-    // MIGRATION: Update entity map
+    // MIGRATION: Update entity map - remove old mapping first
+    entity_map.remove_by_global_entity(&global_entity);
     entity_map.insert_with_host_entity(global_entity, host_entity);
     
     // MIGRATION: Install entity redirect
@@ -111,8 +112,8 @@ fn server_side_migration_complete_flow() {
 /// INTEGRATION TEST: Client-side migration with command replay
 #[test]
 fn client_side_migration_with_command_replay() {
-    // Setup: Create HostEntityChannel with commands
-    let mut host_channel = HostEntityChannel::new(HostType::Server);
+    // Setup: Create HostEntityChannel with commands (Client-owned entity)
+    let mut host_channel = HostEntityChannel::new(HostType::Client);
     let global_entity = GlobalEntity::from_u64(10002);
     let pos_kind = component_kind::<Position>();
     let vel_kind = component_kind::<Velocity>();
@@ -129,7 +130,7 @@ fn client_side_migration_with_command_replay() {
     
     // MIGRATION: Extract component state
     let component_kinds = host_channel.component_kinds().clone();
-    assert_eq!(component_kinds.len(), 0); // No components inserted yet
+    assert_eq!(component_kinds.len(), 2); // Two components were inserted
     
     // MIGRATION: Create new RemoteEntityChannel
     let mut remote_channel = RemoteEntityChannel::new(HostType::Client);
@@ -263,7 +264,7 @@ fn concurrent_migration_scenarios() {
 /// INTEGRATION TEST: Migration with authority changes
 #[test]
 fn migration_with_authority_changes() {
-    let mut host_channel = HostEntityChannel::new(HostType::Server);
+    let mut host_channel = HostEntityChannel::new(HostType::Client);
     let global_entity = GlobalEntity::from_u64(10003);
     
     // Add authority-related commands
