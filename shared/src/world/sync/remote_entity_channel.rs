@@ -284,6 +284,34 @@ impl RemoteEntityChannel {
             component_channel.force_drain_buffers(self.state);
         }
     }
+
+    pub(crate) fn insert_component(&mut self, component_kind: ComponentKind) {
+        if !self.component_channels.contains_key(&component_kind) {
+            self.component_channels.insert(component_kind, RemoteComponentChannel::new());
+        }
+    }
+
+    pub(crate) fn remove_component(&mut self, component_kind: ComponentKind) {
+        self.component_channels.remove(&component_kind);
+    }
+
+    pub(crate) fn set_spawned(&mut self, epoch_id: MessageIndex) {
+        if self.state != EntityChannelState::Despawned {
+            panic!("Can only set spawned on despawned entity");
+        }
+        self.state = EntityChannelState::Spawned;
+        self.last_epoch_id = Some(epoch_id);
+    }
+
+    pub(crate) fn insert_component_channel_as_inserted(
+        &mut self,
+        component_kind: ComponentKind,
+        epoch_id: MessageIndex
+    ) {
+        let mut comp_channel = RemoteComponentChannel::new();
+        comp_channel.set_inserted(true, epoch_id);
+        self.component_channels.insert(component_kind, comp_channel);
+    }
 }
 
 // This function computes the intersection of keys between a `HashSet` and a `HashMap`.

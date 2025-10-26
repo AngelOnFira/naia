@@ -489,6 +489,10 @@ impl RemoteWorldManager {
     pub(crate) fn remove_entity_channel(&mut self, remote_entity: &RemoteEntity) -> RemoteEntityChannel {
         self.remote_engine.remove_entity_channel(remote_entity)
     }
+
+    pub(crate) fn insert_entity_channel(&mut self, remote_entity: RemoteEntity, channel: RemoteEntityChannel) {
+        self.remote_engine.insert_entity_channel(remote_entity, channel);
+    }
 }
 
 impl InScopeEntities<RemoteEntity> for RemoteWorldManager {

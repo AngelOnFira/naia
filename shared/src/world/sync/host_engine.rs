@@ -124,4 +124,8 @@ impl HostEngine {
         }
         self.entity_channels.insert(entity, channel);
     }
+
+    pub(crate) fn get_entity_channel(&self, entity: &HostEntity) -> Option<&HostEntityChannel> {
+        self.entity_channels.get(entity)
+    }
 }

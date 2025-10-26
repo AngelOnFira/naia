@@ -142,4 +142,8 @@ impl HostEntityChannel {
     pub(crate) fn extract_outgoing_commands(&mut self) -> Vec<EntityCommand> {
         std::mem::take(&mut self.outgoing_commands)
     }
+
+    pub(crate) fn component_kinds(&self) -> &HashSet<ComponentKind> {
+        &self.component_channels
+    }
 }

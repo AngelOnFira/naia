@@ -688,6 +688,62 @@ impl LocalWorldManager {
             }
         }
     }
+
+    pub fn extract_host_entity_commands(&mut self, global_entity: &GlobalEntity) -> Vec<EntityCommand> {
+        // Get host_entity from entity_map
+        let host_entity = self.entity_map.global_entity_to_host_entity(global_entity).unwrap();
+        // Get host_entity_channel from host engine
+        let channel = self.host.get_entity_channel(&host_entity).unwrap();
+        // Call extract_outgoing_commands()
+        channel.extract_outgoing_commands()
+    }
+
+    pub fn extract_host_component_kinds(&self, global_entity: &GlobalEntity) -> HashSet<ComponentKind> {
+        // Get host_entity from entity_map
+        let host_entity = self.entity_map.global_entity_to_host_entity(global_entity).unwrap();
+        // Get host_entity_channel from host engine
+        let channel = self.host.get_entity_channel(&host_entity).unwrap();
+        // Return component_channels clone
+        channel.component_kinds().clone()
+    }
+
+    pub fn remove_host_entity(&mut self, global_entity: &GlobalEntity) {
+        // Remove from entity_map
+        self.entity_map.remove_by_global_entity(global_entity);
+        // Remove from host engine
+        let host_entity = self.entity_map.global_entity_to_host_entity(global_entity).unwrap();
+        self.host.remove_entity_channel(&host_entity);
+    }
+
+    pub fn insert_remote_entity(
+        &mut self,
+        global_entity: &GlobalEntity,
+        remote_entity: RemoteEntity,
+        component_kinds: HashSet<ComponentKind>
+    ) {
+        // Insert into entity_map
+        self.entity_map.insert_with_remote_entity(*global_entity, remote_entity);
+        // Create RemoteEntityChannel
+        let mut channel = RemoteEntityChannel::new(HostType::Client);
+        // Set state to Spawned
+        channel.set_spawned(1); // Use dummy message ID
+        // For each component_kind, add RemoteComponentChannel with inserted=true
+        for component_kind in component_kinds {
+            channel.insert_component_channel_as_inserted(component_kind, 1);
+        }
+        // Insert into remote engine
+        self.remote.insert_entity_channel(remote_entity, channel);
+    }
+
+    pub fn install_entity_redirect(&mut self, old: OwnedLocalEntity, new: OwnedLocalEntity) {
+        self.entity_map.install_entity_redirect(old, new);
+    }
+
+    pub fn replay_entity_command(&mut self, global_entity: &GlobalEntity, command: EntityCommand) {
+        // Send command through appropriate channel (should be remote after migration)
+        let remote_entity = self.entity_map.global_entity_to_remote_entity(global_entity).unwrap();
+        self.remote.send_entity_command(remote_entity, command);
+    }
 }
 
 impl PacketNotifiable for LocalWorldManager {

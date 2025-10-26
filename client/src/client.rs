@@ -1666,20 +1666,63 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         .unwrap();
                     self.entity_update_authority(&global_entity, &world_entity, new_auth_status);
                 }
-                EntityEvent::MigrateResponse(global_entity, _remote_entity) => {
+                EntityEvent::MigrateResponse(global_entity, new_remote_entity) => {
                     let world_entity = self
                         .global_entity_map
                         .global_entity_to_entity(&global_entity)
                         .unwrap();
+                    
+                    // Step 1: Get old HostEntity from LocalEntityMap
+                    let Some(connection) = &mut self.server_connection else {
+                        panic!("Received MigrateResponse without connection");
+                    };
+                    let old_host_entity = connection.base.world_manager
+                        .entity_converter()
+                        .global_entity_to_host_entity(&global_entity)
+                        .expect("Entity should exist as HostEntity before migration");
+
+                    // Step 2: Extract and buffer outgoing commands from HostEntityChannel
+                    let buffered_commands = connection.base.world_manager
+                        .extract_host_entity_commands(&global_entity);
+
+                    // Step 3: Extract component state from HostEntityChannel
+                    let component_kinds = connection.base.world_manager
+                        .extract_host_component_kinds(&global_entity);
+
+                    // Step 4: Remove HostEntityChannel from HostEngine
+                    connection.base.world_manager
+                        .remove_host_entity(&global_entity);
+
+                    // Step 5: Create RemoteEntityChannel with extracted component state
+                    connection.base.world_manager
+                        .insert_remote_entity(&global_entity, new_remote_entity, component_kinds);
+
+                    // Step 6: Install entity redirect in LocalEntityMap
+                    let old_entity = OwnedLocalEntity::Host(old_host_entity.value());
+                    let new_entity = OwnedLocalEntity::Remote(new_remote_entity.value());
+                    connection.base.world_manager
+                        .install_entity_redirect(old_entity, new_entity);
+
+                    // Step 7: Update sent_command_packets entity references
+                    connection.base.world_manager
+                        .update_sent_command_entity_refs(&global_entity, old_entity, new_entity);
+
+                    // Step 8: Re-validate and replay buffered commands
+                    for command in buffered_commands {
+                        if command.is_valid_for_remote_entity() {
+                            connection.base.world_manager
+                                .replay_entity_command(&global_entity, command);
+                        }
+                    }
+
+                    // Step 9: Complete delegation in global world manager
                     self.entity_complete_delegation(world, &global_entity, &world_entity);
 
+                    // Step 10: Update authority status
                     self.global_world_manager
                         .entity_update_authority(&global_entity, EntityAuthStatus::Granted);
 
-                    // self.add_redundant_remote_entity_to_host(&world_entity, remote_entity);
-
-                    todo!();
-
+                    // Step 11: Emit AuthGrant event
                     self.incoming_world_events.push_auth_grant(world_entity);
                 }
                 EntityEvent::UpdateComponent(tick, global_entity, component_kind) => {

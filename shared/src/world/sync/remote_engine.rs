@@ -113,12 +113,34 @@ impl<E: Copy + Hash + Eq + Debug> RemoteEngine<E> {
         entity_channel.drain_outgoing_messages_into(&mut self.outgoing_commands);
     }
 
-    pub fn send_entity_command(&mut self, entity: E, _command: EntityCommand) {
+    pub fn send_entity_command(&mut self, entity: E, command: EntityCommand) {
         if !self.entity_channels.contains_key(&entity) {
             panic!("Cannot send a command to an entity that does not exist in the engine: {:?}", entity);
         }
 
-        todo!("Handle Despawn, Insert, Remove commands here!");
+        // Handle entity commands for RemoteEngine
+        match command {
+            EntityCommand::Despawn(_, _) => {
+                // Remove the entity channel
+                self.entity_channels.remove(&entity);
+            }
+            EntityCommand::InsertComponent(_, component_kind) => {
+                // Insert component into the entity channel
+                if let Some(channel) = self.entity_channels.get_mut(&entity) {
+                    channel.insert_component(component_kind);
+                }
+            }
+            EntityCommand::RemoveComponent(_, component_kind) => {
+                // Remove component from the entity channel
+                if let Some(channel) = self.entity_channels.get_mut(&entity) {
+                    channel.remove_component(component_kind);
+                }
+            }
+            _ => {
+                // Other commands are handled by the auth system or are not applicable
+                // to RemoteEngine (like Publish, Unpublish, etc.)
+            }
+        }
     }
 
     pub(crate) fn remove_entity_channel(&mut self, entity: &E) -> RemoteEntityChannel {

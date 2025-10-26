@@ -87,4 +87,22 @@ impl EntityCommand {
             }
         }
     }
+
+    pub(crate) fn is_valid_for_remote_entity(&self) -> bool {
+        // During client-side migration, some commands become invalid
+        // Publish/Unpublish don't make sense for delegated entities
+        // Delegation commands don't make sense post-delegation
+        match self {
+            Self::Publish(_, _) | 
+            Self::Unpublish(_, _) |
+            Self::EnableDelegation(_, _) |
+            Self::DisableDelegation(_, _) => false,
+            
+            Self::InsertComponent(_, _) |
+            Self::RemoveComponent(_, _) |
+            Self::Despawn(_) => true,
+            
+            _ => false,
+        }
+    }
 }
