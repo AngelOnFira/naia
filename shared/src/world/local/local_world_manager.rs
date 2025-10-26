@@ -140,18 +140,16 @@ impl LocalWorldManager {
     pub fn migrate_entity_remote_to_host(
         &mut self,
         global_entity: &GlobalEntity,
-    ) -> HostEntity {
-        // BULLETPROOF: Validate entity exists and is remote-owned
+    ) -> Result<HostEntity, String> {
+        // Validate entity exists and is remote-owned
         let Some(local_entity_record) = self.entity_map.remove_by_global_entity(global_entity) else {
-            panic!("BULLETPROOF ERROR: Attempting to migrate entity which does not exist in local entity map! GlobalEntity: {:?}", global_entity);
+            return Err(format!("Entity does not exist in local entity map: {:?}", global_entity));
         };
         
         if !local_entity_record.is_remote_owned() {
             // Restore the entity record since we removed it
             self.entity_map.insert_with_remote_entity(*global_entity, local_entity_record.remote_entity());
-            panic!("BULLETPROOF ERROR: Attempting to migrate entity which is not remote-owned! GlobalEntity: {:?}, Current owner: {:?}", 
-                   global_entity, 
-                   if local_entity_record.is_host_owned() { "Host" } else { "Unknown" });
+            return Err(format!("Entity is not remote-owned: {:?}", global_entity));
         }
         let old_remote_entity = local_entity_record.remote_entity();
 
@@ -196,7 +194,7 @@ impl LocalWorldManager {
         // This removes the old client-side entity channel
         self.remote.despawn_entity(&mut self.entity_map, &old_remote_entity);
 
-        new_host_entity
+        Ok(new_host_entity)
     }
 
     // only server sends this

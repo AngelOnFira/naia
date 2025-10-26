@@ -1667,25 +1667,33 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     self.entity_update_authority(&global_entity, &world_entity, new_auth_status);
                 }
                 EntityEvent::MigrateResponse(global_entity, new_remote_entity) => {
-                    // BULLETPROOF: Validate we have a valid world entity
-                    let world_entity = self
+                    // Validate we have a valid world entity
+                    let world_entity = match self
                         .global_entity_map
-                        .global_entity_to_entity(&global_entity)
-                        .unwrap_or_else(|| {
-                            panic!("BULLETPROOF ERROR: Received MigrateResponse for unknown global entity: {:?}", global_entity);
-                        });
-                    
-                    // BULLETPROOF: Validate we have an active connection
-                    let Some(connection) = &mut self.server_connection else {
-                        panic!("BULLETPROOF ERROR: Received MigrateResponse without active server connection");
+                        .global_entity_to_entity(&global_entity) {
+                        Some(entity) => entity,
+                        None => {
+                            eprintln!("ERROR: Received MigrateResponse for unknown global entity: {:?}", global_entity);
+                            return;
+                        }
                     };
-                    // BULLETPROOF: Validate entity exists as HostEntity before migration
-                    let old_host_entity = connection.base.world_manager
+                    
+                    // Validate we have an active connection
+                    let Some(connection) = &mut self.server_connection else {
+                        eprintln!("ERROR: Received MigrateResponse without active server connection");
+                        return;
+                    };
+                    
+                    // Validate entity exists as HostEntity before migration
+                    let old_host_entity = match connection.base.world_manager
                         .entity_converter()
-                        .global_entity_to_host_entity(&global_entity)
-                        .unwrap_or_else(|| {
-                            panic!("BULLETPROOF ERROR: Entity {:?} does not exist as HostEntity before migration", global_entity);
-                        });
+                        .global_entity_to_host_entity(&global_entity) {
+                        Some(entity) => entity,
+                        None => {
+                            eprintln!("ERROR: Entity {:?} does not exist as HostEntity before migration", global_entity);
+                            return;
+                        }
+                    };
 
                     // BULLETPROOF: Step 2: Extract and buffer outgoing commands from HostEntityChannel
                     // This preserves any pending commands that need to be replayed

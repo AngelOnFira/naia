@@ -8,7 +8,8 @@ use crate::{
         remote_entity_channel::RemoteEntityChannel,
         host_entity_channel::HostEntityChannel,
     },
-    HostType, EntityCommand, EntityMessage, MessageIndex, ComponentKind,
+    world::entity::entity_converters::LocalEntityAndGlobalEntityConverter,
+    HostType, EntityCommand, EntityMessage, ComponentKind,
     GlobalEntity, HostEntity, OwnedLocalEntity, LocalEntityMap, BigMapKey,
     EntityAuthStatus
 };
@@ -31,8 +32,8 @@ fn server_side_migration_complete_flow() {
     let mut remote_engine = crate::world::sync::remote_engine::RemoteEngine::new(HostType::Server);
     let mut host_engine = crate::world::sync::host_engine::HostEngine::new(HostType::Server);
     
-    // Create test entities
-    let global_entity = GlobalEntity::from_u64(1);
+    // Create test entities with unique IDs (use timestamp-like ID)
+    let global_entity = GlobalEntity::from_u64(10001);
     let remote_entity = crate::world::local::local_entity::RemoteEntity::new(42);
     let host_entity = HostEntity::new(100);
     
@@ -112,7 +113,7 @@ fn server_side_migration_complete_flow() {
 fn client_side_migration_with_command_replay() {
     // Setup: Create HostEntityChannel with commands
     let mut host_channel = HostEntityChannel::new(HostType::Server);
-    let global_entity = GlobalEntity::from_u64(1);
+    let global_entity = GlobalEntity::from_u64(10002);
     let pos_kind = component_kind::<Position>();
     let vel_kind = component_kind::<Velocity>();
     
@@ -176,15 +177,14 @@ fn migration_with_buffered_operations() {
 
 /// INTEGRATION TEST: Migration error handling
 #[test]
-#[should_panic(expected = "BULLETPROOF ERROR")]
 fn migration_error_handling() {
     // Test that migration fails gracefully with invalid input
     let entity_map = LocalEntityMap::new(HostType::Server);
     let fake_entity = GlobalEntity::from_u64(999);
     
-    // This should panic when trying to migrate non-existent entity
-    // We'll test this by trying to get a non-existent entity
-    let _result = entity_map.global_entity_to_remote_entity(&fake_entity).unwrap();
+    // This should return an error when trying to get a non-existent entity
+    let result = entity_map.global_entity_to_remote_entity(&fake_entity);
+    assert!(result.is_err());
 }
 
 /// INTEGRATION TEST: High-frequency migration operations
@@ -264,7 +264,7 @@ fn concurrent_migration_scenarios() {
 #[test]
 fn migration_with_authority_changes() {
     let mut host_channel = HostEntityChannel::new(HostType::Server);
-    let global_entity = GlobalEntity::from_u64(1);
+    let global_entity = GlobalEntity::from_u64(10003);
     
     // Add authority-related commands
     host_channel.send_command(EntityCommand::Publish(Some(1), global_entity));
