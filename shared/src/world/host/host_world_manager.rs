@@ -295,6 +295,14 @@ impl HostWorldManager {
         self.host_engine.insert_entity_channel(entity, channel);
     }
 
+    pub(crate) fn get_entity_channel(&self, entity: &HostEntity) -> Option<&HostEntityChannel> {
+        self.host_engine.get_entity_channel(entity)
+    }
+
+    pub(crate) fn remove_entity_channel(&mut self, entity: &HostEntity) -> HostEntityChannel {
+        self.host_engine.remove_entity_channel(entity)
+    }
+
     fn on_delivered_migrate_response(
         &mut self,
         local_entity_map: &mut LocalEntityMap,

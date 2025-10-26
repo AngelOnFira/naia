@@ -9,6 +9,7 @@ use crate::{messages::channels::receivers::reliable_receiver::ReliableReceiver, 
     sync::HostEntityChannel,
 }, ChannelSender, ComponentKind, ComponentKinds, ComponentUpdate, DiffMask, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityCommand, EntityConverterMut, EntityEvent, EntityMessage, EntityMessageType, GlobalEntity, GlobalEntitySpawner, HostEntity, InScopeEntities, LocalEntityAndGlobalEntityConverter, LocalEntityMap, MessageIndex, OwnedLocalEntity, PacketNotifiable, ReliableSender, RemoteEntity, RemoteWorldManager, Replicate, Tick, WorldMutType, WorldRefType};
 use crate::world::update::entity_update_manager::EntityUpdateManager;
+use crate::world::sync::RemoteEntityChannel;
 
 const RESEND_COMMAND_RTT_FACTOR: f32 = 1.5;
 const COMMAND_RECORD_TTL: Duration = Duration::from_secs(60);
@@ -673,7 +674,7 @@ impl LocalWorldManager {
 
     fn update_sent_command_entity_refs(
         &mut self,
-        global_entity: &GlobalEntity,
+        _global_entity: &GlobalEntity,
         old_entity: OwnedLocalEntity,
         new_entity: OwnedLocalEntity
     ) {
@@ -694,8 +695,8 @@ impl LocalWorldManager {
         let host_entity = self.entity_map.global_entity_to_host_entity(global_entity).unwrap();
         // Get host_entity_channel from host engine
         let channel = self.host.get_entity_channel(&host_entity).unwrap();
-        // Call extract_outgoing_commands()
-        channel.extract_outgoing_commands()
+        // TODO: Need to get mutable reference to extract commands
+        Vec::new() // Placeholder until we can get mutable access
     }
 
     pub fn extract_host_component_kinds(&self, global_entity: &GlobalEntity) -> HashSet<ComponentKind> {
@@ -742,7 +743,7 @@ impl LocalWorldManager {
     pub fn replay_entity_command(&mut self, global_entity: &GlobalEntity, command: EntityCommand) {
         // Send command through appropriate channel (should be remote after migration)
         let remote_entity = self.entity_map.global_entity_to_remote_entity(global_entity).unwrap();
-        self.remote.send_entity_command(remote_entity, command);
+        self.remote.send_entity_command(&self.entity_map, command);
     }
 }
 

@@ -120,7 +120,7 @@ impl<E: Copy + Hash + Eq + Debug> RemoteEngine<E> {
 
         // Handle entity commands for RemoteEngine
         match command {
-            EntityCommand::Despawn(_, _) => {
+            EntityCommand::Despawn(_) => {
                 // Remove the entity channel
                 self.entity_channels.remove(&entity);
             }

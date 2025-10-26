@@ -9,6 +9,8 @@ use crate::{
     HostType,
 };
 use crate::world::local::local_entity::RemoteEntity;
+use crate::{GlobalEntity, HostEntity, OwnedLocalEntity, LocalEntityMap};
+use crate::world::local::local_world_manager::LocalWorldManager;
 
 /// Helper function to create a component kind for testing
 fn component_kind<T: 'static>() -> ComponentKind {

@@ -143,7 +143,4 @@ impl HostEntityChannel {
         std::mem::take(&mut self.outgoing_commands)
     }
 
-    pub(crate) fn component_kinds(&self) -> &HashSet<ComponentKind> {
-        &self.component_channels
-    }
 }

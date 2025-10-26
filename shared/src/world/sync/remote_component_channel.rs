@@ -160,8 +160,4 @@ impl RemoteComponentChannel {
         }
     }
 
-    pub(crate) fn set_inserted(&mut self, inserted: bool, epoch_id: MessageIndex) {
-        self.inserted = inserted;
-        self.last_epoch_id = Some(epoch_id);
-    }
 }
