@@ -1667,47 +1667,60 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     self.entity_update_authority(&global_entity, &world_entity, new_auth_status);
                 }
                 EntityEvent::MigrateResponse(global_entity, new_remote_entity) => {
+                    // BULLETPROOF: Validate we have a valid world entity
                     let world_entity = self
                         .global_entity_map
                         .global_entity_to_entity(&global_entity)
-                        .unwrap();
+                        .unwrap_or_else(|| {
+                            panic!("BULLETPROOF ERROR: Received MigrateResponse for unknown global entity: {:?}", global_entity);
+                        });
                     
-                    // Step 1: Get old HostEntity from LocalEntityMap
+                    // BULLETPROOF: Validate we have an active connection
                     let Some(connection) = &mut self.server_connection else {
-                        panic!("Received MigrateResponse without connection");
+                        panic!("BULLETPROOF ERROR: Received MigrateResponse without active server connection");
                     };
+                    // BULLETPROOF: Validate entity exists as HostEntity before migration
                     let old_host_entity = connection.base.world_manager
                         .entity_converter()
                         .global_entity_to_host_entity(&global_entity)
-                        .expect("Entity should exist as HostEntity before migration");
+                        .unwrap_or_else(|| {
+                            panic!("BULLETPROOF ERROR: Entity {:?} does not exist as HostEntity before migration", global_entity);
+                        });
 
-                    // Step 2: Extract and buffer outgoing commands from HostEntityChannel
+                    // BULLETPROOF: Step 2: Extract and buffer outgoing commands from HostEntityChannel
+                    // This preserves any pending commands that need to be replayed
                     let buffered_commands = connection.base.world_manager
                         .extract_host_entity_commands(&global_entity);
 
-                    // Step 3: Extract component state from HostEntityChannel
+                    // BULLETPROOF: Step 3: Extract component state from HostEntityChannel
+                    // This preserves the current component state during migration
                     let component_kinds = connection.base.world_manager
                         .extract_host_component_kinds(&global_entity);
 
-                    // Step 4: Remove HostEntityChannel from HostEngine
+                    // BULLETPROOF: Step 4: Remove HostEntityChannel from HostEngine
+                    // This must succeed or we're in an inconsistent state
                     connection.base.world_manager
                         .remove_host_entity(&global_entity);
 
-                    // Step 5: Create RemoteEntityChannel with extracted component state
+                    // BULLETPROOF: Step 5: Create RemoteEntityChannel with extracted component state
+                    // This creates the new client-side entity channel with preserved state
                     connection.base.world_manager
                         .insert_remote_entity(&global_entity, new_remote_entity, component_kinds);
 
-                    // Step 6: Install entity redirect in LocalEntityMap
+                    // BULLETPROOF: Step 6: Install entity redirect in LocalEntityMap
+                    // This allows old entity references to be automatically updated
                     let old_entity = OwnedLocalEntity::Host(old_host_entity.value());
                     let new_entity = OwnedLocalEntity::Remote(new_remote_entity.value());
                     connection.base.world_manager
                         .install_entity_redirect(old_entity, new_entity);
 
-                    // Step 7: Update sent_command_packets entity references
+                    // BULLETPROOF: Step 7: Update sent_command_packets entity references
+                    // This ensures pending commands are sent to the correct entity
                     connection.base.world_manager
                         .update_sent_command_entity_refs(&global_entity, old_entity, new_entity);
 
-                    // Step 8: Re-validate and replay buffered commands
+                    // BULLETPROOF: Step 8: Re-validate and replay buffered commands
+                    // This ensures no commands are lost during migration
                     for command in buffered_commands {
                         if command.is_valid_for_remote_entity() {
                             connection.base.world_manager
@@ -1715,14 +1728,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         }
                     }
 
-                    // Step 9: Complete delegation in global world manager
+                    // BULLETPROOF: Step 9: Complete delegation in global world manager
+                    // This finalizes the authority transfer
                     self.entity_complete_delegation(world, &global_entity, &world_entity);
 
-                    // Step 10: Update authority status
+                    // BULLETPROOF: Step 10: Update authority status
+                    // This grants authority to the client for the migrated entity
                     self.global_world_manager
                         .entity_update_authority(&global_entity, EntityAuthStatus::Granted);
 
-                    // Step 11: Emit AuthGrant event
+                    // BULLETPROOF: Step 11: Emit AuthGrant event
+                    // This notifies the application that authority has been granted
                     self.incoming_world_events.push_auth_grant(world_entity);
                 }
                 EntityEvent::UpdateComponent(tick, global_entity, component_kind) => {

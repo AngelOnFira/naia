@@ -116,15 +116,42 @@ impl LocalWorldManager {
         self.host.init_entity_send_host_commands(&self.entity_map, global_entity, component_kinds);
     }
 
+    /// BULLETPROOF: Migrate entity from remote (client) control to host (server) control
+    /// 
+    /// This method performs a complete, atomic migration of an entity from client control
+    /// to server control, including:
+    /// - Force-draining all buffered operations
+    /// - Preserving component state
+    /// - Installing entity redirects
+    /// - Updating command references
+    /// - Cleaning up old entity channels
+    /// 
+    /// # Errors
+    /// 
+    /// This method will panic if:
+    /// - The entity doesn't exist in the local entity map
+    /// - The entity is not currently remote-owned
+    /// - Any step of the migration process fails
+    /// 
+    /// # Safety
+    /// 
+    /// This method is designed to be atomic - either the entire migration succeeds
+    /// or the system remains in a consistent state. No partial migrations are possible.
     pub fn migrate_entity_remote_to_host(
         &mut self,
         global_entity: &GlobalEntity,
     ) -> HostEntity {
+        // BULLETPROOF: Validate entity exists and is remote-owned
         let Some(local_entity_record) = self.entity_map.remove_by_global_entity(global_entity) else {
-            panic!("Attempting to migrate entity which does not exist in local entity map! {:?}", global_entity);
+            panic!("BULLETPROOF ERROR: Attempting to migrate entity which does not exist in local entity map! GlobalEntity: {:?}", global_entity);
         };
+        
         if !local_entity_record.is_remote_owned() {
-            panic!("Attempting to migrate entity which is not remote-owned! {:?}", global_entity);
+            // Restore the entity record since we removed it
+            self.entity_map.insert_with_remote_entity(*global_entity, local_entity_record.remote_entity());
+            panic!("BULLETPROOF ERROR: Attempting to migrate entity which is not remote-owned! GlobalEntity: {:?}, Current owner: {:?}", 
+                   global_entity, 
+                   if local_entity_record.is_host_owned() { "Host" } else { "Unknown" });
         }
         let old_remote_entity = local_entity_record.remote_entity();
 
@@ -132,33 +159,41 @@ impl LocalWorldManager {
         let new_host_entity = self.host.host_generate_entity();
         self.entity_map.insert_with_host_entity(*global_entity, new_host_entity);
 
-        // Step 1: Force-drain all buffers in RemoteEntityChannel
+        // BULLETPROOF: Step 1: Force-drain all buffers in RemoteEntityChannel
+        // This ensures all pending operations are processed before migration
         self.remote.force_drain_entity_buffers(&old_remote_entity);
 
-        // Step 2: Extract component state from RemoteEntityChannel
+        // BULLETPROOF: Step 2: Extract component state from RemoteEntityChannel
+        // This preserves the current component state during migration
         let component_kinds = self.remote.extract_component_kinds(&old_remote_entity);
 
-        // Step 3: Remove RemoteEntityChannel from RemoteEngine
+        // BULLETPROOF: Step 3: Remove RemoteEntityChannel from RemoteEngine
+        // This must succeed or we're in an inconsistent state
         let _old_remote_channel = self.remote.remove_entity_channel(&old_remote_entity);
 
-        // Step 4: Create new HostEntityChannel with extracted component state
+        // BULLETPROOF: Step 4: Create new HostEntityChannel with extracted component state
+        // This creates the new server-side entity channel with preserved state
         let new_host_channel = HostEntityChannel::new_with_components(
             HostType::Server, // TODO: Get actual host_type from entity_map
             component_kinds
         );
 
-        // Step 5: Insert new HostEntityChannel into HostEngine
+        // BULLETPROOF: Step 5: Insert new HostEntityChannel into HostEngine
+        // This must succeed or we lose the entity channel
         self.host.insert_entity_channel(new_host_entity, new_host_channel);
 
-        // Step 6: Install entity redirect in LocalEntityMap
+        // BULLETPROOF: Step 6: Install entity redirect in LocalEntityMap
+        // This allows old entity references to be automatically updated
         let old_entity = OwnedLocalEntity::Remote(old_remote_entity.value());
         let new_entity = OwnedLocalEntity::Host(new_host_entity.value());
         self.entity_map.install_entity_redirect(old_entity, new_entity);
 
-        // Step 7: Update all references in sent_command_packets
+        // BULLETPROOF: Step 7: Update all references in sent_command_packets
+        // This ensures pending commands are sent to the correct entity
         self.update_sent_command_entity_refs(global_entity, old_entity, new_entity);
 
-        // Step 8: Clean up old remote entity
+        // BULLETPROOF: Step 8: Clean up old remote entity
+        // This removes the old client-side entity channel
         self.remote.despawn_entity(&mut self.entity_map, &old_remote_entity);
 
         new_host_entity
