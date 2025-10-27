@@ -565,7 +565,7 @@ impl WorldWriter {
                     );
                 }
             }
-            EntityCommand::MigrateResponse(sub_id_opt, global_entity, new_host_entity_value) => {
+            EntityCommand::MigrateResponse(sub_id_opt, global_entity, old_remote_entity, new_host_entity_value) => {
                 
                 // this command is only ever sent by the server, regarding newly delegated server-owned entities, to clients
                 
@@ -580,13 +580,7 @@ impl WorldWriter {
                 // write subcommand id
                 sub_id.ser(writer);
 
-                // get old remote entity
-                let old_remote_entity = world_manager
-                    .entity_converter()
-                    .global_entity_to_remote_entity(global_entity)
-                    .unwrap();
-
-                // write old remote entity
+                // write old remote entity (captured before migration)
                 old_remote_entity.ser(writer);
 
                 // write new host entity
@@ -632,7 +626,7 @@ impl WorldWriter {
             | EntityCommand::RequestAuthority(_, _)
             | EntityCommand::ReleaseAuthority(_, _)
             | EntityCommand::SetAuthority(_, _, _)
-            | EntityCommand::MigrateResponse(_, _, _) => {
+            | EntityCommand::MigrateResponse(_, _, _, _) => {
                 panic!(
                     "Packet Write Error: Blocking overflow detected! Authority/delegation command requires {bits_needed} bits, but packet only has {bits_free} bits available! These messages should be small and not cause overflow."
                 )

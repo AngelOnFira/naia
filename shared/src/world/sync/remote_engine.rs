@@ -31,7 +31,7 @@
 
 use std::{fmt::Debug, hash::Hash, collections::HashMap};
 
-use crate::{world::{sync::{remote_entity_channel::RemoteEntityChannel, config::EngineConfig}, entity::entity_message::EntityMessage}, EntityMessageType, HostType, InScopeEntities, MessageIndex, RemoteEntity};
+use crate::{world::{sync::{remote_entity_channel::RemoteEntityChannel, config::EngineConfig}, entity::entity_message::EntityMessage}, EntityAuthStatus, EntityMessageType, HostType, InScopeEntities, MessageIndex, RemoteEntity};
 use crate::EntityCommand;
 
 pub struct RemoteEngine<E: Copy + Hash + Eq + Debug> {
@@ -111,6 +111,13 @@ impl<E: Copy + Hash + Eq + Debug> RemoteEngine<E> {
         let entity_channel = self.entity_channels.get_mut(&entity).unwrap();
         entity_channel.send_command(command);
         entity_channel.drain_outgoing_messages_into(&mut self.outgoing_commands);
+    }
+
+    /// Update authority status in RemoteEntityChannel's AuthChannel (used after migration)
+    pub fn receive_set_auth_status(&mut self, entity: E, auth_status: EntityAuthStatus) {
+        if let Some(channel) = self.entity_channels.get_mut(&entity) {
+            channel.update_auth_status(auth_status);
+        }
     }
 
     pub fn send_entity_command(&mut self, entity: E, command: EntityCommand) {

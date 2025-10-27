@@ -327,9 +327,14 @@ impl EntityProperty {
             // LocalEntity is reversed on write, don't worry here
             let local_entity = OwnedLocalEntity::de(reader)?;
 
-            // info!("EntityProperty::new_read() local_entity: {:?}", local_entity);
+            // CRITICAL: Apply entity redirects for migrated entities
+            // If an entity was migrated (e.g., RemoteEntity → HostEntity), the EntityProperty
+            // might reference the old entity ID. The redirect system ensures we use the new ID.
+            let redirected_entity = converter.apply_entity_redirect(&local_entity);
 
-            if let Ok(global_entity) = local_entity.convert_to_global(converter) {
+            // info!("EntityProperty::new_read() local_entity: {:?}, redirected: {:?}", local_entity, redirected_entity);
+
+            if let Ok(global_entity) = redirected_entity.convert_to_global(converter) {
                 let mut new_impl = RemoteCreatedRelation::new_empty();
                 new_impl.global_entity = Some(global_entity);
 
@@ -339,7 +344,7 @@ impl EntityProperty {
 
                 Ok(new_self)
             } else {
-                if let OwnedLocalEntity::Remote(remote_entity_id) = local_entity {
+                if let OwnedLocalEntity::Remote(remote_entity_id) = redirected_entity {
                     let new_impl = RemoteWaitingRelation::new(RemoteEntity::new(remote_entity_id));
 
                     let new_self = Self {
@@ -457,13 +462,16 @@ impl EntityProperty {
             }
             EntityRelation::RemoteWaiting(inner) => {
                 let new_global_entity = {
-                    if let Ok(global_entity) =
-                        converter.remote_entity_to_global_entity(&inner.remote_entity)
-                    {
+                    // CRITICAL: Apply entity redirects for migrated entities
+                    // The RemoteEntity stored here might reference an old entity ID before migration
+                    let owned_entity = OwnedLocalEntity::Remote(inner.remote_entity.value());
+                    let redirected_entity = converter.apply_entity_redirect(&owned_entity);
+                    
+                    if let Ok(global_entity) = redirected_entity.convert_to_global(converter) {
                         Some(global_entity)
                     } else {
-                        panic!("Error completing waiting EntityProperty! Could not convert RemoteEntity to GlobalEntity!");
-                        // I hit this 2 times
+                        panic!("Error completing waiting EntityProperty! Could not convert RemoteEntity to GlobalEntity! Original: {:?}, Redirected: {:?}", 
+                               owned_entity, redirected_entity);
                     }
                 };
 

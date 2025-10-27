@@ -76,7 +76,7 @@
 
 use std::{collections::{HashMap, HashSet}, hash::Hash};
 
-use crate::{sequence_less_than, world::sync::remote_component_channel::RemoteComponentChannel, ComponentKind, EntityCommand, EntityMessage, EntityMessageType, HostType, MessageIndex};
+use crate::{sequence_less_than, world::sync::remote_component_channel::RemoteComponentChannel, ComponentKind, EntityAuthStatus, EntityCommand, EntityMessage, EntityMessageType, HostType, MessageIndex};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum EntityChannelState {
@@ -109,6 +109,21 @@ impl RemoteEntityChannel {
             incoming_messages: Vec::new(),
             outgoing_commands: Vec::new(),
         }
+    }
+
+    /// Create a RemoteEntityChannel for a delegated entity (used during migration)
+    pub(crate) fn new_delegated(host_type: HostType) -> Self {
+        let mut channel = Self::new(host_type);
+        // Set up the AuthChannel for a delegated entity
+        // This simulates the entity having gone through Publish → EnableDelegation
+        channel.auth_channel.force_publish();
+        channel.auth_channel.force_enable_delegation();
+        channel
+    }
+
+    /// Update the AuthChannel's authority status (used after migration to sync with global status)
+    pub(crate) fn update_auth_status(&mut self, auth_status: EntityAuthStatus) {
+        self.auth_channel.force_set_auth_status(auth_status);
     }
 
     pub(crate) fn receive_message(

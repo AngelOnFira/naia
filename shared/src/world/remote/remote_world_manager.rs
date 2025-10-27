@@ -14,7 +14,7 @@ use crate::{world::{
         remote_world_waitlist::RemoteWorldWaitlist,
     },
     sync::{RemoteEngine, RemoteEntityChannel},
-}, ComponentKind, ComponentKinds, ComponentUpdate, EntityAndGlobalEntityConverter, EntityCommand, EntityMessage, EntityMessageReceiver, GlobalEntity, GlobalEntitySpawner, GlobalWorldManagerType, HostType, LocalEntityAndGlobalEntityConverter, LocalEntityMap, MessageIndex, OwnedLocalEntity, Replicate, Tick, WorldMutType};
+}, ComponentKind, ComponentKinds, ComponentUpdate, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityCommand, EntityMessage, EntityMessageReceiver, GlobalEntity, GlobalEntitySpawner, GlobalWorldManagerType, HostType, LocalEntityAndGlobalEntityConverter, LocalEntityMap, MessageIndex, OwnedLocalEntity, Replicate, Tick, WorldMutType};
 use crate::world::entity_event::EntityEvent;
 use crate::world::host::host_world_manager::CommandId;
 use crate::world::local::local_entity::RemoteEntity;
@@ -140,6 +140,15 @@ impl RemoteWorldManager {
         let global_entity = command.entity();
         let remote_entity = converter.global_entity_to_remote_entity(&global_entity).unwrap(); // error triggered here
         self.remote_engine.send_auth_command(remote_entity, command);
+    }
+
+    /// Update authority status in RemoteEntityChannel (used after migration)
+    pub(crate) fn receive_set_auth_status(
+        &mut self,
+        remote_entity: RemoteEntity,
+        auth_status: EntityAuthStatus,
+    ) {
+        self.remote_engine.receive_set_auth_status(remote_entity, auth_status);
     }
 
     pub fn spawn_entity(

@@ -210,9 +210,10 @@ impl LocalWorldManager {
     pub fn host_send_migrate_response(
         &mut self,
         global_entity: &GlobalEntity,
+        old_remote_entity: &RemoteEntity,
         new_host_entity: &HostEntity,
     ) {
-        let command = EntityCommand::MigrateResponse(None, *global_entity, *new_host_entity);
+        let command = EntityCommand::MigrateResponse(None, *global_entity, *old_remote_entity, *new_host_entity);
         self.host.send_command(&self.entity_map, command);
     }
 
@@ -287,6 +288,16 @@ impl LocalWorldManager {
     ) {
         let command = EntityCommand::RequestAuthority(None, *global_entity);
         self.remote.send_auth_command(&self.entity_map, command);
+    }
+
+    /// Update the RemoteEntityChannel's AuthChannel status (used after migration)
+    pub fn remote_receive_set_auth(
+        &mut self,
+        global_entity: &GlobalEntity,
+        auth_status: EntityAuthStatus,
+    ) {
+        let remote_entity = self.entity_map.entity_converter().global_entity_to_remote_entity(global_entity).unwrap();
+        self.remote.receive_set_auth_status(remote_entity, auth_status);
     }
 
     pub fn entity_waitlist_mut(&mut self) -> &mut RemoteEntityWaitlist {
@@ -769,8 +780,8 @@ impl LocalWorldManager {
     ) {
         // Insert into entity_map
         self.entity_map.insert_with_remote_entity(*global_entity, remote_entity);
-        // Create RemoteEntityChannel
-        let mut channel = RemoteEntityChannel::new(HostType::Client);
+        // Create RemoteEntityChannel as delegated (this entity came from migration)
+        let mut channel = RemoteEntityChannel::new_delegated(self.entity_map.host_type());
         // Set state to Spawned
         channel.set_spawned(1); // Use dummy message ID
         // For each component_kind, add RemoteComponentChannel with inserted=true

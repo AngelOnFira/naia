@@ -1,4 +1,4 @@
-use crate::{world::host::host_world_manager::SubCommandId, ComponentKind, EntityAuthStatus, EntityMessageType, GlobalEntity, HostEntity};
+use crate::{world::host::host_world_manager::SubCommandId, ComponentKind, EntityAuthStatus, EntityMessageType, GlobalEntity, HostEntity, RemoteEntity};
 
 // TODO! make this agnostic to type of entity
 
@@ -21,7 +21,7 @@ pub enum EntityCommand {
     RequestAuthority(Option<SubCommandId>, GlobalEntity), // only sent by client
     ReleaseAuthority(Option<SubCommandId>, GlobalEntity), // only sent by client
     EnableDelegationResponse(Option<SubCommandId>, GlobalEntity), // only sent by client
-    MigrateResponse(Option<SubCommandId>, GlobalEntity, HostEntity), // only sent by server
+    MigrateResponse(Option<SubCommandId>, GlobalEntity, RemoteEntity, HostEntity), // only sent by server: (subid, global, old_remote, new_host)
 }
 
 impl EntityCommand {
@@ -39,7 +39,7 @@ impl EntityCommand {
             Self::RequestAuthority(_, entity) => *entity,
             Self::ReleaseAuthority(_, entity) => *entity,
             Self::EnableDelegationResponse(_, entity) => *entity,
-            Self::MigrateResponse(_, entity, _) => *entity,
+            Self::MigrateResponse(_, entity, _, _) => *entity,
         }
     }
 
@@ -65,7 +65,7 @@ impl EntityCommand {
             Self::RequestAuthority(_, _) => EntityMessageType::RequestAuthority,
             Self::ReleaseAuthority(_, _) => EntityMessageType::ReleaseAuthority,
             Self::EnableDelegationResponse(_, _) => EntityMessageType::EnableDelegationResponse,
-            Self::MigrateResponse(_, _, _) => EntityMessageType::MigrateResponse,
+            Self::MigrateResponse(_, _, _, _) => EntityMessageType::MigrateResponse,
         }
     }
 
@@ -82,7 +82,7 @@ impl EntityCommand {
             Self::RequestAuthority(sub_id, _) |
             Self::ReleaseAuthority(sub_id, _) |
             Self::EnableDelegationResponse(sub_id, _) | 
-            Self::MigrateResponse(sub_id, _, _) => {
+            Self::MigrateResponse(sub_id, _, _, _) => {
                 *sub_id = Some(id);
             }
         }

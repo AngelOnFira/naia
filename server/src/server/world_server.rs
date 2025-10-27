@@ -1556,6 +1556,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             panic!("connection does not exist")
         };
 
+        // Step 0: Capture old RemoteEntity BEFORE migration (will be needed for MigrateResponse)
+        let old_remote_entity = match connection
+            .base
+            .world_manager
+            .entity_converter()
+            .global_entity_to_remote_entity(global_entity) {
+            Ok(entity) => entity,
+            Err(_) => {
+                panic!("Entity must exist as RemoteEntity before delegation: {:?}", global_entity);
+            }
+        };
+
         // Step 1: Migrate entity from RemoteEntity to HostEntity
         // This creates the HostEntity in HostEngine so it can receive commands
         let new_host_entity = match connection
@@ -1576,10 +1588,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             .host_send_enable_delegation(global_entity);
 
         // Step 3: Send MigrateResponse to client (valid because entity is now Delegated)
+        // Pass the old RemoteEntity captured before migration
         connection
             .base
             .world_manager
-            .host_send_migrate_response(global_entity, &new_host_entity);
+            .host_send_migrate_response(global_entity, &old_remote_entity, &new_host_entity);
 
         self.global_world_manager
             .entity_enable_delegation(&global_entity);

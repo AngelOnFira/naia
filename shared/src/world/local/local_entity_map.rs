@@ -65,6 +65,17 @@ impl LocalEntityAndGlobalEntityConverter for LocalEntityMap {
         }
         Err(EntityDoesNotExistError)
     }
+
+    fn apply_entity_redirect(
+        &self,
+        entity: &OwnedLocalEntity,
+    ) -> OwnedLocalEntity {
+        if let Some((new_entity, _timestamp)) = self.entity_redirects.get(entity) {
+            *new_entity
+        } else {
+            *entity
+        }
+    }
 }
 
 impl LocalEntityMap {

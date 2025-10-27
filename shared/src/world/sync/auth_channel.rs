@@ -86,6 +86,7 @@ impl AuthChannel {
                 match (self.auth_status.unwrap(), next_status) {
                     (EntityAuthStatus::Available, EntityAuthStatus::Granted) |
                     (EntityAuthStatus::Available, EntityAuthStatus::Denied) |
+                    (EntityAuthStatus::Available, EntityAuthStatus::Available) | // Idempotent: Allow resetting to Available
                     (EntityAuthStatus::Denied, EntityAuthStatus::Available) |
                     (EntityAuthStatus::Granted, EntityAuthStatus::Available) => {
                         // valid transition!
@@ -171,5 +172,21 @@ impl AuthChannel {
 
     pub(crate) fn receiver_process_messages(&mut self, entity_state: EntityChannelState) {
         self.receiver.process_messages(Some(entity_state));
+    }
+
+    /// Force the AuthChannel into Published state (used during migration setup)
+    pub(crate) fn force_publish(&mut self) {
+        self.state = EntityAuthChannelState::Published;
+    }
+
+    /// Force the AuthChannel into Delegated state with Available authority (used during migration setup)
+    pub(crate) fn force_enable_delegation(&mut self) {
+        self.state = EntityAuthChannelState::Delegated;
+        self.auth_status = Some(EntityAuthStatus::Available);
+    }
+
+    /// Force set the authority status (used to sync with global authority tracker after migration)
+    pub(crate) fn force_set_auth_status(&mut self, auth_status: EntityAuthStatus) {
+        self.auth_status = Some(auth_status);
     }
 }

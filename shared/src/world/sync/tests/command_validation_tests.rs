@@ -29,6 +29,7 @@ fn component_kind<T: 'static>() -> ComponentKind {
 #[test]
 fn test_all_migration_commands_through_real_flow() {
     let global_entity = GlobalEntity::from_u64(10001);
+    let old_remote_entity = RemoteEntity::new(99);
     let new_host_entity = HostEntity::new(100);
 
     // Test Server-side HostEntityChannel (Published → Delegated)
@@ -43,7 +44,7 @@ fn test_all_migration_commands_through_real_flow() {
     // Step 3: CRITICAL - Send MigrateResponse (THIS IS WHAT WAS BROKEN)
     // MigrateResponse tells client the new HostEntity ID after migration
     // This is valid after EnableDelegation has made the entity delegated
-    host_channel.send_command(EntityCommand::MigrateResponse(Some(2), global_entity, new_host_entity));
+    host_channel.send_command(EntityCommand::MigrateResponse(Some(2), global_entity, old_remote_entity, new_host_entity));
     
     // If we got here without panic, MigrateResponse is properly registered!
     let commands = host_channel.extract_outgoing_commands();
@@ -51,7 +52,7 @@ fn test_all_migration_commands_through_real_flow() {
     
     // Verify MigrateResponse is in the commands
     let has_migrate_response = commands.iter().any(|cmd| {
-        matches!(cmd, EntityCommand::MigrateResponse(_, _, _))
+        matches!(cmd, EntityCommand::MigrateResponse(_, _, _, _))
     });
     assert!(has_migrate_response, "MigrateResponse should be in outgoing commands");
 }
@@ -108,6 +109,7 @@ fn test_enable_delegation_response_command() {
 #[test]
 fn test_complete_delegation_flow_with_all_commands() {
     let global_entity = GlobalEntity::from_u64(10004);
+    let old_remote_entity = RemoteEntity::new(200);
     let new_host_entity = HostEntity::new(201);
     
     // Simulate server processing delegation request
@@ -117,7 +119,7 @@ fn test_complete_delegation_flow_with_all_commands() {
     server_channel.send_command(EntityCommand::EnableDelegation(Some(1), global_entity));
     
     // 2. Server migrates and sends MigrateResponse with new HostEntity ID
-    server_channel.send_command(EntityCommand::MigrateResponse(Some(2), global_entity, new_host_entity));
+    server_channel.send_command(EntityCommand::MigrateResponse(Some(2), global_entity, old_remote_entity, new_host_entity));
     
     // Extract and verify all commands went through without panic
     let commands = server_channel.extract_outgoing_commands();
@@ -125,7 +127,7 @@ fn test_complete_delegation_flow_with_all_commands() {
     
     // Verify sequence
     assert!(matches!(commands[0], EntityCommand::EnableDelegation(_, _)));
-    assert!(matches!(commands[1], EntityCommand::MigrateResponse(_, _, _)));
+    assert!(matches!(commands[1], EntityCommand::MigrateResponse(_, _, _, _)));
 }
 
 /// Test that commands with invalid state transitions still panic
@@ -133,13 +135,14 @@ fn test_complete_delegation_flow_with_all_commands() {
 #[should_panic(expected = "Cannot send MigrateResponse")]
 fn test_migrate_response_requires_delegation() {
     let global_entity = GlobalEntity::from_u64(10005);
+    let old_remote_entity = RemoteEntity::new(201);
     let host_entity = HostEntity::new(202);
     
     // Try to send MigrateResponse WITHOUT enabling delegation first
     let mut host_channel = HostEntityChannel::new(HostType::Server);
     
     // This SHOULD panic because entity is not delegated yet
-    host_channel.send_command(EntityCommand::MigrateResponse(Some(1), global_entity, host_entity));
+    host_channel.send_command(EntityCommand::MigrateResponse(Some(1), global_entity, old_remote_entity, host_entity));
 }
 
 /// Test that RequestAuthority requires delegation
@@ -161,6 +164,7 @@ fn test_request_authority_requires_delegation() {
 #[test]
 fn test_migrate_response_through_host_channel_send() {
     let global_entity = GlobalEntity::from_u64(10007);
+    let old_remote_entity = RemoteEntity::new(202);
     let new_host_entity = HostEntity::new(203);
     
     // Create a server-side HostEntityChannel (already published)
@@ -173,12 +177,12 @@ fn test_migrate_response_through_host_channel_send() {
     // When LocalWorldManager::host_send_migrate_response is called, it eventually calls
     // HostEntityChannel::send_command with MigrateResponse, which calls
     // AuthChannel::validate_command. This was panicking before the fix.
-    host_channel.send_command(EntityCommand::MigrateResponse(Some(2), global_entity, new_host_entity));
+    host_channel.send_command(EntityCommand::MigrateResponse(Some(2), global_entity, old_remote_entity, new_host_entity));
     
     // If we got here without panic, the bug is fixed!
     // Extract and verify the command made it through
     let commands = host_channel.extract_outgoing_commands();
-    assert!(commands.iter().any(|cmd| matches!(cmd, EntityCommand::MigrateResponse(_, _, _))),
+    assert!(commands.iter().any(|cmd| matches!(cmd, EntityCommand::MigrateResponse(_, _, _, _))),
             "MigrateResponse should have been sent successfully");
 }
 
@@ -207,6 +211,7 @@ fn test_migrate_response_through_host_channel_send() {
 #[test]
 fn test_server_delegation_command_sequence() {
     let global_entity = GlobalEntity::from_u64(10008);
+    let old_remote_entity = RemoteEntity::new(203);
     let new_host_entity = HostEntity::new(204);
     
     // NOTE: This test creates a HostEntityChannel directly, which means the
@@ -220,14 +225,14 @@ fn test_server_delegation_command_sequence() {
     host_channel.send_command(EntityCommand::EnableDelegation(Some(1), global_entity));
     
     // 2. Now can send MigrateResponse (requires Delegated state)
-    host_channel.send_command(EntityCommand::MigrateResponse(Some(2), global_entity, new_host_entity));
+    host_channel.send_command(EntityCommand::MigrateResponse(Some(2), global_entity, old_remote_entity, new_host_entity));
     
     // Verify both commands were sent in correct order
     let commands = host_channel.extract_outgoing_commands();
     assert_eq!(commands.len(), 2, "Should have both EnableDelegation and MigrateResponse");
     assert!(matches!(commands[0], EntityCommand::EnableDelegation(_, _)), 
             "First command must be EnableDelegation");
-    assert!(matches!(commands[1], EntityCommand::MigrateResponse(_, _, _)),
+    assert!(matches!(commands[1], EntityCommand::MigrateResponse(_, _, _, _)),
             "Second command must be MigrateResponse");
 }
 
@@ -237,6 +242,7 @@ fn test_server_delegation_command_sequence() {
 #[should_panic(expected = "Cannot send MigrateResponse")]
 fn test_server_delegation_wrong_sequence_panics() {
     let global_entity = GlobalEntity::from_u64(10009);
+    let old_remote_entity = RemoteEntity::new(204);
     let new_host_entity = HostEntity::new(205);
     
     // Simulate the BROKEN server flow (what caused Bug #2)
@@ -244,7 +250,7 @@ fn test_server_delegation_wrong_sequence_panics() {
     
     // WRONG: Try to send MigrateResponse WITHOUT EnableDelegation first
     // This MUST panic to prevent invalid state transitions
-    host_channel.send_command(EntityCommand::MigrateResponse(Some(1), global_entity, new_host_entity));
+    host_channel.send_command(EntityCommand::MigrateResponse(Some(1), global_entity, old_remote_entity, new_host_entity));
     
     // Should never reach here - the above should panic
 }

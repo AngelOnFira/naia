@@ -1736,16 +1736,27 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         }
                     }
 
-                    // BULLETPROOF: Step 9: Complete delegation in global world manager
+                    // BULLETPROOF: Step 9: Update RemoteEntityChannel's AuthChannel status
+                    // CRITICAL: The RemoteEntityChannel's AuthChannel was initialized with Available
+                    // We need to update it to Granted BEFORE releasing the connection borrow
+                    connection.base.world_manager.remote_receive_set_auth(
+                        &global_entity,
+                        EntityAuthStatus::Granted
+                    );
+
+                    // Drop the connection borrow to allow mutable borrow of self
+                    drop(connection);
+
+                    // BULLETPROOF: Step 10: Complete delegation in global world manager
                     // This finalizes the authority transfer
                     self.entity_complete_delegation(world, &global_entity, &world_entity);
 
-                    // BULLETPROOF: Step 10: Update authority status
+                    // BULLETPROOF: Step 11: Update global authority status
                     // This grants authority to the client for the migrated entity
                     self.global_world_manager
                         .entity_update_authority(&global_entity, EntityAuthStatus::Granted);
 
-                    // BULLETPROOF: Step 11: Emit AuthGrant event
+                    // BULLETPROOF: Step 12: Emit AuthGrant event
                     // This notifies the application that authority has been granted
                     self.incoming_world_events.push_auth_grant(world_entity);
                 }

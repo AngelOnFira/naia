@@ -69,6 +69,10 @@ pub trait LocalEntityAndGlobalEntityConverter {
             OwnedLocalEntity::Remote(remote_entity) => self.remote_entity_to_global_entity(&RemoteEntity::new(*remote_entity)),
         }
     }
+    fn apply_entity_redirect(
+        &self,
+        entity: &OwnedLocalEntity,
+    ) -> OwnedLocalEntity;
 }
 
 pub struct FakeEntityConverter;
@@ -107,6 +111,13 @@ impl LocalEntityAndGlobalEntityConverter for FakeEntityConverter {
         _: &RemoteEntity,
     ) -> Result<GlobalEntity, EntityDoesNotExistError> {
         Ok(GlobalEntity::from_u64(0))
+    }
+
+    fn apply_entity_redirect(
+        &self,
+        entity: &OwnedLocalEntity,
+    ) -> OwnedLocalEntity {
+        *entity // No redirects in fake converter
     }
 }
 
@@ -191,6 +202,15 @@ impl<'a, 'b> LocalEntityAndGlobalEntityConverter for EntityConverterMut<'a, 'b> 
         self.local_entity_map
             .entity_converter()
             .remote_entity_to_global_entity(remote_entity)
+    }
+
+    fn apply_entity_redirect(
+        &self,
+        entity: &OwnedLocalEntity,
+    ) -> OwnedLocalEntity {
+        self.local_entity_map
+            .entity_converter()
+            .apply_entity_redirect(entity)
     }
 }
 
