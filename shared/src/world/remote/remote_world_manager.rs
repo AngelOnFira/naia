@@ -502,6 +502,11 @@ impl RemoteWorldManager {
     pub(crate) fn insert_entity_channel(&mut self, remote_entity: RemoteEntity, channel: RemoteEntityChannel) {
         self.remote_engine.insert_entity_channel(remote_entity, channel);
     }
+
+    /// Get auth status of a remote entity's channel (for testing)
+    pub fn get_entity_auth_status(&self, entity: &RemoteEntity) -> Option<EntityAuthStatus> {
+        self.remote_engine.get_entity_auth_status(entity)
+    }
 }
 
 impl InScopeEntities<RemoteEntity> for RemoteWorldManager {

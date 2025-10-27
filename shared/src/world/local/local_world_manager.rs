@@ -300,6 +300,14 @@ impl LocalWorldManager {
         self.remote.receive_set_auth_status(remote_entity, auth_status);
     }
 
+    /// Get auth status of a remote entity's channel (for testing)
+    pub fn get_remote_entity_auth_status(&self, global_entity: &GlobalEntity) -> Option<EntityAuthStatus> {
+        let Ok(OwnedLocalEntity::Remote(remote_entity_value)) = self.entity_map.global_entity_to_owned_entity(global_entity) else {
+            return None;
+        };
+        self.remote.get_entity_auth_status(&RemoteEntity::new(remote_entity_value))
+    }
+
     pub fn entity_waitlist_mut(&mut self) -> &mut RemoteEntityWaitlist {
         self.remote.entity_waitlist_mut()
     }

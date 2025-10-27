@@ -5,7 +5,7 @@ use crate::{
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum EntityAuthChannelState {
+pub enum EntityAuthChannelState {
     Unpublished,
     Published,
     Delegated,
@@ -138,6 +138,21 @@ impl AuthChannel {
 
     pub(crate) fn sender_drain_messages_into(&mut self, commands: &mut Vec<EntityCommand>) {
         self.sender.drain_messages_into(commands);
+    }
+
+    /// Get current state of the AuthChannel (for testing)
+    pub fn state(&self) -> EntityAuthChannelState {
+        self.state
+    }
+    
+    /// Get current auth status (for testing)
+    pub fn auth_status(&self) -> Option<EntityAuthStatus> {
+        self.auth_status
+    }
+    
+    /// Check if in delegated state (for testing)
+    pub fn is_delegated(&self) -> bool {
+        self.state == EntityAuthChannelState::Delegated
     }
 
     /// Is invoked by `EntityChannel` when the entity despawns; this wipes all buffered state so a future *re‑spawn* starts clean.

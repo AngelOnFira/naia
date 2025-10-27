@@ -120,6 +120,12 @@ impl<E: Copy + Hash + Eq + Debug> RemoteEngine<E> {
         }
     }
 
+    /// Get auth status of an entity's channel (for testing)
+    pub fn get_entity_auth_status(&self, entity: &E) -> Option<EntityAuthStatus> {
+        self.entity_channels.get(entity)
+            .and_then(|channel| channel.auth_status())
+    }
+
     pub fn send_entity_command(&mut self, entity: E, command: EntityCommand) {
         if !self.entity_channels.contains_key(&entity) {
             panic!("Cannot send a command to an entity that does not exist in the engine: {:?}", entity);

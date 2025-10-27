@@ -9,9 +9,11 @@ publish = false
 
 [features]
 
-
 [dependencies]
 naia-server = { path = "../server" }
 naia-client = { path = "../client" }
 naia-shared = { path = "../shared" }
+
+[dev-dependencies]
+proptest = "1.0"
 

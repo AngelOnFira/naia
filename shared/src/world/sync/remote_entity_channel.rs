@@ -97,7 +97,7 @@ pub struct RemoteEntityChannel {
 }
 
 impl RemoteEntityChannel {
-    pub(crate) fn new(host_type: HostType) -> Self {
+    pub fn new(host_type: HostType) -> Self {
         Self {
             state: EntityChannelState::Despawned,
             last_epoch_id: None,
@@ -112,7 +112,7 @@ impl RemoteEntityChannel {
     }
 
     /// Create a RemoteEntityChannel for a delegated entity (used during migration)
-    pub(crate) fn new_delegated(host_type: HostType) -> Self {
+    pub fn new_delegated(host_type: HostType) -> Self {
         let mut channel = Self::new(host_type);
         // Set up the AuthChannel for a delegated entity
         // This simulates the entity having gone through Publish → EnableDelegation
@@ -122,8 +122,18 @@ impl RemoteEntityChannel {
     }
 
     /// Update the AuthChannel's authority status (used after migration to sync with global status)
-    pub(crate) fn update_auth_status(&mut self, auth_status: EntityAuthStatus) {
+    pub fn update_auth_status(&mut self, auth_status: EntityAuthStatus) {
         self.auth_channel.force_set_auth_status(auth_status);
+    }
+
+    /// Get current auth status from internal AuthChannel (for testing)
+    pub fn auth_status(&self) -> Option<EntityAuthStatus> {
+        self.auth_channel.auth_status()
+    }
+    
+    /// Check if AuthChannel is in delegated state (for testing)
+    pub fn is_delegated(&self) -> bool {
+        self.auth_channel.is_delegated()
     }
 
     pub(crate) fn receive_message(
@@ -148,7 +158,7 @@ impl RemoteEntityChannel {
         self.process_messages();
     }
 
-    pub(crate) fn send_command(
+    pub fn send_command(
         &mut self,
         command: EntityCommand,
     ) {

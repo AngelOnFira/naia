@@ -57,12 +57,12 @@
 
 mod config;
 mod remote_engine;
-mod remote_entity_channel;
+pub mod remote_entity_channel;
 mod remote_component_channel;
 mod auth_channel_receiver;
 
 mod host_engine;
-mod host_entity_channel;
+pub mod host_entity_channel;
 mod auth_channel_sender;
 
 pub use remote_engine::RemoteEngine;
@@ -72,6 +72,6 @@ pub use host_entity_channel::HostEntityChannel;
 
 #[cfg(test)]
 pub mod tests;
-mod auth_channel;
+pub mod auth_channel;
 pub mod ordered_ids;
 pub mod bevy_integration;

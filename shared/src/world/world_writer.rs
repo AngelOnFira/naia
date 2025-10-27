@@ -565,7 +565,7 @@ impl WorldWriter {
                     );
                 }
             }
-            EntityCommand::MigrateResponse(sub_id_opt, global_entity, old_remote_entity, new_host_entity_value) => {
+            EntityCommand::MigrateResponse(sub_id_opt, _global_entity, old_remote_entity, new_host_entity_value) => {
                 
                 // this command is only ever sent by the server, regarding newly delegated server-owned entities, to clients
                 

@@ -185,7 +185,7 @@ impl LocalEntityMap {
         self
     }
 
-    pub(crate) fn install_entity_redirect(
+    pub fn install_entity_redirect(
         &mut self,
         old_entity: OwnedLocalEntity,
         new_entity: OwnedLocalEntity

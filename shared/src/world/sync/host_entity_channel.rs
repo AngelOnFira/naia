@@ -12,7 +12,7 @@ pub struct HostEntityChannel {
 }
 
 impl HostEntityChannel {
-    pub(crate) fn new(host_type: HostType) -> Self {
+    pub fn new(host_type: HostType) -> Self {
         Self {
             component_channels: HashSet::new(),
             auth_channel: AuthChannel::new(host_type),
@@ -27,7 +27,7 @@ impl HostEntityChannel {
         &self.component_channels
     }
 
-    pub(crate) fn send_command(
+    pub fn send_command(
         &mut self,
         command: EntityCommand,
     ) {
@@ -139,7 +139,7 @@ impl HostEntityChannel {
         }
     }
 
-    pub(crate) fn extract_outgoing_commands(&mut self) -> Vec<EntityCommand> {
+    pub fn extract_outgoing_commands(&mut self) -> Vec<EntityCommand> {
         std::mem::take(&mut self.outgoing_commands)
     }
 
