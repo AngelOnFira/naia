@@ -254,18 +254,18 @@ impl WorldReader {
                 // read subcommand id
                 let sub_command_id = SubCommandId::de(reader)?;
                 
-                // read old host entity
-                let old_host_entity = HostEntity::de(reader)?;
+                // read client's HostEntity (so client can look it up in entity_map!)
+                let client_host_entity = HostEntity::de(reader)?;
                 
-                // read new remote entity
-                let new_host_entity = HostEntity::de(reader)?;
+                // read new RemoteEntity (what the client will create)
+                let new_remote_entity = RemoteEntity::de(reader)?;
 
                 world_manager.receiver_buffer_message(
                     message_id,
                     EntityMessage::MigrateResponse(
                         sub_command_id,
-                        old_host_entity.copy_to_owned(),
-                        new_host_entity,
+                        client_host_entity.copy_to_owned(),
+                        new_remote_entity,
                     ),
                 );
             }

@@ -142,5 +142,24 @@ impl HostEntityChannel {
     pub fn extract_outgoing_commands(&mut self) -> Vec<EntityCommand> {
         std::mem::take(&mut self.outgoing_commands)
     }
+    
+    /// Force-enable delegation on this channel (client-side only)
+    /// This is called when the client originates an EnableDelegation message,
+    /// to ensure the local channel is in the correct state to receive MigrateResponse
+    pub fn local_enable_delegation(&mut self) {
+        // Must publish first before enabling delegation
+        self.auth_channel.force_publish();
+        self.auth_channel.force_enable_delegation();
+    }
+    
+    /// Check if this channel is in Delegated state (for testing)
+    pub fn is_delegated(&self) -> bool {
+        self.auth_channel.is_delegated()
+    }
+    
+    /// Get the AuthChannel state (for testing)
+    pub fn auth_channel_state(&self) -> crate::world::sync::auth_channel::EntityAuthChannelState {
+        self.auth_channel.state()
+    }
 
 }

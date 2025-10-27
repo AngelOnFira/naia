@@ -144,6 +144,7 @@ pub use types::{HostType, MessageIndex, PacketIndex, ShortMessageIndex, Tick};
 pub use world::entity_command::EntityCommand;
 pub use world::entity_event::EntityEvent;
 pub use world::host::host_entity_generator::HostEntityGenerator;
+pub use world::host::host_world_manager::SubCommandId;
 pub use world::local::local_entity::{HostEntity, OwnedLocalEntity, RemoteEntity};
 pub use world::local::local_entity_map::LocalEntityMap;
 pub use world::local::local_world_manager::LocalWorldManager;

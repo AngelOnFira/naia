@@ -1,6 +1,6 @@
 use std::{any::Any, collections::VecDeque, hash::Hash, net::SocketAddr, time::Duration};
 
-use log::{info, warn};
+use log::{debug, info, warn};
 
 use naia_shared::{BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityDoesNotExistError, EntityEvent, FakeEntityConverter, GameInstant, GlobalEntity, GlobalEntityMap, GlobalEntitySpawner, GlobalRequestId, GlobalResponseId, GlobalWorldManagerType, HostType, Instant, Message, MessageContainer, OwnedLocalEntity, PacketType, Protocol, Replicate, ReplicatedComponent, Request, Response, ResponseReceiveKey, ResponseSendKey, Serde, SharedGlobalWorldManager, SocketConfig, StandardHeader, Tick, WorldMutType, WorldRefType};
 
@@ -679,10 +679,24 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             .entity_to_global_entity(world_entity)
             .unwrap();
 
+        // DEBUG: Check channel status before request
+        if let Some(connection) = &self.server_connection {
+            let channel_status = connection.base.world_manager.get_remote_entity_auth_status(&global_entity);
+            debug!("Requesting authority for {:?}", global_entity);
+            debug!("  Channel auth status: {:?}", channel_status);
+        }
+        
+        // Check global tracker status
+        let global_status = self.global_world_manager.entity_authority_status(&global_entity);
+        debug!("  Global tracker auth status: {:?}", global_status);
+
         // 1. Set local authority status for Entity
         let success = self
             .global_world_manager
             .entity_request_authority(&global_entity);
+        
+        debug!("  Global manager allowed request: {}", success);
+        
         if success {
 
             // 2. Send request to Server via EntityActionEvent system
@@ -694,6 +708,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 .base
                 .world_manager
                 .remote_send_request_auth(&global_entity);
+                
+            debug!("  Request sent to server");
+        } else {
+            debug!("  Global manager BLOCKED request - entity not in correct state");
         }
     }
 
@@ -1058,6 +1076,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             .entity_register_auth_for_delegation(global_entity);
 
         if client_is_origin {
+            info!("CLIENT: Sending EnableDelegation to server for {:?}", global_entity);
+            
             // Send EnableDelegationEntity action via EntityActionEvent system
             let Some(connection) = &mut self.server_connection else {
                 return;
@@ -1129,8 +1149,37 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             .entity_authority_status(global_entity)
             .unwrap();
 
+        debug!("entity_update_authority for {:?}: {:?} -> {:?}", 
+            global_entity, old_auth_status, new_auth_status);
+
         self.global_world_manager
             .entity_update_authority(global_entity, new_auth_status);
+
+        // Update RemoteEntityChannel's internal AuthChannel status (for migrated entities)
+        // This ensures the channel's state machine stays in sync with the global tracker
+        if let Some(connection) = &mut self.server_connection {
+            debug!("  Syncing RemoteEntityChannel...");
+            
+            // Check if entity exists as RemoteEntity
+            let channel_status_before = connection.base.world_manager.get_remote_entity_auth_status(global_entity);
+            debug!("  Channel status BEFORE sync: {:?}", channel_status_before);
+            
+            // Only sync if entity exists as RemoteEntity (i.e., migration completed)
+            if channel_status_before.is_some() {
+                connection.base.world_manager.remote_receive_set_auth(
+                    global_entity,
+                    new_auth_status
+                );
+                
+                let channel_status_after = connection.base.world_manager.get_remote_entity_auth_status(global_entity);
+                debug!("  Channel status AFTER sync: {:?}", channel_status_after);
+            } else {
+                warn!("Entity {:?} not yet migrated to RemoteEntity - channel sync skipped", global_entity);
+                debug!("  This entity is still a HostEntity. Authority updates will only affect global tracker.");
+            }
+        } else {
+            debug!("  No server connection - skipping channel sync");
+        }
 
         // info!(
         //     "<-- Received Entity Update Authority message! {:?} -> {:?}",
@@ -1625,10 +1674,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     self.incoming_world_events.push_unpublish(world_entity);
                 }
                 EntityEvent::EnableDelegation(global_entity) => {
+                    debug!("Received EnableDelegation for {:?}", global_entity);
+                    
                     let world_entity = self
                         .global_entity_map
                         .global_entity_to_entity(&global_entity)
                         .unwrap();
+
+                    // Check if entity exists as RemoteEntity
+                    if let Some(connection) = &self.server_connection {
+                        let channel_status = connection.base.world_manager.get_remote_entity_auth_status(&global_entity);
+                        debug!("  Channel status before EnableDelegation: {:?}", channel_status);
+                    }
 
                     self.entity_enable_delegation(world, &global_entity, &world_entity, false);
 
@@ -1667,13 +1724,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     self.entity_update_authority(&global_entity, &world_entity, new_auth_status);
                 }
                 EntityEvent::MigrateResponse(global_entity, new_remote_entity) => {
+                    info!("CLIENT: Received MigrateResponse for {:?} -> RemoteEntity({:?})", global_entity, new_remote_entity);
+                    
                     // Validate we have a valid world entity
                     let world_entity = match self
                         .global_entity_map
                         .global_entity_to_entity(&global_entity) {
                         Ok(entity) => entity,
                         Err(_) => {
-                            eprintln!("ERROR: Received MigrateResponse for unknown global entity: {:?}", global_entity);
+                            warn!("Received MigrateResponse for unknown global entity: {:?}", global_entity);
                             return;
                         }
                     };
@@ -1681,7 +1740,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     // Scope the connection borrow to complete migration steps
                     {
                         let Some(connection) = &mut self.server_connection else {
-                            eprintln!("ERROR: Received MigrateResponse without active server connection");
+                            warn!("Received MigrateResponse without active server connection");
                             return;
                         };
                         
@@ -1690,7 +1749,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                             .global_entity_to_host_entity(&global_entity) {
                             Ok(entity) => entity,
                             Err(_) => {
-                                eprintln!("ERROR: Entity {:?} does not exist as HostEntity before migration", global_entity);
+                                warn!("Entity {:?} does not exist as HostEntity before migration", global_entity);
                                 return;
                             }
                         };

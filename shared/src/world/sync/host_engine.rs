@@ -41,6 +41,8 @@ impl HostEngine {
         id: MessageIndex,
         msg: EntityMessage<HostEntity>,
     ) {
+        use log::info;
+        
         match msg.get_type() {
             EntityMessageType::Spawn | EntityMessageType::Despawn | EntityMessageType::InsertComponent | EntityMessageType::RemoveComponent => {
                 panic!("Host should not receive messages of this type: {:?}", msg.get_type());
@@ -53,9 +55,12 @@ impl HostEngine {
 
         let host_entity = msg.entity().unwrap();
 
-        // info!("HostEngine::receive_message(id={}, entity={:?}, msgType={:?})", id, host_entity, msg.get_type());
+        info!("HostEngine::receive_message(id={}, entity=HostEntity({}), msgType={:?})", id, host_entity.value(), msg.get_type());
 
         let Some(entity_channel) = self.entity_channels.get_mut(&host_entity) else {
+            info!("ERROR: HostEngine - Entity channel does not exist for HostEntity({})!", host_entity.value());
+            info!("  Message type: {:?}", msg.get_type());
+            info!("  Available channels: {:?}", self.entity_channels.keys().map(|e| e.value()).collect::<Vec<_>>());
             panic!("Cannot accept message for an entity that does not exist in the engine. Message: {:?}", msg);
         };
 
@@ -136,4 +141,9 @@ impl HostEngine {
     pub(crate) fn get_entity_channel(&self, entity: &HostEntity) -> Option<&HostEntityChannel> {
         self.entity_channels.get(entity)
     }
+
+    pub(crate) fn get_entity_channel_mut(&mut self, entity: &HostEntity) -> Option<&mut HostEntityChannel> {
+        self.entity_channels.get_mut(entity)
+    }
+    
 }

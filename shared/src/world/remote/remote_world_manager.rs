@@ -3,7 +3,7 @@ use std::{
     hash::Hash,
 };
 
-use log::warn;
+use log::{debug, warn};
 
 use naia_socket_shared::Instant;
 
@@ -312,8 +312,10 @@ impl RemoteWorldManager {
                     // do nothing
                 }
                 msg => {
-                    // let msg_type = msg.get_type();
+                    let msg_type = msg.get_type();
+                    debug!("remote_world_manager processing message type: {:?}", msg_type);
                     let event = msg.to_event(local_entity_map);
+                    debug!("  Successfully converted to event");
                     self.incoming_events.push(event);
                 }
             }

@@ -34,6 +34,34 @@ Test multiple components working together at the **LocalWorldManager level**, fo
 
 **Run**: `cargo test --package naia-test --test integration_`
 
+### 4. End-to-End (E2E) Tests
+**Location**: `test/tests/e2e_*.rs`
+
+Test complete workflows that span client and server, including entity ID conversions that occur across network boundaries.
+
+**Purpose**: Verify cross-boundary protocols, entity ID translation, and complete delegation flows (addresses protocol integration gaps)
+
+**Run**: `cargo test --package naia-test --test e2e_`
+
+#### E2E Test Suites
+
+1. **Complete Delegation Flow** (`e2e_delegation_complete_flow.rs`)
+   - Tests client-initiated delegation with entity ID tracking
+   - Verifies server-to-client entity ID conversion
+   - Documents the entity ID conversion bug (server sends wrong IDs)
+   - Tests server-side migration (`migrate_entity_remote_to_host`)
+   - **Critical Tests**:
+     - `bug_server_sends_wrong_entity_ids_in_migrate_response` - Demonstrates current bug
+     - `correct_server_converts_entity_ids_before_migrate_response` - Shows correct behavior
+     - `complete_delegation_flow_tracks_entity_ids` - Full flow with ID tracking
+     - `serialization_needs_entity_id_conversion` - Documents serialization requirements
+
+2. **Entity ID Conversion Bugs** (`e2e_entity_id_conversion_bug.rs`)
+   - Focused tests on specific entity ID conversion failures
+   - Tests client's inability to look up server's RemoteEntity
+   - Tests server's inability to migrate already-mapped entities
+   - Demonstrates correct vs incorrect entity ID usage
+
 #### Integration Test Suites
 
 1. **LocalWorldManager Integration** (`integration_local_world_manager.rs`)

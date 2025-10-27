@@ -1,3 +1,5 @@
+use log::error;
+
 use crate::{world::host::host_world_manager::SubCommandId, EntityAuthStatus, HostEntity, RemoteEntity, world::component::component_kinds::ComponentKind, EntityMessageType, EntityEvent, LocalEntityMap};
 
 // Raw entity sync messages sent over the wire
@@ -17,7 +19,7 @@ pub enum EntityMessage<E: Copy + Eq + PartialEq> {
     RequestAuthority(SubCommandId, E),
     ReleaseAuthority(SubCommandId, E),
     EnableDelegationResponse(SubCommandId, E),
-    MigrateResponse(SubCommandId, E, HostEntity),
+    MigrateResponse(SubCommandId, E, RemoteEntity),
 
     Noop,
 }
@@ -159,7 +161,14 @@ impl EntityMessage<RemoteEntity> {
 //
     pub fn to_event(self, local_entity_map: &LocalEntityMap) -> EntityEvent {
         let remote_entity = self.entity().unwrap();
-        let global_entity = *(local_entity_map.global_entity_from_remote(&remote_entity).unwrap());
+        let global_entity = match local_entity_map.global_entity_from_remote(&remote_entity) {
+            Some(ge) => *ge,
+            None => {
+                error!("to_event() failed to find RemoteEntity({:?}) in entity_map! Message type: {:?}", 
+                    remote_entity, self.get_type());
+                panic!("RemoteEntity not found in entity_map during to_event conversion");
+            }
+        };
         match self {
             EntityMessage::Publish(_, _) => EntityEvent::Publish(global_entity),
             EntityMessage::Unpublish(_, _) => EntityEvent::Unpublish(global_entity),
@@ -169,7 +178,11 @@ impl EntityMessage<RemoteEntity> {
             EntityMessage::RequestAuthority(_, _) => EntityEvent::RequestAuthority(global_entity),
             EntityMessage::ReleaseAuthority(_, _) => EntityEvent::ReleaseAuthority(global_entity),
             EntityMessage::SetAuthority(_, _, status) => EntityEvent::SetAuthority(global_entity, status),
-            EntityMessage::MigrateResponse(_, _, other_entity) => EntityEvent::MigrateResponse(global_entity, other_entity.to_remote()),
+            EntityMessage::MigrateResponse(_, _, _new_remote_entity) => {
+                // MigrateResponse should never be EntityMessage<RemoteEntity>!
+                // It should be EntityMessage<HostEntity> so the client can look it up
+                panic!("MigrateResponse should be EntityMessage<HostEntity>, not EntityMessage<RemoteEntity>!");
+            },
             EntityMessage::Spawn(_) | EntityMessage::Despawn(_) |
             EntityMessage::InsertComponent(_, _) | EntityMessage::RemoveComponent(_, _) => panic!("Handled elsewhere"),
             EntityMessage::Noop => panic!("Cannot convert Noop message to an event"),
@@ -190,7 +203,9 @@ impl EntityMessage<HostEntity> {
             EntityMessage::RequestAuthority(_, _) => EntityEvent::RequestAuthority(global_entity),
             EntityMessage::ReleaseAuthority(_, _) => EntityEvent::ReleaseAuthority(global_entity),
             EntityMessage::SetAuthority(_, _, status) => EntityEvent::SetAuthority(global_entity, status),
-            EntityMessage::MigrateResponse(_, _, new_host_entity) => EntityEvent::MigrateResponse(global_entity, new_host_entity.to_remote()),
+            EntityMessage::MigrateResponse(_, _, new_remote_entity) => {
+                EntityEvent::MigrateResponse(global_entity, new_remote_entity)
+            },
             EntityMessage::Spawn(_) | EntityMessage::Despawn(_) |
             EntityMessage::InsertComponent(_, _) | EntityMessage::RemoveComponent(_, _) => panic!("Handled elsewhere"),
             EntityMessage::Noop => panic!("Cannot convert Noop message to an event"),

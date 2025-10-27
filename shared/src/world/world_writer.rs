@@ -4,6 +4,8 @@ use std::{
     hash::Hash,
 };
 
+use log::debug;
+
 use crate::{
     messages::channels::senders::indexed_message_writer::IndexedMessageWriter,
     world::{
@@ -566,6 +568,8 @@ impl WorldWriter {
                 }
             }
             EntityCommand::MigrateResponse(sub_id_opt, _global_entity, old_remote_entity, new_host_entity_value) => {
+                debug!("Writing MigrateResponse to packet: global={:?}, old_remote={:?}, new_host={:?}", 
+                    _global_entity, old_remote_entity, new_host_entity_value);
                 
                 // this command is only ever sent by the server, regarding newly delegated server-owned entities, to clients
                 
@@ -580,18 +584,21 @@ impl WorldWriter {
                 // write subcommand id
                 sub_id.ser(writer);
 
-                // write old remote entity (captured before migration)
-                old_remote_entity.ser(writer);
+                // Convert server's RemoteEntity to client's HostEntity (same value, different type)
+                // The client can look this up in its entity_map!
+                let client_host_entity = old_remote_entity.to_host();
+                client_host_entity.ser(writer);
 
-                // write new host entity
-                new_host_entity_value.ser(writer);
+                // write new remote entity (what the client will create)
+                let new_remote_entity = new_host_entity_value.to_remote();
+                new_remote_entity.ser(writer);
 
                 // if we are writing to this packet, add it to record
                 if is_writing {
                     world_manager.record_command_written(
                         packet_index,
                         command_id,
-                        EntityMessage::MigrateResponse(*sub_id, old_remote_entity.copy_to_owned(), *new_host_entity_value),
+                        EntityMessage::MigrateResponse(*sub_id, client_host_entity.copy_to_owned(), new_remote_entity),
                     );
                 }
             }

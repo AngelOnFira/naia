@@ -141,6 +141,7 @@ impl AuthChannel {
     }
 
     /// Get current state of the AuthChannel (for testing)
+    #[allow(dead_code)]
     pub fn state(&self) -> EntityAuthChannelState {
         self.state
     }
