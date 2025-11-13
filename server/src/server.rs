@@ -58,6 +58,7 @@ pub struct Server<E: Copy + Eq + Hash + Send + Sync> {
     // Users
     users: BigMap<UserKey, User>,
     user_connections: HashMap<SocketAddr, Connection<E>>,
+    user_key_to_addr: HashMap<UserKey, SocketAddr>,
     // Rooms
     rooms: BigMap<RoomKey, Room<E>>,
     // Entities
@@ -100,6 +101,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             // Users
             users: BigMap::new(),
             user_connections: HashMap::new(),
+            user_key_to_addr: HashMap::new(),
             // Rooms
             rooms: BigMap::new(),
             // Entities
@@ -162,13 +164,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// with the Server
     pub fn accept_connection(&mut self, user_key: &UserKey) {
         let Some(user) = self.users.get_mut(user_key) else {
-            warn!("unknown user is finalizing connection...");
+            info!("unknown user is finalizing connection...");
             return;
         };
         let auth_addr = user.take_auth_address();
 
         // info!("adding authenticated user {}", &auth_addr);
         let identity_token = naia_shared::generate_identity_token();
+        info!("Identity token: {}", identity_token);
         self.handshake_manager
             .authenticate_user(&identity_token, user_key);
 
@@ -177,7 +180,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             .as_mut()
             .expect("Auth should be set up by this point");
         if auth_sender.accept(&auth_addr, &identity_token).is_err() {
-            warn!(
+            info!(
                 "Server Error: Cannot send auth accept packet to {:?}",
                 &auth_addr
             );
@@ -215,6 +218,20 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             return;
         };
         user.set_address(user_address);
+
+        warn!(
+            ">>> FINALIZE_CONNECTION for {:?} at address {}",
+            user_key, user_address
+        );
+        warn!(
+            "    user_connections before insert: {} entries",
+            self.user_connections.len()
+        );
+        warn!(
+            "    existing addresses: {:?}",
+            self.user_connections.keys().collect::<Vec<_>>()
+        );
+
         let new_connection = Connection::new(
             &self.server_config.connection,
             &self.server_config.ping,
@@ -225,10 +242,22 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         );
 
         self.user_connections.insert(user.address(), new_connection);
+        self.user_key_to_addr.insert(*user_key, user.address());
+        warn!(
+            "    user_connections after insert: {} entries",
+            self.user_connections.len()
+        );
+        warn!(
+            "    user_key_to_addr mapping: {:?} -> {}",
+            user_key,
+            user.address()
+        );
+
         if self.io.bandwidth_monitor_enabled() {
             self.io.register_client(&user.address());
         }
         self.incoming_events.push_connection(user_key);
+        warn!("    ConnectEvent pushed for {:?}", user_key);
     }
 
     // Messages
@@ -485,7 +514,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
     /// Creates a new Entity and returns an EntityMut which can be used for
     /// further operations on the Entity
-    pub fn spawn_entity<W: WorldMutType<E>>(&mut self, mut world: W) -> EntityMut<E, W> {
+    pub fn spawn_entity<W: WorldMutType<E>>(&mut self, mut world: W) -> EntityMut<'_, E, W> {
         let entity = world.spawn_entity();
         self.spawn_entity_inner(&entity);
 
@@ -809,7 +838,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Retrieves an EntityRef that exposes read-only operations for the
     /// Entity.
     /// Panics if the Entity does not exist.
-    pub fn entity<W: WorldRefType<E>>(&self, world: W, entity: &E) -> EntityRef<E, W> {
+    pub fn entity<W: WorldRefType<E>>(&self, world: W, entity: &E) -> EntityRef<'_, E, W> {
         if world.has_entity(entity) {
             return EntityRef::new(self, world, entity);
         }
@@ -819,7 +848,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Retrieves an EntityMut that exposes read and write operations for the
     /// Entity.
     /// Panics if the Entity does not exist.
-    pub fn entity_mut<W: WorldMutType<E>>(&mut self, world: W, entity: &E) -> EntityMut<E, W> {
+    pub fn entity_mut<W: WorldMutType<E>>(&mut self, world: W, entity: &E) -> EntityMut<'_, E, W> {
         if world.has_entity(entity) {
             return EntityMut::new(self, world, entity);
         }
@@ -848,7 +877,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Retrieves an UserRef that exposes read-only operations for the User
     /// associated with the given UserKey.
     /// Panics if the user does not exist.
-    pub fn user(&self, user_key: &UserKey) -> UserRef<E> {
+    pub fn user(&self, user_key: &UserKey) -> UserRef<'_, E> {
         if self.users.contains_key(user_key) {
             return UserRef::new(self, user_key);
         }
@@ -858,7 +887,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Retrieves an UserMut that exposes read and write operations for the User
     /// associated with the given UserKey.
     /// Returns None if the user does not exist.
-    pub fn user_mut(&mut self, user_key: &UserKey) -> UserMut<E> {
+    pub fn user_mut(&mut self, user_key: &UserKey) -> UserMut<'_, E> {
         if self.users.contains_key(user_key) {
             return UserMut::new(self, user_key);
         }
@@ -887,7 +916,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     }
 
     /// Returns a UserScopeRef, which is used to query whether a given user has
-    pub fn user_scope(&self, user_key: &UserKey) -> UserScopeRef<E> {
+    pub fn user_scope(&self, user_key: &UserKey) -> UserScopeRef<'_, E> {
         if self.users.contains_key(user_key) {
             return UserScopeRef::new(self, user_key);
         }
@@ -896,7 +925,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
     /// Returns a UserScopeMut, which is used to include/exclude Entities for a
     /// given User
-    pub fn user_scope_mut(&mut self, user_key: &UserKey) -> UserScopeMut<E> {
+    pub fn user_scope_mut(&mut self, user_key: &UserKey) -> UserScopeMut<'_, E> {
         if self.users.contains_key(user_key) {
             return UserScopeMut::new(self, user_key);
         }
@@ -908,7 +937,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Creates a new Room on the Server and returns a corresponding RoomMut,
     /// which can be used to add users/entities to the room or retrieve its
     /// key
-    pub fn make_room(&mut self) -> RoomMut<E> {
+    pub fn make_room(&mut self) -> RoomMut<'_, E> {
         let new_room = Room::new();
         let room_key = self.rooms.insert(new_room);
         RoomMut::new(self, &room_key)
@@ -922,7 +951,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Retrieves an RoomMut that exposes read and write operations for the
     /// Room associated with the given RoomKey.
     /// Panics if the room does not exist.
-    pub fn room(&self, room_key: &RoomKey) -> RoomRef<E> {
+    pub fn room(&self, room_key: &RoomKey) -> RoomRef<'_, E> {
         if self.rooms.contains_key(room_key) {
             return RoomRef::new(self, room_key);
         }
@@ -932,7 +961,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Retrieves an RoomMut that exposes read and write operations for the
     /// Room associated with the given RoomKey.
     /// Panics if the room does not exist.
-    pub fn room_mut(&mut self, room_key: &RoomKey) -> RoomMut<E> {
+    pub fn room_mut(&mut self, room_key: &RoomKey) -> RoomMut<'_, E> {
         if self.rooms.contains_key(room_key) {
             return RoomMut::new(self, room_key);
         }
@@ -1458,7 +1487,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     }
 
     /// Returns an iterator of all the keys of the [`Room`]s the User belongs to
-    pub(crate) fn user_room_keys(&self, user_key: &UserKey) -> Option<Iter<RoomKey>> {
+    pub(crate) fn user_room_keys(&self, user_key: &UserKey) -> Option<Iter<'_, RoomKey>> {
         if let Some(user) = self.users.get(user_key) {
             return Some(user.room_keys().iter());
         }
@@ -1478,6 +1507,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         user_key: &UserKey,
         world: &mut W,
     ) {
+        warn!(">>> USER_DISCONNECT for {:?}", user_key);
+        warn!(
+            "    user_connections before cleanup: {} entries",
+            self.user_connections.len()
+        );
+
         if self.protocol.client_authoritative_entities {
             self.despawn_all_remote_entities(user_key, world);
             if let Some(all_owned_entities) =
@@ -1490,7 +1525,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             }
         }
         let user = self.user_delete(user_key);
+        warn!(
+            "    user_connections after user_delete: {} entries",
+            self.user_connections.len()
+        );
+
         self.incoming_events.push_disconnection(user_key, user);
+        warn!("    DisconnectEvent pushed for {:?}", user_key);
     }
 
     pub(crate) fn user_queue_disconnect(&mut self, user_key: &UserKey) {
@@ -1543,6 +1584,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             info!("deleting authenticated user for {}", user.address());
             self.user_connections.remove(&user_addr);
         }
+
+        self.user_key_to_addr.remove(user_key);
 
         self.entity_scope_map.remove_user(user_key);
 
@@ -1772,6 +1815,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         // TODO: increase suspicion against packet sender
                         continue;
                     };
+                    info!("Header received: {:?}", header);
 
                     match header.packet_type {
                         PacketType::Data => {
@@ -1821,10 +1865,34 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                             continue;
                         }
                         PacketType::Handshake => {
+                            // Check if there's an existing connection AND it's for a different user
+                            // If connection exists but for same user (reconnection), treat as new connection
+                            let has_different_user_connection = if let Some(existing_conn) =
+                                self.user_connections.get(&address)
+                            {
+                                // Check if the authenticated user for this address is the same as the existing connection
+                                if let Some(user_key_for_addr) =
+                                    self.handshake_manager.get_user_for_address(&address)
+                                {
+                                    // There's an authenticated user for this address - check if connection matches
+                                    let existing_user_key = existing_conn.user_key;
+                                    let is_different = existing_user_key != user_key_for_addr;
+                                    warn!(">>> ADDRESS COLLISION CHECK: addr={}, existing_user={:?}, authenticating_user={:?}, different={}",
+                                        address, existing_user_key, user_key_for_addr, is_different);
+                                    is_different
+                                } else {
+                                    // No authenticated user yet, allow handshake to proceed
+                                    warn!(">>> ADDRESS REUSE: addr={} has connection but no authenticated user yet", address);
+                                    false
+                                }
+                            } else {
+                                false
+                            };
+
                             match self.handshake_manager.maintain_handshake(
                                 &address,
                                 &mut reader,
-                                self.user_connections.contains_key(&address),
+                                has_different_user_connection,
                             ) {
                                 Ok(HandshakeAction::None) => {}
                                 Ok(HandshakeAction::FinalizeConnection(
@@ -2106,14 +2174,35 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         if self.timeout_timer.ringing() {
             self.timeout_timer.reset();
 
+            warn!(
+                ">>> TIMEOUT_CHECK: Checking {} connections for timeouts",
+                self.user_connections.len()
+            );
+
             let mut user_disconnects: Vec<UserKey> = Vec::new();
 
-            for (_, connection) in &mut self.user_connections.iter_mut() {
+            for (addr, connection) in &mut self.user_connections.iter_mut() {
+                let should_drop = connection.base.should_drop();
+                let manual = connection.manual_disconnect;
+
+                warn!(
+                    "    Connection at {} (user {:?}): should_drop={}, manual_disconnect={}",
+                    addr, connection.user_key, should_drop, manual
+                );
+
                 // user disconnects
-                if connection.base.should_drop() || connection.manual_disconnect {
+                if should_drop || manual {
+                    warn!("    -> Marking for disconnect!");
                     user_disconnects.push(connection.user_key);
                     continue;
                 }
+            }
+
+            if !user_disconnects.is_empty() {
+                warn!(
+                    ">>> TIMEOUT_CHECK: Disconnecting {} users",
+                    user_disconnects.len()
+                );
             }
 
             for user_key in user_disconnects {

@@ -22,6 +22,8 @@ pub trait Handshaker: Send + Sync {
     // address is optional because user may not have been identified yet
     fn delete_user(&mut self, user_key: &UserKey, address_opt: Option<SocketAddr>);
 
+    fn get_user_for_address(&self, address: &SocketAddr) -> Option<UserKey>;
+
     fn maintain_handshake(
         &mut self,
         address: &SocketAddr,

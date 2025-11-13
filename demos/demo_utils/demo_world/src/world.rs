@@ -84,7 +84,7 @@ impl<'w> WorldRefType<Entity> for WorldRef<'w> {
         has_component_of_type(self.world, entity, component_kind)
     }
 
-    fn component<R: Replicate>(&self, entity: &Entity) -> Option<ReplicaRefWrapper<R>> {
+    fn component<R: Replicate>(&self, entity: &Entity) -> Option<ReplicaRefWrapper<'_, R>> {
         component(self.world, entity)
     }
 
@@ -114,7 +114,7 @@ impl<'w> WorldRefType<Entity> for WorldMut<'w> {
         has_component_of_type(self.world, entity, component_kind)
     }
 
-    fn component<R: Replicate>(&self, entity: &Entity) -> Option<ReplicaRefWrapper<R>> {
+    fn component<R: Replicate>(&self, entity: &Entity) -> Option<ReplicaRefWrapper<'_, R>> {
         component(self.world, entity)
     }
 
@@ -171,7 +171,7 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
         output
     }
 
-    fn component_mut<R: Replicate>(&mut self, entity: &Entity) -> Option<ReplicaMutWrapper<R>> {
+    fn component_mut<R: Replicate>(&mut self, entity: &Entity) -> Option<ReplicaMutWrapper<'_, R>> {
         if let Some(component_map) = self.world.entities.get_mut(entity) {
             if let Some(boxed_component) = component_map.get_mut(&ComponentKind::of::<R>()) {
                 if let Some(raw_ref) = boxed_component.to_any_mut().downcast_mut::<R>() {

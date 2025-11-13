@@ -28,7 +28,7 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>> EntityRef<'s, E,
         self.world.has_component::<R>(&self.entity)
     }
 
-    pub fn component<R: ReplicatedComponent>(&self) -> Option<ReplicaRefWrapper<R>> {
+    pub fn component<R: ReplicatedComponent>(&self) -> Option<ReplicaRefWrapper<'_, R>> {
         self.world.component::<R>(&self.entity)
     }
 

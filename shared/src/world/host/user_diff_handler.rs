@@ -52,7 +52,7 @@ impl<E: Copy + Eq + Hash> UserDiffHandler<E> {
         &self,
         entity: &E,
         component_kind: &ComponentKind,
-    ) -> RwLockReadGuard<DiffMask> {
+    ) -> RwLockReadGuard<'_, DiffMask> {
         let Some(receiver) = self.receivers.get(&(*entity, *component_kind)) else {
             panic!("Should not call this unless we're sure there's a receiver");
         };

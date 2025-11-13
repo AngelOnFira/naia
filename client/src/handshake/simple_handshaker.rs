@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use log::warn;
+use log::{info, warn};
 
 use naia_shared::{
     handshake::HandshakeHeader, BitReader, BitWriter, IdentityToken, OutgoingPacket, PacketType,
@@ -66,6 +66,10 @@ impl Handshaker for HandshakeManager {
         match &mut self.connection_state {
             HandshakeState::AwaitingIdentifyResponse => {
                 if let Some(identity_token) = &self.identity_token {
+                    info!(
+                        "CLIENT HANDSHAKE: Sending ClientIdentifyRequest (token: {})",
+                        identity_token
+                    );
                     let writer = self.write_identify_request(identity_token);
                     return Some(writer.to_packet());
                 } else {
@@ -76,10 +80,12 @@ impl Handshaker for HandshakeManager {
             HandshakeState::TimeSync(time_manager) => {
                 // use time manager to send initial pings until client/server time is synced
                 // then, move state to AwaitingConnectResponse
+                info!("CLIENT HANDSHAKE: Sending TimeSync ping");
                 let writer = time_manager.write_ping();
                 return Some(writer.to_packet());
             }
             HandshakeState::AwaitingConnectResponse(_) => {
+                info!("CLIENT HANDSHAKE: Sending ClientConnectRequest");
                 let writer = self.write_connect_request();
                 return Some(writer.to_packet());
             }
@@ -105,10 +111,12 @@ impl Handshaker for HandshakeManager {
                 };
                 match handshake_header {
                     HandshakeHeader::ServerIdentifyResponse => {
+                        info!("CLIENT HANDSHAKE: Received ServerIdentifyResponse, transitioning to TimeSync");
                         self.recv_identify_response(reader);
                         return None;
                     }
                     HandshakeHeader::ServerConnectResponse => {
+                        info!("CLIENT HANDSHAKE: Received ServerConnectResponse, transitioning to Connected");
                         return self.recv_connect_response();
                     }
                     HandshakeHeader::ClientIdentifyRequest
@@ -130,6 +138,7 @@ impl Handshaker for HandshakeManager {
                     success = success_inner;
                 }
                 if success {
+                    info!("CLIENT HANDSHAKE: TimeSync complete, transitioning to AwaitingConnectResponse");
                     let HandshakeState::TimeSync(time_manager) =
                         std::mem::replace(&mut self.connection_state, HandshakeState::Connected)
                     else {
@@ -163,6 +172,8 @@ impl HandshakeManager {
     pub fn new(send_interval: Duration, ping_interval: Duration, handshake_pings: u8) -> Self {
         let mut handshake_timer = Timer::new(send_interval);
         handshake_timer.ring_manual();
+
+        info!("CLIENT HANDSHAKE: New HandshakeManager created, state=AwaitingIdentifyResponse");
 
         Self {
             handshake_timer,

@@ -109,12 +109,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
         if let Some(auth_bytes) = &self.auth_message {
             if let Some(auth_headers) = &self.auth_headers {
+                info!("connect with auth & headers");
                 // connect with auth & headers
                 let boxed_socket: Box<dyn Socket> = socket.into();
                 let (id_receiver, packet_sender, packet_receiver) = boxed_socket
                     .connect_with_auth_and_headers(auth_bytes.clone(), auth_headers.clone());
                 self.io.load(id_receiver, packet_sender, packet_receiver);
             } else {
+                info!("connect with auth");
                 // connect with auth
                 let boxed_socket: Box<dyn Socket> = socket.into();
                 let (id_receiver, packet_sender, packet_receiver) =
@@ -123,12 +125,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             }
         } else {
             if let Some(auth_headers) = &self.auth_headers {
+                info!("connect with auth headers");
                 // connect with auth headers
                 let boxed_socket: Box<dyn Socket> = socket.into();
                 let (id_receiver, packet_sender, packet_receiver) =
                     boxed_socket.connect_with_auth_headers(auth_headers.clone());
                 self.io.load(id_receiver, packet_sender, packet_receiver);
             } else {
+                info!("connect without auth");
                 // connect without auth
                 let boxed_socket: Box<dyn Socket> = socket.into();
                 let (id_receiver, packet_sender, packet_receiver) = boxed_socket.connect();
@@ -504,7 +508,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
     /// Creates a new Entity and returns an EntityMut which can be used for
     /// further operations on the Entity
-    pub fn spawn_entity<W: WorldMutType<E>>(&mut self, mut world: W) -> EntityMut<E, W> {
+    pub fn spawn_entity<W: WorldMutType<E>>(&mut self, mut world: W) -> EntityMut<'_, E, W> {
         self.check_client_authoritative_allowed();
 
         let entity = world.spawn_entity();
@@ -529,7 +533,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     /// Retrieves an EntityRef that exposes read-only operations for the
     /// given Entity.
     /// Panics if the Entity does not exist.
-    pub fn entity<W: WorldRefType<E>>(&self, world: W, entity: &E) -> EntityRef<E, W> {
+    pub fn entity<W: WorldRefType<E>>(&self, world: W, entity: &E) -> EntityRef<'_, E, W> {
         if world.has_entity(entity) {
             return EntityRef::new(self, world, entity);
         }
@@ -539,7 +543,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     /// Retrieves an EntityMut that exposes read and write operations for the
     /// Entity.
     /// Panics if the Entity does not exist.
-    pub fn entity_mut<W: WorldMutType<E>>(&mut self, world: W, entity: &E) -> EntityMut<E, W> {
+    pub fn entity_mut<W: WorldMutType<E>>(&mut self, world: W, entity: &E) -> EntityMut<'_, E, W> {
         self.check_client_authoritative_allowed();
         if world.has_entity(entity) {
             return EntityMut::new(self, world, entity);

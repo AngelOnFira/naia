@@ -37,6 +37,12 @@ impl Handshaker for HandshakeManager {
         }
     }
 
+    fn get_user_for_address(&self, address: &SocketAddr) -> Option<UserKey> {
+        self.authenticated_and_identified_users
+            .get(address)
+            .copied()
+    }
+
     fn maintain_handshake(
         &mut self,
         address: &SocketAddr,
@@ -78,7 +84,17 @@ impl Handshaker for HandshakeManager {
                 let writer = self.write_connect_response();
                 let packet = writer.to_packet();
 
+                warn!(">>> HANDSHAKE: ClientConnectRequest from {}", address);
+                warn!("    has_connection: {}", has_connection);
+                warn!(
+                    "    authenticated_and_identified_users: {:?}",
+                    self.authenticated_and_identified_users
+                        .keys()
+                        .collect::<Vec<_>>()
+                );
+
                 if has_connection {
+                    warn!("    RESULT: Sending SendPacket (NO ConnectEvent will fire!)");
                     return Ok(HandshakeAction::SendPacket(packet));
                 } else {
                     let Some(user_key) = self.authenticated_and_identified_users.get(address)
@@ -87,6 +103,10 @@ impl Handshaker for HandshakeManager {
                         return Ok(HandshakeAction::None);
                     };
 
+                    warn!(
+                        "    RESULT: Sending FinalizeConnection for {:?} (ConnectEvent WILL fire)",
+                        user_key
+                    );
                     return Ok(HandshakeAction::FinalizeConnection(*user_key, packet));
                 }
             }

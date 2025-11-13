@@ -48,6 +48,12 @@ impl Handshaker for HandshakeManager {
         }
     }
 
+    fn get_user_for_address(&self, address: &SocketAddr) -> Option<UserKey> {
+        self.authenticated_and_identified_users
+            .get(address)
+            .copied()
+    }
+
     fn maintain_handshake(
         &mut self,
         address: &SocketAddr,

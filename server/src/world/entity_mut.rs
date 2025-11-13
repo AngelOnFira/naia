@@ -34,7 +34,7 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> EntityMut<'s, E,
         self.world.has_component::<R>(&self.entity)
     }
 
-    pub fn component<R: ReplicatedComponent>(&mut self) -> Option<ReplicaMutWrapper<R>> {
+    pub fn component<R: ReplicatedComponent>(&mut self) -> Option<ReplicaMutWrapper<'_, R>> {
         self.world.component_mut::<R>(&self.entity)
     }
 

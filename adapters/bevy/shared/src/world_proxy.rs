@@ -70,7 +70,10 @@ impl<'w> WorldRefType<Entity> for WorldRef<'w> {
         has_component_of_kind(self.world, entity, component_kind)
     }
 
-    fn component<R: ReplicatedComponent>(&self, entity: &Entity) -> Option<ReplicaRefWrapper<R>> {
+    fn component<R: ReplicatedComponent>(
+        &self,
+        entity: &Entity,
+    ) -> Option<ReplicaRefWrapper<'_, R>> {
         component(self.world, entity)
     }
 
@@ -78,7 +81,7 @@ impl<'w> WorldRefType<Entity> for WorldRef<'w> {
         &self,
         entity: &Entity,
         component_kind: &ComponentKind,
-    ) -> Option<ReplicaDynRefWrapper> {
+    ) -> Option<ReplicaDynRefWrapper<'_>> {
         component_of_kind(self.world, entity, component_kind)
     }
 }
@@ -112,7 +115,10 @@ impl<'w> WorldRefType<Entity> for WorldMut<'w> {
         has_component_of_kind(self.world, entity, component_kind)
     }
 
-    fn component<R: ReplicatedComponent>(&self, entity: &Entity) -> Option<ReplicaRefWrapper<R>> {
+    fn component<R: ReplicatedComponent>(
+        &self,
+        entity: &Entity,
+    ) -> Option<ReplicaRefWrapper<'_, R>> {
         component(self.world, entity)
     }
 
@@ -120,7 +126,7 @@ impl<'w> WorldRefType<Entity> for WorldMut<'w> {
         &self,
         entity: &Entity,
         component_kind: &ComponentKind,
-    ) -> Option<ReplicaDynRefWrapper> {
+    ) -> Option<ReplicaDynRefWrapper<'_>> {
         component_of_kind(self.world, entity, component_kind)
     }
 }
@@ -190,7 +196,7 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
     fn component_mut<R: ReplicatedComponent>(
         &mut self,
         entity: &Entity,
-    ) -> Option<ReplicaMutWrapper<R>> {
+    ) -> Option<ReplicaMutWrapper<'_, R>> {
         if let Some(bevy_mut) = self.world.get_mut::<R>(*entity) {
             let wrapper = ComponentMut(bevy_mut);
             let component_mut = ReplicaMutWrapper::new(wrapper);
@@ -203,7 +209,7 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
         &mut self,
         entity: &Entity,
         component_kind: &ComponentKind,
-    ) -> Option<ReplicaDynMutWrapper> {
+    ) -> Option<ReplicaDynMutWrapper<'_>> {
         let world_data = world_data(&self.world);
         let Some(component_access) = world_data.component_access(component_kind) else {
             return None;
@@ -456,7 +462,7 @@ fn world_data(world: &World) -> &WorldData {
         .expect("Need to instantiate by adding WorldData<Protocol> resource at startup!")
 }
 
-fn world_data_unchecked_mut(world: &mut World) -> Mut<WorldData> {
+fn world_data_unchecked_mut(world: &mut World) -> Mut<'_, WorldData> {
     unsafe {
         world
             .as_unsafe_world_cell()

@@ -4,9 +4,8 @@ use bevy::{
     color::LinearRgba,
     log::info,
     prelude::{
-        Mesh2d, MeshMaterial2d,
-        Color as BevyColor, Commands, EventReader, Query, Res, ResMut, Sprite,
-        Transform, Vec2,
+        Color as BevyColor, Commands, EventReader, Mesh2d, MeshMaterial2d, Query, Res, ResMut,
+        Sprite, Transform, Vec2,
     },
 };
 
@@ -139,13 +138,11 @@ pub fn message_events(
                                 ColorValue::Aqua => &global.aqua,
                             }
                         };
-                        commands
-                            .entity(cursor_entity)
-                            .insert((
-                                Mesh2d(global.circle.clone().into()),
-                                MeshMaterial2d(color_handle.clone()),
-                                Transform::from_xyz(0.0, 0.0, 0.0)
-                            ));
+                        commands.entity(cursor_entity).insert((
+                            Mesh2d(global.circle.clone().into()),
+                            MeshMaterial2d(color_handle.clone()),
+                            Transform::from_xyz(0.0, 0.0, 0.0),
+                        ));
                         info!("assigned color to cursor");
                     }
                 }

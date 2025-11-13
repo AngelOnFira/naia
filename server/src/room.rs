@@ -54,7 +54,7 @@ impl<E: Copy + Eq + Hash> Room<E> {
         }
     }
 
-    pub(crate) fn user_keys(&self) -> Iter<UserKey> {
+    pub(crate) fn user_keys(&self) -> Iter<'_, UserKey> {
         self.users.iter()
     }
 
@@ -85,7 +85,7 @@ impl<E: Copy + Eq + Hash> Room<E> {
         self.entities.contains(entity)
     }
 
-    pub(crate) fn entities(&self) -> Iter<E> {
+    pub(crate) fn entities(&self) -> Iter<'_, E> {
         self.entities.iter()
     }
 
