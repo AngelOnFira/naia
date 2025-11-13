@@ -9,6 +9,12 @@ cfg_if! {
         mod conditioner;
     } else {}
 }
+cfg_if! {
+    if #[cfg(feature = "transport_quic")] {
+        pub mod quic;
+        mod conditioner;
+    } else {}
+}
 
 pub use inner::{
     AuthReceiver, AuthSender, PacketReceiver, PacketSender, RecvError, SendError, Socket,

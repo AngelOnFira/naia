@@ -8,6 +8,11 @@ cfg_if! {
         pub mod udp;
     } else {}
 }
+cfg_if! {
+    if #[cfg(feature = "transport_quic")] {
+        pub mod quic;
+    } else {}
+}
 
 mod server_addr;
 
