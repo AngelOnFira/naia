@@ -3,12 +3,19 @@ use std::net::SocketAddr;
 use naia_shared::{link_condition_logic, Instant, LinkConditionerConfig, TimeQueue};
 
 use super::{PacketReceiver, RecvError};
-use crate::transport::udp::UdpPacketReceiver;
+
+cfg_if::cfg_if! {
+    if #[cfg(feature = "transport_udp")] {
+        use crate::transport::udp::UdpPacketReceiver as InnerReceiver;
+    } else if #[cfg(feature = "transport_quic")] {
+        use crate::transport::quic::QuicPacketReceiver as InnerReceiver;
+    }
+}
 
 /// Used to receive packets from the Client Socket
 #[derive(Clone)]
 pub struct ConditionedPacketReceiver {
-    inner_receiver: UdpPacketReceiver,
+    inner_receiver: InnerReceiver,
     link_conditioner_config: LinkConditionerConfig,
     time_queue: TimeQueue<(SocketAddr, Box<[u8]>)>,
     last_payload: Option<Box<[u8]>>,
@@ -17,7 +24,7 @@ pub struct ConditionedPacketReceiver {
 impl ConditionedPacketReceiver {
     /// Creates a new ConditionedPacketReceiver
     pub fn new(
-        inner_receiver: UdpPacketReceiver,
+        inner_receiver: InnerReceiver,
         link_conditioner_config: &LinkConditionerConfig,
     ) -> Self {
         Self {

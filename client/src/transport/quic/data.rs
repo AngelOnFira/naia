@@ -1,4 +1,5 @@
 use std::{
+    collections::VecDeque,
     net::SocketAddr,
     sync::{Arc, Mutex},
     time::Duration,
@@ -46,8 +47,9 @@ impl Socket {
         Box<dyn TransportSender>,
         Box<dyn TransportPacketReceiver>,
     ) {
-        // Create auth IO
+        // Create shared state
         let auth_io = Arc::new(Mutex::new(AuthIo::new(self.connection.clone())));
+        let datagram_buffer = Arc::new(Mutex::new(VecDeque::new()));
 
         // Spawn connection task
         spawn_connection_task(
@@ -58,11 +60,12 @@ impl Socket {
             auth_io.clone(),
             auth_bytes_opt,
             auth_headers_opt,
+            datagram_buffer.clone(),
         );
 
         let id_receiver = AuthReceiver::new(auth_io);
         let packet_sender = Box::new(PacketSender::new(self.connection.clone()));
-        let packet_receiver = Box::new(PacketReceiver::new(self.connection.clone()));
+        let packet_receiver = Box::new(PacketReceiver::new(self.connection.clone(), datagram_buffer));
 
         (Box::new(id_receiver), packet_sender, packet_receiver)
     }
@@ -128,6 +131,7 @@ fn spawn_connection_task(
     auth_io: Arc<Mutex<AuthIo>>,
     auth_bytes_opt: Option<Vec<u8>>,
     auth_headers_opt: Option<Vec<(String, String)>>,
+    datagram_buffer: Arc<Mutex<VecDeque<Vec<u8>>>>,
 ) {
     std::thread::spawn(move || {
         let runtime = tokio::runtime::Builder::new_current_thread()
@@ -152,6 +156,24 @@ fn spawn_connection_task(
                         auth_guard.initiate_auth(auth_bytes_opt, auth_headers_opt);
                     }
 
+                    // Spawn datagram receiver task
+                    let datagram_buffer_clone = datagram_buffer.clone();
+                    let connection_clone = connection.clone();
+                    tokio::spawn(async move {
+                        loop {
+                            match connection_clone.read_datagram().await {
+                                Ok(data) => {
+                                    let mut buffer = datagram_buffer_clone.lock().unwrap();
+                                    buffer.push_back(data.to_vec());
+                                }
+                                Err(_) => {
+                                    log::debug!("Datagram receive ended");
+                                    break;
+                                }
+                            }
+                        }
+                    });
+
                     // Keep connection alive (don't drop it)
                     let _ = connection.closed().await;
                     log::info!("QUIC connection closed");
@@ -169,6 +191,9 @@ async fn establish_connection(
     server_name: &str,
     config: &QuicConfig,
 ) -> Result<Connection, String> {
+    // Install default crypto provider if not already installed
+    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+
     // Create client config
     let mut client_crypto = match &config.cert_verification {
         CertificateVerification::System => {
@@ -260,31 +285,38 @@ impl TransportSender for PacketSender {
 #[derive(Clone)]
 pub(crate) struct PacketReceiver {
     connection: Arc<Mutex<Option<Connection>>>,
-    buffer: Vec<u8>,
+    datagram_buffer: Arc<Mutex<VecDeque<Vec<u8>>>>,
+    current_buffer: Vec<u8>,
 }
 
 impl PacketReceiver {
-    pub fn new(connection: Arc<Mutex<Option<Connection>>>) -> Self {
+    pub fn new(
+        connection: Arc<Mutex<Option<Connection>>>,
+        datagram_buffer: Arc<Mutex<VecDeque<Vec<u8>>>>,
+    ) -> Self {
         Self {
             connection,
-            buffer: Vec::new(),
+            datagram_buffer,
+            current_buffer: Vec::new(),
         }
     }
 }
 
 impl TransportPacketReceiver for PacketReceiver {
     fn receive(&mut self) -> Result<Option<&[u8]>, RecvError> {
-        let conn_guard = self.connection.lock().unwrap();
-        if let Some(connection) = conn_guard.as_ref() {
-            // Try to receive datagram (non-blocking)
-            match connection.read_datagram() {
-                Ok(data) => {
-                    self.buffer = data.to_vec();
-                    Ok(Some(&self.buffer))
-                }
-                Err(quinn::ConnectionError::ApplicationClosed(_)) => Err(RecvError),
-                Err(_) => Ok(None), // No datagram available
+        // Check if connection is still alive
+        {
+            let conn_guard = self.connection.lock().unwrap();
+            if conn_guard.is_none() {
+                return Err(RecvError);
             }
+        }
+
+        // Try to pop a datagram from the buffer
+        let mut buffer = self.datagram_buffer.lock().unwrap();
+        if let Some(data) = buffer.pop_front() {
+            self.current_buffer = data;
+            Ok(Some(&self.current_buffer))
         } else {
             Ok(None)
         }
@@ -379,22 +411,18 @@ impl rustls::client::danger::ServerCertVerifier for SkipServerVerification {
 // Helper to parse server URL
 fn parse_server_url(url: &str) -> (SocketAddr, String) {
     // Simple parsing: expect format like "localhost:14192" or "127.0.0.1:14192"
-    let addr: SocketAddr = url
+    let parsed_url = if url.starts_with("quic://") {
+        &url[7..]
+    } else {
+        url
+    };
+
+    let addr: SocketAddr = parsed_url
         .parse()
-        .unwrap_or_else(|_| {
-            // Try with scheme
-            if url.starts_with("quic://") {
-                url[7..].parse()
-            } else {
-                url.parse()
-            }
-        })
         .expect("Invalid server URL");
 
     // Extract hostname for SNI
-    let hostname = if let Ok(host_port) = url.parse::<SocketAddr>() {
-        host_port.ip().to_string()
-    } else if url.contains("://") {
+    let hostname = if url.contains("://") {
         url.split("://").nth(1).unwrap_or(url).split(':').next().unwrap_or("localhost").to_string()
     } else {
         url.split(':').next().unwrap_or("localhost").to_string()

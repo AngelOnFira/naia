@@ -55,56 +55,64 @@ impl Socket {
         }
     }
 
-    fn create_endpoint(&self) -> Result<Endpoint, String> {
-        // Generate or load certificates
-        let (cert_chain, private_key) = match &self.cert_config {
-            CertificateConfig::SelfSigned { hostnames } => {
-                generate_self_signed_cert(hostnames)
-                    .map_err(|e| format!("Failed to generate self-signed cert: {}", e))?
-            }
-            CertificateConfig::FromBytes { cert_chain, private_key } => {
-                let certs: Vec<CertificateDer> = cert_chain
-                    .iter()
-                    .map(|bytes| CertificateDer::from(bytes.clone()))
-                    .collect();
-                let key = PrivateKeyDer::try_from(private_key.clone())
-                    .map_err(|_| "Invalid private key format".to_string())?;
-                (certs, key)
-            }
-        };
+}
 
-        // Create server config
-        let mut server_crypto = rustls::ServerConfig::builder()
-            .with_no_client_auth()
-            .with_single_cert(cert_chain, private_key)
-            .map_err(|e| format!("Failed to create rustls config: {}", e))?;
+fn create_endpoint_impl(
+    listen_addr: SocketAddr,
+    cert_config: &CertificateConfig,
+    quic_config: &QuicConfig,
+) -> Result<Endpoint, String> {
+    // Install default crypto provider if not already installed
+    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
-        server_crypto.alpn_protocols = vec![b"naia-quic".to_vec()];
+    // Generate or load certificates
+    let (cert_chain, private_key) = match cert_config {
+        CertificateConfig::SelfSigned { hostnames } => {
+            generate_self_signed_cert(hostnames)
+                .map_err(|e| format!("Failed to generate self-signed cert: {}", e))?
+        }
+        CertificateConfig::FromBytes { cert_chain, private_key } => {
+            let certs: Vec<CertificateDer> = cert_chain
+                .iter()
+                .map(|bytes| CertificateDer::from(bytes.clone()))
+                .collect();
+            let key = PrivateKeyDer::try_from(private_key.clone())
+                .map_err(|_| "Invalid private key format".to_string())?;
+            (certs, key)
+        }
+    };
 
-        let mut server_config = ServerConfig::with_crypto(Arc::new(
-            QuicServerConfig::try_from(server_crypto)
-                .map_err(|e| format!("Failed to create QUIC config: {}", e))?,
-        ));
+    // Create server config
+    let mut server_crypto = rustls::ServerConfig::builder()
+        .with_no_client_auth()
+        .with_single_cert(cert_chain, private_key)
+        .map_err(|e| format!("Failed to create rustls config: {}", e))?;
 
-        // Configure transport for low latency
-        let mut transport_config = TransportConfig::default();
-        transport_config
-            .datagram_receive_buffer_size(Some(self.quic_config.datagram_receive_buffer_size));
-        transport_config.datagram_send_buffer_size(self.quic_config.datagram_send_buffer_size);
-        transport_config.max_idle_timeout(Some(
-            VarInt::from_u64(self.quic_config.idle_timeout.as_millis() as u64)
-                .map_err(|_| "Invalid idle timeout".to_string())?
-                .into(),
-        ));
-        transport_config.keep_alive_interval(Some(self.quic_config.keep_alive_interval));
-        transport_config.initial_rtt(self.quic_config.initial_rtt);
+    server_crypto.alpn_protocols = vec![b"naia-quic".to_vec()];
 
-        server_config.transport_config(Arc::new(transport_config));
+    let mut server_config = ServerConfig::with_crypto(Arc::new(
+        QuicServerConfig::try_from(server_crypto)
+            .map_err(|e| format!("Failed to create QUIC config: {}", e))?,
+    ));
 
-        // Create endpoint
-        Endpoint::server(server_config, self.listen_addr)
-            .map_err(|e| format!("Failed to create QUIC endpoint: {}", e))
-    }
+    // Configure transport for low latency
+    let mut transport_config = TransportConfig::default();
+    transport_config
+        .datagram_receive_buffer_size(Some(quic_config.datagram_receive_buffer_size));
+    transport_config.datagram_send_buffer_size(quic_config.datagram_send_buffer_size);
+    transport_config.max_idle_timeout(Some(
+        VarInt::from_u64(quic_config.idle_timeout.as_millis() as u64)
+            .map_err(|_| "Invalid idle timeout".to_string())?
+            .into(),
+    ));
+    transport_config.keep_alive_interval(Some(quic_config.keep_alive_interval));
+    transport_config.initial_rtt(quic_config.initial_rtt);
+
+    server_config.transport_config(Arc::new(transport_config));
+
+    // Create endpoint
+    Endpoint::server(server_config, listen_addr)
+        .map_err(|e| format!("Failed to create QUIC endpoint: {}", e))
 }
 
 impl Into<Box<dyn TransportSocket>> for Socket {
@@ -122,16 +130,16 @@ impl TransportSocket for Socket {
         Box<dyn TransportSender>,
         Box<dyn PacketReceiver>,
     ) {
-        let endpoint = self.create_endpoint().expect("Failed to create QUIC endpoint");
-
         // Shared state
         let connections = Arc::new(Mutex::new(HashMap::<SocketAddr, Connection>::new()));
         let auth_queue = Arc::new(Mutex::new(VecDeque::<(UserAuthAddr, Vec<u8>)>::new()));
         let datagram_buffer = Arc::new(Mutex::new(VecDeque::<(SocketAddr, Vec<u8>)>::new()));
 
-        // Spawn connection acceptor task
+        // Spawn connection acceptor task - creates endpoint inside its async runtime
         spawn_connection_acceptor(
-            endpoint.clone(),
+            self.listen_addr,
+            self.cert_config.clone(),
+            self.quic_config.clone(),
             connections.clone(),
             auth_queue.clone(),
             datagram_buffer.clone(),
@@ -161,21 +169,36 @@ impl TransportSocket for Socket {
 
 // Spawn async task to accept connections
 fn spawn_connection_acceptor(
-    endpoint: Endpoint,
+    listen_addr: SocketAddr,
+    cert_config: CertificateConfig,
+    quic_config: QuicConfig,
     connections: Arc<Mutex<HashMap<SocketAddr, Connection>>>,
     auth_queue: Arc<Mutex<VecDeque<(UserAuthAddr, Vec<u8>)>>>,
     datagram_buffer: Arc<Mutex<VecDeque<(SocketAddr, Vec<u8>)>>>,
 ) {
     std::thread::spawn(move || {
-        let runtime = tokio::runtime::Builder::new_current_thread()
+        // Use multi-threaded runtime to support tokio::spawn
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
             .enable_all()
             .build()
             .expect("Failed to create tokio runtime");
 
         runtime.block_on(async {
+            // Create endpoint inside the async runtime
+            let endpoint = match create_endpoint_impl(listen_addr, &cert_config, &quic_config) {
+                Ok(ep) => ep,
+                Err(e) => {
+                    log::error!("Failed to create QUIC endpoint: {}", e);
+                    return;
+                }
+            };
+
+            log::info!("QUIC acceptor started, waiting for connections...");
             loop {
                 match endpoint.accept().await {
                     Some(incoming) => {
+                        log::debug!("Accepting new QUIC connection");
                         let connections = connections.clone();
                         let auth_queue = auth_queue.clone();
                         let datagram_buffer = datagram_buffer.clone();

@@ -5,7 +5,7 @@ use naia_shared::{BitReader, IdentityToken, OutgoingPacket, SerdeErr};
 use crate::UserKey;
 
 cfg_if! {
-    if #[cfg(feature = "transport_udp")] {
+    if #[cfg(any(feature = "transport_udp", feature = "transport_quic"))] {
         mod cache_map;
 
         mod advanced_handshaker;

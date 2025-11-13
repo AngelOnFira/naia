@@ -152,7 +152,7 @@ async fn receive_identity_token(connection: Connection) -> Result<IdentityToken,
     let token_str = String::from_utf8(token_bytes)
         .map_err(|e| AuthError::StreamError(format!("Invalid UTF-8 in token: {}", e)))?;
 
-    Ok(IdentityToken::new(token_str))
+    Ok(token_str)
 }
 
 #[derive(Debug)]
