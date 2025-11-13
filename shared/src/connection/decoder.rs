@@ -4,6 +4,7 @@ cfg_if! {
         use zstd::bulk::Decompressor;
 
         use super::compression_config::CompressionMode;
+        use super::error::DecoderError;
 
         pub struct Decoder {
             result: Vec<u8>,
@@ -11,37 +12,61 @@ cfg_if! {
         }
 
         impl Decoder {
-            pub fn new(compression_mode: CompressionMode) -> Self {
+            /// Try to create a new Decoder with the specified compression mode
+            pub fn try_new(compression_mode: CompressionMode) -> Result<Self, DecoderError> {
                 let decoder = match compression_mode {
                     CompressionMode::Training(_) => None,
                     CompressionMode::Default(_) => {
-                        Some(Decompressor::new().expect("error creating Decompressor"))
+                        Some(Decompressor::new().map_err(|_| DecoderError::DecompressorCreationFailed)?)
                     }
                     CompressionMode::Dictionary(_, dictionary) => Some(
-                        Decompressor::with_dictionary(&dictionary).expect("error creating Decompressor"),
+                        Decompressor::with_dictionary(&dictionary).map_err(|_| DecoderError::DecompressorWithDictionaryFailed)?,
                     ),
                 };
 
-                Self {
+                Ok(Self {
                     decoder,
                     result: Vec::new(),
+                })
+            }
+
+            /// Create a new Decoder with the specified compression mode
+            ///
+            /// # Panics
+            /// Panics if the decompressor cannot be created with the given configuration
+            pub fn new(compression_mode: CompressionMode) -> Self {
+                Self::try_new(compression_mode).expect("Failed to create Decoder")
+            }
+
+            /// Try to decode a payload, returning error on decompression failure
+            ///
+            /// SECURITY: This method processes untrusted network data. Any malformed or
+            /// malicious payload will return an error instead of panicking.
+            pub fn try_decode(&mut self, payload: &[u8]) -> Result<&[u8], DecoderError> {
+                if let Some(decoder) = &mut self.decoder {
+                    let upper_bound = Decompressor::<'static>::upper_bound(payload)
+                        .map_err(|_| DecoderError::UpperBoundCalculationFailed {
+                            payload_size: payload.len(),
+                        })?;
+
+                    self.result = decoder
+                        .decompress(payload, upper_bound)
+                        .map_err(|_| DecoderError::DecompressionFailed {
+                            payload_size: payload.len(),
+                        })?;
+                    Ok(&self.result)
+                } else {
+                    self.result = payload.to_vec();
+                    Ok(&self.result)
                 }
             }
 
+            /// Decode a payload
+            ///
+            /// # Panics
+            /// Panics if decompression fails
             pub fn decode(&mut self, payload: &[u8]) -> &[u8] {
-                if let Some(decoder) = &mut self.decoder {
-                    self.result = decoder
-                        .decompress(
-                            payload,
-                            Decompressor::<'static>::upper_bound(payload)
-                                .expect("upper bound decode error"),
-                        )
-                        .expect("decode error");
-                    return &self.result;
-                } else {
-                    self.result = payload.to_vec();
-                    return &self.result;
-                }
+                self.try_decode(payload).expect("Failed to decode payload")
             }
         }
     }

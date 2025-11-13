@@ -8,7 +8,10 @@ use naia_socket_shared::Instant;
 
 use crate::{
     world::{
-        entity::local_entity::{HostEntity, OwnedLocalEntity, RemoteEntity},
+        entity::{
+            error::EntityError,
+            local_entity::{HostEntity, OwnedLocalEntity, RemoteEntity},
+        },
         local_entity_map::LocalEntityMap,
     },
     EntityAndLocalEntityConverter, EntityDoesNotExistError, KeyGenerator,
@@ -37,20 +40,41 @@ impl<E: Copy + Eq + Hash> LocalWorldManager<E> {
 
     // Host entities
 
-    pub fn host_reserve_entity(&mut self, world_entity: &E) -> HostEntity {
-        self.process_reserved_entity_timeouts();
+    /// Attempts to reserve a host entity for the given world entity.
+    ///
+    /// Returns an error if the entity has already been reserved.
+    /// Consider using this method instead of `host_reserve_entity` for non-panicking error handling.
+    pub fn try_host_reserve_entity(&mut self, world_entity: &E) -> Result<HostEntity, EntityError> {
+        self.try_process_reserved_entity_timeouts()?;
 
         if self.reserved_entities.contains_key(world_entity) {
-            panic!("World Entity has already reserved Local Entity!");
+            return Err(EntityError::EntityAlreadyReserved {
+                entity_id: "world entity".to_string(),
+            });
         }
         let host_entity = self.generate_host_entity();
         self.entity_map
             .insert_with_host_entity(*world_entity, host_entity);
         self.reserved_entities.insert(*world_entity, host_entity);
-        host_entity
+        self.reserved_entities_ttls.push_back((Instant::now(), *world_entity));
+        Ok(host_entity)
     }
 
-    fn process_reserved_entity_timeouts(&mut self) {
+    /// Reserves a host entity for the given world entity.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the entity has already been reserved.
+    /// Consider using `try_host_reserve_entity` for non-panicking error handling.
+    pub fn host_reserve_entity(&mut self, world_entity: &E) -> HostEntity {
+        self.try_host_reserve_entity(world_entity)
+            .expect("World Entity has already reserved Local Entity!")
+    }
+
+    /// Attempts to process expired entity reservations.
+    ///
+    /// Returns an error if the timeout queue is corrupted (entity in queue but not in map).
+    fn try_process_reserved_entity_timeouts(&mut self) -> Result<(), EntityError> {
         let now = Instant::now();
 
         loop {
@@ -60,11 +84,26 @@ impl<E: Copy + Eq + Hash> LocalWorldManager<E> {
             if timeout.elapsed(&now) < self.reserved_entity_ttl {
                 break;
             }
-            let (_, world_entity) = self.reserved_entities_ttls.pop_front().unwrap();
-            let Some(_) = self.reserved_entities.remove(&world_entity) else {
-                panic!("Reserved Entity does not exist!");
-            };
+            let (_, world_entity) = self.reserved_entities_ttls.pop_front()
+                .ok_or(EntityError::ReservationQueueCorrupted)?;
+
+            if self.reserved_entities.remove(&world_entity).is_none() {
+                return Err(EntityError::ReservationExpired {
+                    entity_id: "world entity".to_string(),
+                });
+            }
         }
+        Ok(())
+    }
+
+    /// Processes expired entity reservations.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the reservation timeout queue is corrupted (entity in queue but not in map).
+    fn process_reserved_entity_timeouts(&mut self) {
+        self.try_process_reserved_entity_timeouts()
+            .expect("Reserved Entity does not exist!")
     }
 
     pub fn remove_reserved_host_entity(&mut self, world_entity: &E) -> Option<HostEntity> {
@@ -75,46 +114,123 @@ impl<E: Copy + Eq + Hash> LocalWorldManager<E> {
         HostEntity::new(self.host_entity_generator.generate())
     }
 
-    pub(crate) fn insert_host_entity(&mut self, world_entity: E, host_entity: HostEntity) {
+    /// Attempts to insert a host entity for the given world entity.
+    ///
+    /// Returns an error if the host entity already exists.
+    pub fn try_insert_host_entity(&mut self, world_entity: E, host_entity: HostEntity) -> Result<(), EntityError> {
         if self.entity_map.contains_host_entity(&host_entity) {
-            panic!("Local Entity already exists!");
+            return Err(EntityError::EntityAlreadyRegisteredAs {
+                entity_id: format!("{:?}", host_entity),
+                existing_type: "HostEntity",
+            });
         }
 
         self.entity_map
             .insert_with_host_entity(world_entity, host_entity);
+        Ok(())
     }
 
-    pub fn insert_remote_entity(&mut self, world_entity: &E, remote_entity: RemoteEntity) {
+    /// Inserts a host entity for the given world entity.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the host entity already exists.
+    /// Consider using `try_insert_host_entity` for non-panicking error handling.
+    pub(crate) fn insert_host_entity(&mut self, world_entity: E, host_entity: HostEntity) {
+        self.try_insert_host_entity(world_entity, host_entity)
+            .expect("Local Entity already exists!")
+    }
+
+    /// Attempts to insert a remote entity for the given world entity.
+    ///
+    /// Returns an error if the remote entity already exists.
+    pub fn try_insert_remote_entity(&mut self, world_entity: &E, remote_entity: RemoteEntity) -> Result<(), EntityError> {
         if self.entity_map.contains_remote_entity(&remote_entity) {
-            panic!("Remote Entity `{:?}` already exists!", remote_entity);
+            return Err(EntityError::EntityAlreadyRegisteredAs {
+                entity_id: format!("{:?}", remote_entity),
+                existing_type: "RemoteEntity",
+            });
         }
 
         self.entity_map
             .insert_with_remote_entity(*world_entity, remote_entity);
+        Ok(())
     }
 
-    pub(crate) fn remove_by_world_entity(&mut self, world_entity: &E) {
+    /// Inserts a remote entity for the given world entity.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the remote entity already exists.
+    /// Consider using `try_insert_remote_entity` for non-panicking error handling.
+    pub fn insert_remote_entity(&mut self, world_entity: &E, remote_entity: RemoteEntity) {
+        self.try_insert_remote_entity(world_entity, remote_entity)
+            .expect(&format!("Remote Entity `{:?}` already exists!", remote_entity))
+    }
+
+    /// Attempts to remove an entity by its world entity identifier.
+    ///
+    /// Returns an error if the entity doesn't exist or doesn't have a host entity.
+    pub fn try_remove_by_world_entity(&mut self, world_entity: &E) -> Result<(), EntityError> {
         let record = self
             .entity_map
             .remove_by_world_entity(world_entity)
-            .expect("Attempting to despawn entity which does not exist!");
-        let host_entity = record.host().unwrap();
+            .ok_or_else(|| EntityError::EntityNotFound {
+                context: "attempting to despawn entity which does not exist",
+            })?;
+
+        let host_entity = record.host().ok_or_else(|| EntityError::MissingHostEntity {
+            entity_id: "world entity".to_string(),
+        })?;
+
         self.recycle_host_entity(host_entity);
+        Ok(())
     }
 
-    pub fn remove_by_remote_entity(&mut self, remote_entity: &RemoteEntity) -> E {
-        let world_entity = *(self
+    /// Removes an entity by its world entity identifier.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the entity doesn't exist or doesn't have a host entity.
+    /// Consider using `try_remove_by_world_entity` for non-panicking error handling.
+    pub(crate) fn remove_by_world_entity(&mut self, world_entity: &E) {
+        self.try_remove_by_world_entity(world_entity)
+            .expect("Attempting to despawn entity which does not exist!")
+    }
+
+    /// Attempts to remove an entity by its remote entity identifier.
+    ///
+    /// Returns the world entity on success, or an error if the entity doesn't exist.
+    pub fn try_remove_by_remote_entity(&mut self, remote_entity: &RemoteEntity) -> Result<E, EntityError> {
+        let world_entity = *self
             .entity_map
             .world_entity_from_remote(remote_entity)
-            .expect("Attempting to despawn entity which does not exist!"));
+            .ok_or_else(|| EntityError::EntityNotFound {
+                context: "attempting to despawn remote entity which does not exist",
+            })?;
+
         let record = self
             .entity_map
             .remove_by_world_entity(&world_entity)
-            .expect("Attempting to despawn entity which does not exist!");
+            .ok_or_else(|| EntityError::EntityNotFound {
+                context: "attempting to despawn entity which does not exist",
+            })?;
+
         if let Some(host_entity) = record.host() {
             self.recycle_host_entity(host_entity);
         }
-        world_entity
+        Ok(world_entity)
+    }
+
+    /// Removes an entity by its remote entity identifier.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the entity doesn't exist.
+    /// Consider using `try_remove_by_remote_entity` for non-panicking error handling.
+    pub fn remove_by_remote_entity(&mut self, remote_entity: &RemoteEntity) -> E {
+        self.try_remove_by_remote_entity(remote_entity)
+            .expect("Attempting to despawn entity which does not exist!")
     }
 
     pub(crate) fn recycle_host_entity(&mut self, host_entity: HostEntity) {
@@ -127,15 +243,30 @@ impl<E: Copy + Eq + Hash> LocalWorldManager<E> {
         self.entity_map.contains_remote_entity(remote_entity)
     }
 
+    /// Attempts to get the world entity for a given remote entity.
+    ///
+    /// Returns an error if the remote entity doesn't exist.
+    pub fn try_world_entity_from_remote(&self, remote_entity: &RemoteEntity) -> Result<E, EntityError> {
+        self.entity_map
+            .world_entity_from_remote(remote_entity)
+            .copied()
+            .ok_or_else(|| EntityError::EntityNotFound {
+                context: "attempting to get world entity for remote entity which does not exist",
+            })
+    }
+
+    /// Gets the world entity for a given remote entity.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the remote entity doesn't exist.
+    /// Consider using `try_world_entity_from_remote` for non-panicking error handling.
     pub(crate) fn world_entity_from_remote(&self, remote_entity: &RemoteEntity) -> E {
-        if let Some(world_entity) = self.entity_map.world_entity_from_remote(remote_entity) {
-            return *world_entity;
-        } else {
-            panic!(
+        self.try_world_entity_from_remote(remote_entity)
+            .expect(&format!(
                 "Attempting to get world entity for local entity which does not exist!: `{:?}`",
                 remote_entity
-            );
-        }
+            ))
     }
 
     pub(crate) fn remote_entities(&self) -> Vec<E> {

@@ -1,10 +1,12 @@
 use std::{
     hash::Hash,
     net::SocketAddr,
-    sync::{Arc, RwLock, RwLockReadGuard},
+    sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
 };
 
 use crate::{DiffMask, GlobalWorldManagerType, PropertyMutate};
+
+use super::error::WorldChannelError;
 
 pub trait MutChannelType: Send + Sync {
     fn new_receiver(&mut self, address: &Option<SocketAddr>) -> Option<MutReceiver>;
@@ -100,6 +102,41 @@ impl MutReceiver {
             panic!("Mask held on current thread");
         };
         mask.clear();
+    }
+
+    // Try versions that return Result instead of panicking
+
+    pub fn try_mask(&self) -> Result<RwLockReadGuard<DiffMask>, WorldChannelError> {
+        self.mask.as_ref().read()
+            .map_err(|_| WorldChannelError::RwLockReentrant)
+    }
+
+    pub fn try_mask_mut(&self) -> Result<RwLockWriteGuard<DiffMask>, WorldChannelError> {
+        self.mask.as_ref().write()
+            .map_err(|_| WorldChannelError::RwLockReentrant)
+    }
+
+    pub fn try_diff_mask_is_clear(&self) -> Result<bool, WorldChannelError> {
+        let mask = self.try_mask()?;
+        Ok(mask.is_clear())
+    }
+
+    pub fn try_mutate(&self, diff: u8) -> Result<(), WorldChannelError> {
+        let mut mask = self.try_mask_mut()?;
+        mask.set_bit(diff, true);
+        Ok(())
+    }
+
+    pub fn try_or_mask(&self, other_mask: &DiffMask) -> Result<(), WorldChannelError> {
+        let mut mask = self.try_mask_mut()?;
+        mask.or(other_mask);
+        Ok(())
+    }
+
+    pub fn try_clear_mask(&self) -> Result<(), WorldChannelError> {
+        let mut mask = self.try_mask_mut()?;
+        mask.clear();
+        Ok(())
     }
 }
 

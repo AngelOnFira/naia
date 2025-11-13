@@ -9,6 +9,7 @@ use crate::{
     sequence_list::SequenceList,
     world::{
         entity::entity_converters::GlobalWorldManagerType, local_world_manager::LocalWorldManager,
+        host::error::WorldChannelError,
     },
     BitWrite, BitWriter, ComponentKind, ComponentKinds, ConstBitLength, EntityAction,
     EntityActionType, EntityAndLocalEntityConverter, EntityConverterMut, HostWorldEvents,
@@ -98,7 +99,7 @@ impl HostWorldWriter {
             // write ActionContinue bit
             true.ser(&mut counter);
             // write data
-            Self::write_action(
+            if let Err(e) = Self::write_action(
                 component_kinds,
                 world,
                 global_world_manager,
@@ -109,17 +110,23 @@ impl HostWorldWriter {
                 false,
                 host_manager,
                 next_send_actions,
-            );
+            ) {
+                // Component not found during action write, skip this action
+                log::error!("Skipping action due to error: {}", e);
+                next_send_actions.pop_front();
+                continue;
+            }
             if counter.overflowed() {
                 // if nothing useful has been written in this packet yet,
-                // send warning about size of component being too big
+                // log error about size of component being too big
                 if !*has_written {
-                    Self::warn_overflow_action(
+                    let error = Self::create_overflow_error(
                         component_kinds,
                         counter.bits_needed(),
                         writer.bits_free(),
                         next_send_actions,
                     );
+                    log::error!("Packet write overflow (skipping action): {}", error);
                 }
                 break;
             }
@@ -139,7 +146,7 @@ impl HostWorldWriter {
             // write ActionContinue bit
             true.ser(writer);
             // write data
-            Self::write_action(
+            if let Err(e) = Self::write_action(
                 component_kinds,
                 world,
                 global_world_manager,
@@ -150,7 +157,12 @@ impl HostWorldWriter {
                 true,
                 host_manager,
                 next_send_actions,
-            );
+            ) {
+                // Component not found during action write, skip this action
+                log::error!("Skipping action due to error: {}", e);
+                next_send_actions.pop_front();
+                continue;
+            }
 
             // pop action we've written
             next_send_actions.pop_front();
@@ -173,7 +185,9 @@ impl HostWorldWriter {
         is_writing: bool,
         host_manager: &mut HostWorldManager<E>,
         next_send_actions: &mut VecDeque<(ActionId, EntityActionEvent<E>)>,
-    ) {
+    ) -> Result<(), WorldChannelError> {
+        // SAFETY: This function is only called when next_send_actions is not empty,
+        // as checked in write_actions loop before calling this function
         let (action_id, action) = next_send_actions.front().unwrap();
 
         // write message id
@@ -184,10 +198,12 @@ impl HostWorldWriter {
                 EntityActionType::SpawnEntity.ser(writer);
 
                 // write net entity
-                local_world_manager
+                // SAFETY: If we are writing a SpawnEntity action, the entity must already be
+                // registered in local_world_manager by the time it reaches the action queue
+                let host_entity = local_world_manager
                     .entity_to_host_entity(world_entity)
-                    .unwrap()
-                    .ser(writer);
+                    .unwrap();
+                host_entity.ser(writer);
 
                 // write number of components
                 let components_num =
@@ -199,10 +215,13 @@ impl HostWorldWriter {
                         EntityConverterMut::new(global_world_manager, local_world_manager);
 
                     // write component payload
-                    world
+                    let component = world
                         .component_of_kind(world_entity, component_kind)
-                        .expect("Component does not exist in World")
-                        .write(component_kinds, writer, &mut converter);
+                        .ok_or_else(|| WorldChannelError::ComponentNotFoundDuringWrite {
+                            entity_id: "<entity>".to_string(),
+                            component_kind: component_kinds.kind_to_name(component_kind),
+                        })?;
+                    component.write(component_kinds, writer, &mut converter);
                 }
 
                 // if we are writing to this packet, add it to record
@@ -219,10 +238,12 @@ impl HostWorldWriter {
                 EntityActionType::DespawnEntity.ser(writer);
 
                 // write net entity
-                local_world_manager
+                // SAFETY: If we are writing a DespawnEntity action, the entity must still be
+                // registered in local_world_manager (it will be removed after write completes)
+                let host_entity = local_world_manager
                     .entity_to_host_entity(world_entity)
-                    .unwrap()
-                    .ser(writer);
+                    .unwrap();
+                host_entity.ser(writer);
 
                 // if we are writing to this packet, add it to record
                 if is_writing {
@@ -256,19 +277,24 @@ impl HostWorldWriter {
                     EntityActionType::InsertComponent.ser(writer);
 
                     // write net entity
-                    local_world_manager
+                    // SAFETY: If we are writing an InsertComponent action and entity channel is open,
+                    // the entity must be registered in local_world_manager
+                    let host_entity = local_world_manager
                         .entity_to_host_entity(world_entity)
-                        .unwrap()
-                        .ser(writer);
+                        .unwrap();
+                    host_entity.ser(writer);
 
                     let mut converter =
                         EntityConverterMut::new(global_world_manager, local_world_manager);
 
                     // write component payload
-                    world
+                    let comp = world
                         .component_of_kind(world_entity, component)
-                        .expect("Component does not exist in World")
-                        .write(component_kinds, writer, &mut converter);
+                        .ok_or_else(|| WorldChannelError::ComponentNotFoundDuringWrite {
+                            entity_id: "<entity>".to_string(),
+                            component_kind: component_kinds.kind_to_name(component),
+                        })?;
+                    comp.write(component_kinds, writer, &mut converter);
 
                     // if we are actually writing this packet
                     if is_writing {
@@ -303,10 +329,12 @@ impl HostWorldWriter {
                     EntityActionType::RemoveComponent.ser(writer);
 
                     // write net entity
-                    local_world_manager
+                    // SAFETY: If we are writing a RemoveComponent action and entity channel is open,
+                    // the entity must be registered in local_world_manager
+                    let host_entity = local_world_manager
                         .entity_to_host_entity(world_entity)
-                        .unwrap()
-                        .ser(writer);
+                        .unwrap();
+                    host_entity.ser(writer);
 
                     // write component kind
                     component_kind.ser(component_kinds, writer);
@@ -323,6 +351,8 @@ impl HostWorldWriter {
                 }
             }
         }
+
+        Ok(())
     }
 
     #[allow(clippy::type_complexity)]
@@ -332,21 +362,25 @@ impl HostWorldWriter {
         action_id: &ActionId,
         action_record: EntityAction<E>,
     ) {
+        // SAFETY: packet_index was inserted into sent_action_packets in write_actions
+        // before this function is called (see optimization check at line ~130-137)
         let (_, sent_actions_list) = sent_actions.get_mut_scan_from_back(packet_index).unwrap();
         sent_actions_list.push((*action_id, action_record));
     }
 
-    fn warn_overflow_action<E: Copy + Eq + Hash + Send + Sync>(
+    fn create_overflow_error<E: Copy + Eq + Hash + Send + Sync>(
         component_kinds: &ComponentKinds,
         bits_needed: u32,
         bits_free: u32,
         next_send_actions: &VecDeque<(ActionId, EntityActionEvent<E>)>,
-    ) {
+    ) -> WorldChannelError {
+        // SAFETY: This function is only called when next_send_actions is not empty,
+        // as checked by the caller in write_actions loop
         let (_action_id, action) = next_send_actions.front().unwrap();
 
         match action {
             EntityActionEvent::SpawnEntity(_entity, component_kind_list) => {
-                let mut component_names = "".to_owned();
+                let mut component_names = String::new();
                 let mut added = false;
 
                 for component_kind in component_kind_list {
@@ -358,21 +392,26 @@ impl HostWorldWriter {
                     let name = component_kinds.kind_to_name(component_kind);
                     component_names.push_str(&name);
                 }
-                panic!(
-                    "Packet Write Error: Blocking overflow detected! Entity Spawn message with Components `{component_names}` requires {bits_needed} bits, but packet only has {bits_free} bits available! Recommend slimming down these Components."
-                )
+                WorldChannelError::EntitySpawnPacketOverflow {
+                    entity_id: "<entity>".to_string(),
+                    component_names,
+                    bits_needed,
+                    bits_free,
+                }
             }
             EntityActionEvent::InsertComponent(_entity, component_kind) => {
                 let component_name = component_kinds.kind_to_name(component_kind);
-                panic!(
-                    "Packet Write Error: Blocking overflow detected! Component Insertion message of type `{component_name}` requires {bits_needed} bits, but packet only has {bits_free} bits available! This condition should never be reached, as large Messages should be Fragmented in the Reliable channel"
-                )
+                WorldChannelError::ComponentInsertPacketOverflow {
+                    entity_id: "<entity>".to_string(),
+                    component_kind: component_name,
+                    bits_needed,
+                    bits_free,
+                }
             }
-            _ => {
-                panic!(
-                    "Packet Write Error: Blocking overflow detected! Action requires {bits_needed} bits, but packet only has {bits_free} bits available! This message should never display..."
-                )
-            }
+            _ => WorldChannelError::ActionPacketOverflow {
+                bits_needed,
+                bits_free,
+            },
         }
     }
 
@@ -392,6 +431,8 @@ impl HostWorldWriter {
 
         for entity in all_update_entities {
             // get LocalEntity
+            // SAFETY: If an entity is in next_send_updates, it must be tracked by local_world_manager
+            // as entities are only added to updates after they have been spawned and registered
             let host_entity = local_world_manager.entity_to_host_entity(&entity).unwrap();
 
             // check that we can at least write a LocalEntity and a ComponentContinue bit
@@ -413,7 +454,7 @@ impl HostWorldWriter {
             // write HostEntity
             host_entity.ser(writer);
             // write Components
-            Self::write_update(
+            if let Err(e) = Self::write_update(
                 component_kinds,
                 now,
                 world,
@@ -425,7 +466,12 @@ impl HostWorldWriter {
                 has_written,
                 host_manager,
                 next_send_updates,
-            );
+            ) {
+                // Component not found during update write, skip remaining components for this entity
+                log::error!("Skipping entity update due to error: {}", e);
+                // Remove this entity from next_send_updates to avoid retrying
+                next_send_updates.remove(&entity);
+            }
 
             // write ComponentContinue finish bit, release
             writer.release_bits(1);
@@ -451,8 +497,9 @@ impl HostWorldWriter {
         has_written: &mut bool,
         host_manager: &mut HostWorldManager<E>,
         next_send_updates: &mut HashMap<E, HashSet<ComponentKind>>,
-    ) {
+    ) -> Result<(), WorldChannelError> {
         let mut written_component_kinds = Vec::new();
+        // SAFETY: write_update is only called from write_updates with entities from next_send_updates.keys()
         let component_kind_set = next_send_updates.get(entity).unwrap();
         for component_kind in component_kind_set {
             // get diff mask
@@ -471,20 +518,24 @@ impl HostWorldWriter {
             // write component kind
             counter.count_bits(<ComponentKind as ConstBitLength>::const_bit_length());
             // write data
-            world
+            let component = world
                 .component_of_kind(entity, component_kind)
-                .expect("Component does not exist in World")
-                .write_update(&diff_mask, &mut counter, &mut converter);
+                .ok_or_else(|| WorldChannelError::ComponentNotFoundDuringWrite {
+                    entity_id: "<entity>".to_string(),
+                    component_kind: component_kinds.kind_to_name(component_kind),
+                })?;
+            component.write_update(&diff_mask, &mut counter, &mut converter);
             if counter.overflowed() {
                 // if nothing useful has been written in this packet yet,
-                // send warning about size of component being too big
+                // log error about size of component being too big
                 if !*has_written {
                     let component_name = component_kinds.kind_to_name(component_kind);
-                    Self::warn_overflow_update(
+                    let error = Self::create_update_overflow_error(
                         component_name,
                         counter.bits_needed(),
                         writer.bits_free(),
                     );
+                    log::error!("Packet write overflow (skipping component update): {}", error);
                 }
 
                 break;
@@ -497,10 +548,13 @@ impl HostWorldWriter {
             // write component kind
             component_kind.ser(component_kinds, writer);
             // write data
-            world
+            let component = world
                 .component_of_kind(entity, component_kind)
-                .expect("Component does not exist in World")
-                .write_update(&diff_mask, writer, &mut converter);
+                .ok_or_else(|| WorldChannelError::ComponentNotFoundDuringWrite {
+                    entity_id: "<entity>".to_string(),
+                    component_kind: component_kinds.kind_to_name(component_kind),
+                })?;
+            component.write_update(&diff_mask, writer, &mut converter);
 
             written_component_kinds.push(*component_kind);
 
@@ -512,6 +566,7 @@ impl HostWorldWriter {
                     .sent_updates
                     .insert(*packet_index, (now.clone(), HashMap::new()));
             }
+            // SAFETY: We just ensured packet_index exists in the map with the contains_key/insert check above
             let (_, sent_updates_map) = host_manager.sent_updates.get_mut(packet_index).unwrap();
             sent_updates_map.insert((*entity, *component_kind), diff_mask);
 
@@ -522,6 +577,7 @@ impl HostWorldWriter {
                 .clear_diff_mask(entity, component_kind);
         }
 
+        // SAFETY: entity is from next_send_updates.keys(), so it must exist in the map
         let update_kinds = next_send_updates.get_mut(entity).unwrap();
         for component_kind in &written_component_kinds {
             update_kinds.remove(component_kind);
@@ -529,11 +585,19 @@ impl HostWorldWriter {
         if update_kinds.is_empty() {
             next_send_updates.remove(entity);
         }
+
+        Ok(())
     }
 
-    fn warn_overflow_update(component_name: String, bits_needed: u32, bits_free: u32) {
-        panic!(
-            "Packet Write Error: Blocking overflow detected! Data update of Component `{component_name}` requires {bits_needed} bits, but packet only has {bits_free} bits available! Recommended to slim down this Component"
-        )
+    fn create_update_overflow_error(
+        component_kind: String,
+        bits_needed: u32,
+        bits_free: u32,
+    ) -> WorldChannelError {
+        WorldChannelError::ComponentUpdatePacketOverflow {
+            component_kind,
+            bits_needed,
+            bits_free,
+        }
     }
 }

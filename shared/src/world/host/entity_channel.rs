@@ -1,4 +1,4 @@
-use crate::{world::host::world_channel::CheckedMap, ComponentKind};
+use crate::{world::host::{error::WorldChannelError, world_channel::CheckedMap}, ComponentKind};
 
 // ComponentChannel
 
@@ -114,12 +114,51 @@ impl EntityChannel {
         return (self.despawn_after_spawned, release_message_queued);
     }
 
+    // returns (if entity should be immediately despawned, if release message should be sent)
+    pub(crate) fn try_spawning_complete(
+        &mut self,
+        entity_id: &str,
+    ) -> Result<(bool, bool), WorldChannelError> {
+        if self.state != EntityChannelState::Spawning {
+            return Err(WorldChannelError::EntityNotSpawningState {
+                entity_id: entity_id.to_string(),
+            });
+        }
+
+        if self.components.len() > 0 {
+            return Err(WorldChannelError::EntityHasPendingComponents {
+                entity_id: entity_id.to_string(),
+            });
+        }
+
+        self.state = EntityChannelState::Spawned;
+
+        let mut release_message_queued = false;
+        if self.ready_to_release() && self.release_auth == ReleaseAuthState::Waiting {
+            self.release_auth = ReleaseAuthState::Complete;
+            release_message_queued = true;
+        }
+
+        Ok((self.despawn_after_spawned, release_message_queued))
+    }
+
     pub(crate) fn despawn(&mut self) {
         if self.state != EntityChannelState::Spawned {
             panic!("EntityChannel::despawn() called on non-spawned entity");
         }
         self.state = EntityChannelState::Despawning;
         self.components.clear();
+    }
+
+    pub(crate) fn try_despawn(&mut self, entity_id: &str) -> Result<(), WorldChannelError> {
+        if self.state != EntityChannelState::Spawned {
+            return Err(WorldChannelError::EntityNotYetSpawned {
+                entity_id: entity_id.to_string(),
+            });
+        }
+        self.state = EntityChannelState::Despawning;
+        self.components.clear();
+        Ok(())
     }
 
     pub(crate) fn component_is_removing(&self, component_kind: &ComponentKind) -> bool {
@@ -136,6 +175,24 @@ impl EntityChannel {
         self.components
             .insert(*component_kind, ComponentChannel::Inserting);
         self.send_message(after_spawn);
+    }
+
+    pub(crate) fn try_insert_component(
+        &mut self,
+        entity_id: &str,
+        component_kind: &ComponentKind,
+        after_spawn: bool,
+    ) -> Result<(), WorldChannelError> {
+        if self.state != EntityChannelState::Spawned {
+            return Err(WorldChannelError::ComponentInsertEntityNotSpawned {
+                entity_id: entity_id.to_string(),
+                component_kind: format!("{:?}", component_kind),
+            });
+        }
+        self.components
+            .insert(*component_kind, ComponentChannel::Inserting);
+        self.try_send_message(entity_id, after_spawn)?;
+        Ok(())
     }
 
     pub(crate) fn insert_remote_component(&mut self, component_kind: &ComponentKind) {
@@ -161,6 +218,32 @@ impl EntityChannel {
         }
     }
 
+    pub(crate) fn try_remove_component(
+        &mut self,
+        entity_id: &str,
+        component_kind: &ComponentKind,
+    ) -> Result<bool, WorldChannelError> {
+        match self.components.get(component_kind) {
+            Some(ComponentChannel::Inserted) => {
+                self.components.remove(component_kind);
+                self.components
+                    .insert(*component_kind, ComponentChannel::Removing);
+                self.try_send_message(entity_id, false)?;
+                Ok(true)
+            }
+            Some(ComponentChannel::Inserting) => {
+                // CRITICAL: This is the todo!() implementation at line 156
+                // Conservative approach: Return error when trying to remove a component
+                // that is still being inserted. This prevents race conditions.
+                Err(WorldChannelError::ComponentRemoveWhileInserting {
+                    entity_id: entity_id.to_string(),
+                    component_kind: format!("{:?}", component_kind),
+                })
+            }
+            _ => Ok(false),
+        }
+    }
+
     // returns whether auth release message should be sent
     pub(crate) fn component_insertion_complete(&mut self, component_kind: &ComponentKind) -> bool {
         if let Some(component_channel) = self.components.get_mut(component_kind) {
@@ -174,6 +257,34 @@ impl EntityChannel {
     }
 
     // returns whether auth release message should be sent
+    pub(crate) fn try_component_insertion_complete(
+        &mut self,
+        entity_id: &str,
+        component_kind: &ComponentKind,
+    ) -> Result<bool, WorldChannelError> {
+        if let Some(component_channel) = self.components.get_mut(component_kind) {
+            if *component_channel == ComponentChannel::Inserting {
+                *component_channel = ComponentChannel::Inserted;
+                return Ok(self.message_delivered());
+            }
+            return Err(WorldChannelError::ComponentOperationWrongState {
+                operation: "insertion_complete",
+                expected: "Inserting",
+                actual: if *component_channel == ComponentChannel::Inserted {
+                    "Inserted"
+                } else {
+                    "Removing"
+                },
+            });
+        }
+
+        Err(WorldChannelError::ComponentNotFound {
+            entity_id: entity_id.to_string(),
+            component_kind: format!("{:?}", component_kind),
+        })
+    }
+
+    // returns whether auth release message should be sent
     pub(crate) fn component_removal_complete(&mut self, component_kind: &ComponentKind) -> bool {
         if self.components.get(component_kind) == Some(&ComponentChannel::Removing) {
             self.components.remove(component_kind);
@@ -183,11 +294,53 @@ impl EntityChannel {
         }
     }
 
+    // returns whether auth release message should be sent
+    pub(crate) fn try_component_removal_complete(
+        &mut self,
+        entity_id: &str,
+        component_kind: &ComponentKind,
+    ) -> Result<bool, WorldChannelError> {
+        match self.components.get(component_kind) {
+            Some(&ComponentChannel::Removing) => {
+                self.components.remove(component_kind);
+                Ok(self.message_delivered())
+            }
+            Some(state) => Err(WorldChannelError::ComponentOperationWrongState {
+                operation: "removal_complete",
+                expected: "Removing",
+                actual: if *state == ComponentChannel::Inserting {
+                    "Inserting"
+                } else {
+                    "Inserted"
+                },
+            }),
+            None => Err(WorldChannelError::ComponentNotFound {
+                entity_id: entity_id.to_string(),
+                component_kind: format!("{:?}", component_kind),
+            }),
+        }
+    }
+
     fn send_message(&mut self, after_spawn: bool) {
         if self.release_auth == ReleaseAuthState::None || after_spawn {
             self.messages_in_progress += 1;
         } else {
             panic!("Entity channel should be blocked right now, as auth has been released");
+        }
+    }
+
+    fn try_send_message(
+        &mut self,
+        entity_id: &str,
+        after_spawn: bool,
+    ) -> Result<(), WorldChannelError> {
+        if self.release_auth == ReleaseAuthState::None || after_spawn {
+            self.messages_in_progress += 1;
+            Ok(())
+        } else {
+            Err(WorldChannelError::AuthorityReleased {
+                entity_id: entity_id.to_string(),
+            })
         }
     }
 
@@ -215,6 +368,17 @@ impl EntityChannel {
 
     fn ready_to_release(&self) -> bool {
         self.messages_in_progress == 0 && self.state == EntityChannelState::Spawned
+    }
+
+    /// Validates that the channel is safe to drop. Should be called before dropping.
+    /// Returns an error if auth release message is still waiting.
+    pub(crate) fn validate_drop(&self, entity_id: &str) -> Result<(), WorldChannelError> {
+        if self.release_auth == ReleaseAuthState::Waiting {
+            return Err(WorldChannelError::AuthReleaseMessageFailed {
+                entity_id: entity_id.to_string(),
+            });
+        }
+        Ok(())
     }
 }
 

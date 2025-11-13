@@ -3,6 +3,7 @@ use std::{any::TypeId, collections::HashMap};
 use naia_serde::{BitReader, BitWrite, ConstBitLength, Serde, SerdeErr};
 
 use crate::messages::channels::channel::{Channel, ChannelSettings};
+use crate::messages::error::ChannelError;
 
 type NetId = u16;
 
@@ -84,10 +85,22 @@ impl ChannelKinds {
         settings.clone()
     }
 
+    pub fn try_channel(&self, kind: &ChannelKind) -> Result<ChannelSettings, ChannelError> {
+        let (_, settings) = self.kind_map.get(kind)
+            .ok_or(ChannelError::ChannelKindNotFound)?;
+        Ok(settings.clone())
+    }
+
     fn net_id_to_kind(&self, net_id: &NetId) -> ChannelKind {
         return *self.net_id_map.get(net_id).expect(
             "Must properly initialize Channel with Protocol via `add_channel()` function!",
         );
+    }
+
+    pub fn try_net_id_to_kind(&self, net_id: &NetId) -> Result<ChannelKind, ChannelError> {
+        self.net_id_map.get(net_id)
+            .copied()
+            .ok_or(ChannelError::NetIdNotFound { net_id: *net_id })
     }
 
     fn kind_to_net_id(&self, channel_kind: &ChannelKind) -> NetId {
@@ -98,5 +111,11 @@ impl ChannelKinds {
                 "Must properly initialize Component with Protocol via `add_channel()` function!",
             )
             .0;
+    }
+
+    pub fn try_kind_to_net_id(&self, channel_kind: &ChannelKind) -> Result<NetId, ChannelError> {
+        self.kind_map.get(channel_kind)
+            .map(|(net_id, _)| *net_id)
+            .ok_or(ChannelError::ChannelKindNotFound)
     }
 }

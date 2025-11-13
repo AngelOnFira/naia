@@ -1,4 +1,5 @@
 pub mod channel_receiver;
+pub mod error;
 pub mod fragment_receiver;
 pub mod indexed_message_reader;
 pub mod ordered_reliable_receiver;

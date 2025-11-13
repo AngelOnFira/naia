@@ -9,6 +9,7 @@ use crate::{
     messages::{
         channels::senders::{
             channel_sender::{ChannelSender, MessageChannelSender},
+            error::SenderError,
             indexed_message_writer::IndexedMessageWriter,
         },
         message_container::MessageContainer,
@@ -95,5 +96,43 @@ impl MessageChannelSender for SequencedUnreliableSender {
 
     fn process_incoming_response(&mut self, _: &LocalRequestId) -> Option<GlobalRequestId> {
         panic!("SequencedUnreliable channel does not support requests");
+    }
+}
+
+impl SequencedUnreliableSender {
+    /// Try version of send_outgoing_request that returns an error instead of panicking
+    pub fn try_send_outgoing_request(
+        &mut self,
+        _: &MessageKinds,
+        _: &mut dyn LocalEntityAndGlobalEntityConverterMut,
+        _: GlobalRequestId,
+        _: MessageContainer,
+    ) -> Result<(), SenderError> {
+        Err(SenderError::RequestsNotSupported {
+            channel_type: "SequencedUnreliable",
+        })
+    }
+
+    /// Try version of send_outgoing_response that returns an error instead of panicking
+    pub fn try_send_outgoing_response(
+        &mut self,
+        _: &MessageKinds,
+        _: &mut dyn LocalEntityAndGlobalEntityConverterMut,
+        _: LocalResponseId,
+        _: MessageContainer,
+    ) -> Result<(), SenderError> {
+        Err(SenderError::RequestsNotSupported {
+            channel_type: "SequencedUnreliable",
+        })
+    }
+
+    /// Try version of process_incoming_response that returns an error instead of panicking
+    pub fn try_process_incoming_response(
+        &mut self,
+        _: &LocalRequestId,
+    ) -> Result<Option<GlobalRequestId>, SenderError> {
+        Err(SenderError::RequestsNotSupported {
+            channel_type: "SequencedUnreliable",
+        })
     }
 }

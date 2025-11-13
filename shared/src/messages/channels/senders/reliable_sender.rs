@@ -2,7 +2,10 @@ use std::{collections::VecDeque, mem, time::Duration};
 
 use naia_socket_shared::Instant;
 
-use crate::{messages::channels::senders::channel_sender::ChannelSender, types::MessageIndex};
+use crate::{
+    messages::channels::senders::{channel_sender::ChannelSender, error::SenderError},
+    types::MessageIndex,
+};
 
 // Sender
 pub struct ReliableSender<P: Send + Sync> {
@@ -70,6 +73,44 @@ impl<P: Send + Sync> ReliableSender<P> {
 
                 // stop loop
                 return output.map(|(_, _, message)| message);
+            }
+
+            index += 1;
+        }
+    }
+
+    // Try version of deliver_message that returns Result instead of unwrapping
+    pub fn try_deliver_message(
+        &mut self,
+        message_index: &MessageIndex,
+    ) -> Result<Option<P>, SenderError> {
+        let mut index = 0;
+        let mut found = false;
+
+        loop {
+            if index == self.sending_messages.len() {
+                return Ok(None);
+            }
+
+            if let Some(Some((old_message_index, _, _))) = self.sending_messages.get(index) {
+                if *message_index == *old_message_index {
+                    found = true;
+                }
+            }
+
+            if found {
+                // replace found message with nothing
+                let container = self.sending_messages.get_mut(index).ok_or_else(|| {
+                    SenderError::StateInconsistency {
+                        reason: "found message index but cannot access container",
+                    }
+                })?;
+                let output = container.take();
+
+                self.cleanup_sent_messages();
+
+                // stop loop
+                return Ok(output.map(|(_, _, message)| message));
             }
 
             index += 1;

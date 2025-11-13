@@ -3,6 +3,8 @@ use std::str::FromStr;
 use http::Method;
 use log::warn;
 
+use crate::transport::error::{HttpParseError, TransportError};
+
 pub fn request_to_bytes(request: http::Request<Vec<u8>>) -> Vec<u8> {
     let url = request.uri();
 
@@ -38,6 +40,24 @@ pub fn request_to_bytes(request: http::Request<Vec<u8>>) -> Vec<u8> {
     request_bytes
 }
 
+/// Try to parse bytes into HTTP request, returning error instead of panicking
+pub fn try_bytes_to_request(request_bytes: &[u8]) -> Result<http::Request<Vec<u8>>, TransportError> {
+    let request_str = String::from_utf8_lossy(request_bytes);
+
+    let (path_line, headers_str, body_start_index) = try_split_request(&request_str)?;
+    let (method, url) = try_parse_path_line(path_line)?;
+    let headers = try_parse_headers(headers_str)?;
+    let body = request_bytes[body_start_index..].to_vec();
+
+    let mut request = http::Request::builder().method(method).uri(url);
+    for (key, value) in headers {
+        request = request.header(key, value);
+    }
+    request.body(body).map_err(|_| HttpParseError::RequestBuildFailed.into())
+}
+
+/// Parse bytes into HTTP request, panicking on error
+/// For backward compatibility with existing code
 pub fn bytes_to_request(request_bytes: &[u8]) -> http::Request<Vec<u8>> {
     let request_str = String::from_utf8_lossy(request_bytes);
 
@@ -59,6 +79,24 @@ pub fn response_to_bytes(response: http::Response<Vec<u8>>) -> Vec<u8> {
     response_bytes
 }
 
+/// Try to parse bytes into HTTP response, returning error instead of panicking
+pub fn try_bytes_to_response(response_bytes: &[u8]) -> Result<http::Response<Vec<u8>>, TransportError> {
+    let response_str = String::from_utf8_lossy(response_bytes);
+
+    let (status_line, headers_str, body_start_index) = try_split_response(&response_str)?;
+    let (status_code, _status_text) = try_parse_status_line(status_line)?;
+    let headers = try_parse_headers(headers_str)?;
+    let body = response_bytes[body_start_index..].to_vec();
+
+    let mut response = http::Response::builder().status(status_code);
+    for (key, value) in headers {
+        response = response.header(key, value);
+    }
+    response.body(body).map_err(|_| HttpParseError::ResponseBuildFailed { status_code }.into())
+}
+
+/// Parse bytes into HTTP response, panicking on error
+/// For backward compatibility with existing code
 pub fn bytes_to_response(response_bytes: &[u8]) -> http::Response<Vec<u8>> {
     let response_str = String::from_utf8_lossy(response_bytes);
 
@@ -74,6 +112,25 @@ pub fn bytes_to_response(response_bytes: &[u8]) -> http::Response<Vec<u8>> {
     response.body(body).unwrap()
 }
 
+fn try_split_request(request_str: &str) -> Result<(&str, &str, usize), HttpParseError> {
+    let mut parts = request_str.splitn(3, "\r\n\r\n");
+    let status_and_headers = parts.next().ok_or(HttpParseError::MissingComponent {
+        message_type: "request",
+        component: "status and headers",
+    })?;
+    let mut pathline_and_headers_parts = status_and_headers.splitn(2, "\r\n");
+    let path_line = pathline_and_headers_parts.next().ok_or(HttpParseError::MissingComponent {
+        message_type: "request",
+        component: "path line",
+    })?;
+    let headers = pathline_and_headers_parts.next().unwrap_or(""); // If there are no headers, it's an empty string
+    let body_start_index = request_str
+        .find("\r\n\r\n")
+        .map(|idx| idx + 4)
+        .unwrap_or(request_str.len());
+    Ok((path_line, headers, body_start_index))
+}
+
 fn split_request(request_str: &str) -> (&str, &str, usize) {
     let mut parts = request_str.splitn(3, "\r\n\r\n");
     let status_and_headers = parts.next().unwrap();
@@ -85,6 +142,25 @@ fn split_request(request_str: &str) -> (&str, &str, usize) {
         .map(|idx| idx + 4)
         .unwrap_or(request_str.len());
     (path_line, headers, body_start_index)
+}
+
+fn try_split_response(response_str: &str) -> Result<(&str, &str, usize), HttpParseError> {
+    let mut parts = response_str.splitn(3, "\r\n\r\n");
+    let status_and_headers = parts.next().ok_or(HttpParseError::MissingComponent {
+        message_type: "response",
+        component: "status and headers",
+    })?;
+    let mut status_and_headers_parts = status_and_headers.splitn(2, "\r\n");
+    let status_line = status_and_headers_parts.next().ok_or(HttpParseError::MissingComponent {
+        message_type: "response",
+        component: "status line",
+    })?;
+    let headers = status_and_headers_parts.next().unwrap_or(""); // If there are no headers, it's an empty string
+    let body_start_index = response_str
+        .find("\r\n\r\n")
+        .map(|idx| idx + 4)
+        .unwrap_or(response_str.len());
+    Ok((status_line, headers, body_start_index))
 }
 
 fn split_response(response_str: &str) -> (&str, &str, usize) {
@@ -100,6 +176,27 @@ fn split_response(response_str: &str) -> (&str, &str, usize) {
     (status_line, headers, body_start_index)
 }
 
+fn try_parse_path_line(path_line: &str) -> Result<(Method, String), HttpParseError> {
+    let mut parts = path_line.splitn(3, ' ');
+    let method = parts.next().ok_or(HttpParseError::MissingComponent {
+        message_type: "request",
+        component: "HTTP method",
+    })?;
+    let path = parts.next().ok_or(HttpParseError::MissingComponent {
+        message_type: "request",
+        component: "path",
+    })?;
+    let _http_version = parts.next().ok_or(HttpParseError::MissingComponent {
+        message_type: "request",
+        component: "HTTP version",
+    })?;
+
+    let method = Method::from_str(method).map_err(|_| HttpParseError::InvalidMethod {
+        method: method.to_string(),
+    })?;
+    Ok((method, path.to_string()))
+}
+
 fn parse_path_line(path_line: &str) -> (Method, String) {
     let mut parts = path_line.splitn(3, ' ');
     let method = parts.next().unwrap();
@@ -110,6 +207,23 @@ fn parse_path_line(path_line: &str) -> (Method, String) {
     (method, path.to_string())
 }
 
+fn try_parse_status_line(status_line: &str) -> Result<(u16, String), HttpParseError> {
+    let mut parts = status_line.splitn(3, ' ');
+    let _http_version = parts.next().ok_or(HttpParseError::MissingComponent {
+        message_type: "response",
+        component: "HTTP version",
+    })?;
+    let status_code = parts.next().ok_or(HttpParseError::MissingComponent {
+        message_type: "response",
+        component: "status code",
+    })?;
+    let status_text = parts.next().unwrap_or("").to_string(); // Status text can be empty
+    let status_code = status_code.parse::<u16>().map_err(|_| HttpParseError::InvalidStatusCode {
+        status_code: status_code.to_string(),
+    })?;
+    Ok((status_code, status_text))
+}
+
 fn parse_status_line(status_line: &str) -> (u16, String) {
     let mut parts = status_line.splitn(3, ' ');
     let _http_version = parts.next().unwrap();
@@ -117,6 +231,26 @@ fn parse_status_line(status_line: &str) -> (u16, String) {
     let status_text = parts.next().unwrap_or("").to_string(); // Status text can be empty
     let status_code = status_code.parse::<u16>().unwrap();
     (status_code, status_text)
+}
+
+fn try_parse_headers(headers: &str) -> Result<Vec<(String, String)>, HttpParseError> {
+    let mut header_store: Vec<(String, String)> = Vec::new();
+    for line in headers.lines() {
+        if line.is_empty() {
+            continue;
+        }
+        let mut parts = line.splitn(2, ": ");
+        let key = parts.next().ok_or(HttpParseError::MissingComponent {
+            message_type: "header",
+            component: "header name",
+        })?.to_lowercase();
+        let value = parts.next().ok_or(HttpParseError::MissingComponent {
+            message_type: "header",
+            component: "header value",
+        })?.to_string();
+        header_store.push((key, value));
+    }
+    Ok(header_store)
 }
 
 fn parse_headers(headers: &str) -> Vec<(String, String)> {

@@ -1,18 +1,24 @@
 use std::hash::Hash;
 use std::marker::PhantomData;
 
-use crate::{EntityEvent, GlobalWorldManagerType, WorldMutType};
+use crate::{EntityError, EntityEvent, GlobalWorldManagerType, WorldMutType};
 
 pub struct SharedGlobalWorldManager<E: Copy + Eq + Hash + Send + Sync> {
     phantom_e: PhantomData<E>,
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> SharedGlobalWorldManager<E> {
-    pub fn despawn_all_entities<W: WorldMutType<E>>(
+    /// Attempts to despawn all entities and generate corresponding events.
+    ///
+    /// Returns an error if there's an internal consistency issue between the
+    /// GlobalWorldManager's component list and the actual world state.
+    ///
+    /// Consider using this method instead of `despawn_all_entities` for non-panicking error handling.
+    pub fn try_despawn_all_entities<W: WorldMutType<E>>(
         world: &mut W,
         global_world_manager: &dyn GlobalWorldManagerType<E>,
         entities: Vec<E>,
-    ) -> Vec<EntityEvent<E>> {
+    ) -> Result<Vec<EntityEvent<E>>, EntityError> {
         let mut output = Vec::new();
 
         for entity in entities {
@@ -25,7 +31,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> SharedGlobalWorldManager<E> {
                     {
                         output.push(EntityEvent::<E>::RemoveComponent(entity, component));
                     } else {
-                        panic!("Global World Manager must not have an accurate component list");
+                        return Err(EntityError::InternalConsistency {
+                            context: "Global World Manager component list out of sync with world state",
+                        });
                     }
                 }
             }
@@ -37,6 +45,23 @@ impl<E: Copy + Eq + Hash + Send + Sync> SharedGlobalWorldManager<E> {
             world.despawn_entity(&entity);
         }
 
-        output
+        Ok(output)
+    }
+
+    /// Despawns all entities and generates corresponding events.
+    ///
+    /// # Panics
+    ///
+    /// Panics if there's an internal consistency issue between the GlobalWorldManager's
+    /// component list and the actual world state.
+    ///
+    /// Consider using `try_despawn_all_entities` for non-panicking error handling.
+    pub fn despawn_all_entities<W: WorldMutType<E>>(
+        world: &mut W,
+        global_world_manager: &dyn GlobalWorldManagerType<E>,
+        entities: Vec<E>,
+    ) -> Vec<EntityEvent<E>> {
+        Self::try_despawn_all_entities(world, global_world_manager, entities)
+            .expect("Global World Manager must not have an accurate component list")
     }
 }

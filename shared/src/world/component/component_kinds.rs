@@ -7,6 +7,8 @@ use crate::{
     Replicate, ReplicateBuilder,
 };
 
+use super::error::ComponentError;
+
 type NetId = u16;
 
 /// ComponentKind - should be one unique value for each type of Component
@@ -115,29 +117,42 @@ impl ComponentKinds {
         return self.kind_to_builder(component_kind).name();
     }
 
+    fn try_net_id_to_kind(&self, net_id: &NetId) -> Result<ComponentKind, ComponentError> {
+        self.net_id_map
+            .get(net_id)
+            .copied()
+            .ok_or(ComponentError::NetIdNotFound { net_id: *net_id })
+    }
+
     fn net_id_to_kind(&self, net_id: &NetId) -> ComponentKind {
-        return *self.net_id_map.get(net_id).expect(
+        self.try_net_id_to_kind(net_id).expect(
             "Must properly initialize Component with Protocol via `add_component()` function!",
-        );
+        )
+    }
+
+    fn try_kind_to_net_id(&self, component_kind: &ComponentKind) -> Result<NetId, ComponentError> {
+        self.kind_map
+            .get(component_kind)
+            .map(|(net_id, _)| *net_id)
+            .ok_or(ComponentError::KindNotFound)
     }
 
     fn kind_to_net_id(&self, component_kind: &ComponentKind) -> NetId {
-        return self
-            .kind_map
+        self.try_kind_to_net_id(component_kind).expect(
+            "Must properly initialize Component with Protocol via `add_component()` function!",
+        )
+    }
+
+    fn try_kind_to_builder(&self, component_kind: &ComponentKind) -> Result<&Box<dyn ReplicateBuilder>, ComponentError> {
+        self.kind_map
             .get(component_kind)
-            .expect(
-                "Must properly initialize Component with Protocol via `add_component()` function!",
-            )
-            .0;
+            .map(|(_, builder)| builder)
+            .ok_or(ComponentError::KindNotFound)
     }
 
     fn kind_to_builder(&self, component_kind: &ComponentKind) -> &Box<dyn ReplicateBuilder> {
-        return &self
-            .kind_map
-            .get(component_kind)
-            .expect(
-                "Must properly initialize Component with Protocol via `add_component()` function!",
-            )
-            .1;
+        self.try_kind_to_builder(component_kind).expect(
+            "Must properly initialize Component with Protocol via `add_component()` function!",
+        )
     }
 }

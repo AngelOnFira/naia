@@ -51,17 +51,17 @@ fn convert_single_fragment() {
     let initial_message = StringMessage::new("hello");
     let outgoing_message = initial_message.clone();
 
-    let container = MessageContainer::from_write(Box::new(outgoing_message), &FakeEntityConverter);
+    let container = MessageContainer::from_write(Box::new(outgoing_message), &mut FakeEntityConverter);
 
     // Fragment Message
-    let fragments = fragmenter.fragment_message(&message_kinds, &converter, container);
+    let fragments = fragmenter.fragment_message(&message_kinds, &mut FakeEntityConverter, container);
     let fragment_count = fragments.len();
 
     // Receive Fragments
     let mut incoming_message_container_opt = None;
-    for fragment in fragments {
-        if let Some((_, reassembled_message)) =
-            receiver.receive(&message_kinds, &converter, fragment)
+    for (i, fragment) in fragments.into_iter().enumerate() {
+        if let Some((_, _, reassembled_message)) =
+            receiver.receive(&message_kinds, &converter, i as u16, fragment)
         {
             incoming_message_container_opt = Some(reassembled_message);
             break;
@@ -98,10 +98,10 @@ fn convert_multiple_fragments() {
             Donec ut purus venenatis, mollis est ut, sollicitudin egestas.");
     let outgoing_message = initial_message.clone();
 
-    let container = MessageContainer::from_write(Box::new(outgoing_message), &FakeEntityConverter);
+    let container = MessageContainer::from_write(Box::new(outgoing_message), &mut FakeEntityConverter);
 
     // Fragment Message
-    let fragments = fragmenter.fragment_message(&message_kinds, &converter, container);
+    let fragments = fragmenter.fragment_message(&message_kinds, &mut FakeEntityConverter, container);
     let fragment_count = fragments.len();
 
     // Receive Fragments
@@ -114,9 +114,9 @@ fn convert_multiple_fragments() {
             x => x,
         };
 
-        let fragment = &fragments[j];
-        if let Some((_, reassembled_message)) =
-            receiver.receive(&message_kinds, &converter, fragment.clone())
+        let fragment = fragments[j].clone();
+        if let Some((_, _, reassembled_message)) =
+            receiver.receive(&message_kinds, &converter, i as u16, fragment)
         {
             incoming_message_container_opt = Some(reassembled_message);
             break;

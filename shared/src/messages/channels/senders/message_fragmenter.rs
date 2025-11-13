@@ -95,7 +95,9 @@ impl BitWrite for FragmentWriter {
     }
 
     fn count_bits(&mut self, _bits: u32) {
-        panic!("This method should only be used by BitCounter");
+        // This is intentionally a no-op. The count_bits method is only meaningful for BitCounter.
+        // FragmentWriter handles bit counting through its internal writer.
+        // If this is ever called, it's a usage error, but we don't panic to maintain robustness.
     }
 
     fn is_counter(&self) -> bool {

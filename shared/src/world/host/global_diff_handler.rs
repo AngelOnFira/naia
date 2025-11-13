@@ -2,7 +2,7 @@ use std::{collections::HashMap, hash::Hash, net::SocketAddr};
 
 use crate::{ComponentKind, GlobalWorldManagerType};
 
-use super::mut_channel::{MutChannel, MutReceiver, MutReceiverBuilder, MutSender};
+use super::{error::WorldChannelError, mut_channel::{MutChannel, MutReceiver, MutReceiverBuilder, MutSender}};
 
 pub struct GlobalDiffHandler<E: Copy + Eq + Hash> {
     mut_receiver_builders: HashMap<(E, ComponentKind), MutReceiverBuilder>,
@@ -52,5 +52,32 @@ impl<E: Copy + Eq + Hash> GlobalDiffHandler<E> {
             return builder.build(address);
         }
         None
+    }
+
+    // Try version that returns Result instead of panicking
+
+    pub fn try_register_component(
+        &mut self,
+        global_world_manager: &dyn GlobalWorldManagerType<E>,
+        entity: &E,
+        component_kind: &ComponentKind,
+        diff_mask_length: u8,
+    ) -> Result<MutSender, WorldChannelError> {
+        if self
+            .mut_receiver_builders
+            .contains_key(&(*entity, *component_kind))
+        {
+            return Err(WorldChannelError::ComponentAlreadyRegistered {
+                entity_id: "<entity>".to_string(),
+                component_kind: format!("{:?}", component_kind),
+            });
+        }
+
+        let (sender, builder) = MutChannel::new_channel(global_world_manager, diff_mask_length);
+
+        self.mut_receiver_builders
+            .insert((*entity, *component_kind), builder);
+
+        Ok(sender)
     }
 }

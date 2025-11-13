@@ -7,7 +7,7 @@ use std::{
 
 use crate::{ComponentKind, DiffMask, GlobalWorldManagerType};
 
-use super::{global_diff_handler::GlobalDiffHandler, mut_channel::MutReceiver};
+use super::{error::WorldChannelError, global_diff_handler::GlobalDiffHandler, mut_channel::MutReceiver};
 
 #[derive(Clone)]
 pub struct UserDiffHandler<E: Copy + Eq + Hash> {
@@ -87,5 +87,80 @@ impl<E: Copy + Eq + Hash> UserDiffHandler<E> {
             panic!("Should not call this unless we're sure there's a receiver");
         };
         receiver.clear_mask();
+    }
+
+    // Try versions that return Result instead of panicking
+
+    pub fn try_register_component(
+        &mut self,
+        address: &Option<SocketAddr>,
+        entity: &E,
+        component_kind: &ComponentKind,
+    ) -> Result<(), WorldChannelError> {
+        let global_handler = self.global_diff_handler.as_ref().read()
+            .map_err(|_| WorldChannelError::RwLockReentrant)?;
+
+        let receiver = global_handler
+            .receiver(address, entity, component_kind)
+            .ok_or_else(|| WorldChannelError::ComponentNotRegistered {
+                entity_id: "<entity>".to_string(),
+                component_kind: format!("{:?}", component_kind),
+            })?;
+
+        self.receivers.insert((*entity, *component_kind), receiver);
+        Ok(())
+    }
+
+    pub fn try_diff_mask(
+        &self,
+        entity: &E,
+        component_kind: &ComponentKind,
+    ) -> Result<RwLockReadGuard<DiffMask>, WorldChannelError> {
+        let receiver = self.receivers.get(&(*entity, *component_kind))
+            .ok_or_else(|| WorldChannelError::ReceiverNotFound {
+                entity_id: "<entity>".to_string(),
+                component_kind: format!("{:?}", component_kind),
+            })?;
+        receiver.try_mask()
+    }
+
+    pub fn try_diff_mask_is_clear(
+        &self,
+        entity: &E,
+        component_kind: &ComponentKind,
+    ) -> Result<bool, WorldChannelError> {
+        let receiver = self.receivers.get(&(*entity, *component_kind))
+            .ok_or_else(|| WorldChannelError::ReceiverNotFound {
+                entity_id: "<entity>".to_string(),
+                component_kind: format!("{:?}", component_kind),
+            })?;
+        receiver.try_diff_mask_is_clear()
+    }
+
+    pub fn try_or_diff_mask(
+        &mut self,
+        entity: &E,
+        component_kind: &ComponentKind,
+        other_mask: &DiffMask,
+    ) -> Result<(), WorldChannelError> {
+        let receiver = self.receivers.get_mut(&(*entity, *component_kind))
+            .ok_or_else(|| WorldChannelError::ReceiverNotFound {
+                entity_id: "<entity>".to_string(),
+                component_kind: format!("{:?}", component_kind),
+            })?;
+        receiver.try_or_mask(other_mask)
+    }
+
+    pub fn try_clear_diff_mask(
+        &mut self,
+        entity: &E,
+        component_kind: &ComponentKind,
+    ) -> Result<(), WorldChannelError> {
+        let receiver = self.receivers.get_mut(&(*entity, *component_kind))
+            .ok_or_else(|| WorldChannelError::ReceiverNotFound {
+                entity_id: "<entity>".to_string(),
+                component_kind: format!("{:?}", component_kind),
+            })?;
+        receiver.try_clear_mask()
     }
 }

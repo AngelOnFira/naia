@@ -13,6 +13,7 @@ use crate::{
         remote::{
             entity_event::EntityEvent,
             entity_waitlist::{EntityWaitlist, WaitlistHandle, WaitlistStore},
+            error::RemoteWorldError,
             remote_world_reader::RemoteWorldEvents,
         },
     },
@@ -39,6 +40,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
             update_waitlist_map: HashMap::new(),
             outgoing_events: Vec::new(),
         }
+    }
+
+    /// Helper to format RemoteEntity for error messages
+    fn format_entity(entity: &RemoteEntity) -> String {
+        format!("RemoteEntity({})", entity.value())
+    }
+
+    /// Helper to format ComponentKind for error messages
+    fn format_component(kind: &ComponentKind) -> String {
+        format!("{:?}", kind)
     }
 
     pub fn on_entity_channel_opened(&mut self, remote_entity: &RemoteEntity) {
@@ -101,16 +112,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
         self.process_waitlist_actions(global_world_manager, local_world_manager, world, now);
     }
 
-    /// For each [`EntityAction`] that can be executed now,
-    /// execute it and emit a corresponding event.
-    fn process_ready_actions<W: WorldMutType<E>>(
+    /// Try to process ready actions with error handling
+    ///
+    /// Returns an error if component data is missing from incoming_components,
+    /// which indicates malformed network data.
+    pub fn try_process_ready_actions<W: WorldMutType<E>>(
         &mut self,
         global_world_manager: &dyn GlobalWorldManagerType<E>,
         local_world_manager: &mut LocalWorldManager<E>,
         world: &mut W,
         incoming_actions: Vec<EntityAction<RemoteEntity>>,
         mut incoming_components: HashMap<(RemoteEntity, ComponentKind), Box<dyn Replicate>>,
-    ) {
+    ) -> Result<(), RemoteWorldError> {
         // execute the action and emit an event
         for action in incoming_actions {
             match action {
@@ -126,7 +139,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
                     for component_kind in components {
                         let component = incoming_components
                             .remove(&(remote_entity, component_kind))
-                            .unwrap();
+                            .ok_or_else(|| RemoteWorldError::ComponentDataMissingDuringSpawn {
+                                entity_id: Self::format_entity(&remote_entity),
+                                component_kind: Self::format_component(&component_kind),
+                            })?;
 
                         self.process_insert(world, world_entity, component, &component_kind);
                     }
@@ -154,7 +170,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
                 EntityAction::InsertComponent(remote_entity, component_kind) => {
                     let component = incoming_components
                         .remove(&(remote_entity, component_kind))
-                        .unwrap();
+                        .ok_or_else(|| RemoteWorldError::ComponentDataMissingDuringInsert {
+                            entity_id: Self::format_entity(&remote_entity),
+                            component_kind: Self::format_component(&component_kind),
+                        })?;
 
                     if local_world_manager.has_remote_entity(&remote_entity) {
                         let world_entity =
@@ -175,6 +194,31 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
                 }
             }
         }
+        Ok(())
+    }
+
+    /// For each [`EntityAction`] that can be executed now,
+    /// execute it and emit a corresponding event.
+    ///
+    /// # Panics
+    /// Panics if component data is missing from incoming_components.
+    /// For non-panicking version, use `try_process_ready_actions`.
+    fn process_ready_actions<W: WorldMutType<E>>(
+        &mut self,
+        global_world_manager: &dyn GlobalWorldManagerType<E>,
+        local_world_manager: &mut LocalWorldManager<E>,
+        world: &mut W,
+        incoming_actions: Vec<EntityAction<RemoteEntity>>,
+        incoming_components: HashMap<(RemoteEntity, ComponentKind), Box<dyn Replicate>>,
+    ) {
+        self.try_process_ready_actions(
+            global_world_manager,
+            local_world_manager,
+            world,
+            incoming_actions,
+            incoming_components,
+        )
+        .expect("component data should be present in incoming_components map")
     }
 
     fn process_insert<W: WorldMutType<E>>(
@@ -300,15 +344,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
         self.process_waitlist_updates(global_world_manager, local_world_manager, world, now);
     }
 
-    /// Process component updates from raw bits for a given entity
-    fn process_ready_updates<W: WorldMutType<E>>(
+    /// Try to process component updates with error handling
+    ///
+    /// Returns an error if a component update is malformed (splits into neither waiting nor ready parts),
+    /// or if internal waitlist structures are inconsistent.
+    pub fn try_process_ready_updates<W: WorldMutType<E>>(
         &mut self,
         global_world_manager: &dyn GlobalWorldManagerType<E>,
         local_world_manager: &LocalWorldManager<E>,
         component_kinds: &ComponentKinds,
         world: &mut W,
         mut incoming_updates: Vec<(Tick, E, ComponentUpdate)>,
-    ) {
+    ) -> Result<(), RemoteWorldError> {
         let converter = EntityConverter::new(
             global_world_manager.to_global_entity_converter(),
             local_world_manager,
@@ -334,7 +381,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
                 // warn!("Incoming Update split into ONLY ready part");
             }
             if waiting_updates_opt.is_none() && ready_update_opt.is_none() {
-                panic!("Incoming Update split into NEITHER waiting nor ready parts. This should not happen.");
+                // This indicates a malformed update that couldn't be split properly
+                return Err(RemoteWorldError::MalformedComponentUpdate {
+                    entity_id: "world_entity".to_string(),
+                    component_kind: Self::format_component(&component_kind),
+                });
             }
 
             // if it exists, queue the waiting part of the component update
@@ -360,7 +411,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
                     let handle_map = self
                         .update_waitlist_map
                         .get_mut(&component_field_key)
-                        .unwrap();
+                        .ok_or_else(|| RemoteWorldError::UpdateWaitlistMapInconsistency {
+                            entity_id: "world_entity".to_string(),
+                            component_kind: Self::format_component(&component_kind),
+                        })?;
                     if let Some(old_handle) = handle_map.get(&field_id) {
                         self.update_waitlist_store.remove(&handle);
                         self.entity_waitlist.remove_waiting_handle(old_handle);
@@ -390,6 +444,30 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
                 ));
             }
         }
+        Ok(())
+    }
+
+    /// Process component updates from raw bits for a given entity
+    ///
+    /// # Panics
+    /// Panics if a component update is malformed or internal structures are inconsistent.
+    /// For non-panicking version, use `try_process_ready_updates`.
+    fn process_ready_updates<W: WorldMutType<E>>(
+        &mut self,
+        global_world_manager: &dyn GlobalWorldManagerType<E>,
+        local_world_manager: &LocalWorldManager<E>,
+        component_kinds: &ComponentKinds,
+        world: &mut W,
+        incoming_updates: Vec<(Tick, E, ComponentUpdate)>,
+    ) {
+        self.try_process_ready_updates(
+            global_world_manager,
+            local_world_manager,
+            component_kinds,
+            world,
+            incoming_updates,
+        )
+        .expect("component update should be well-formed")
     }
 
     fn process_waitlist_updates<W: WorldMutType<E>>(

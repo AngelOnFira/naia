@@ -3,7 +3,7 @@ use std::{collections::HashMap, time::Duration};
 use naia_derive::MessageRequest;
 use naia_serde::{BitWriter, SerdeInternal};
 
-use crate::messages::request::GlobalRequestId;
+use crate::messages::{channels::senders::error::SenderError, request::GlobalRequestId};
 use crate::{KeyGenerator, LocalEntityAndGlobalEntityConverterMut, MessageContainer, MessageKinds};
 
 pub struct RequestSender {
@@ -86,7 +86,7 @@ impl RequestOrResponse {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, SerdeInternal)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, SerdeInternal)]
 pub enum LocalRequestOrResponseId {
     Request(LocalRequestId),
     Response(LocalResponseId),
@@ -116,15 +116,29 @@ impl LocalRequestOrResponseId {
         }
     }
 
+    pub fn try_to_request_id(&self) -> Result<LocalRequestId, SenderError> {
+        match self {
+            LocalRequestOrResponseId::Request(id) => Ok(*id),
+            LocalRequestOrResponseId::Response(_) => Err(SenderError::ExpectedRequest),
+        }
+    }
+
     pub fn to_response_id(&self) -> LocalResponseId {
         match self {
             LocalRequestOrResponseId::Request(_) => panic!("LocalRequestOrResponseId is a request"),
             LocalRequestOrResponseId::Response(id) => *id,
         }
     }
+
+    pub fn try_to_response_id(&self) -> Result<LocalResponseId, SenderError> {
+        match self {
+            LocalRequestOrResponseId::Request(_) => Err(SenderError::ExpectedResponse),
+            LocalRequestOrResponseId::Response(id) => Ok(*id),
+        }
+    }
 }
 
-#[derive(Clone, Copy, Eq, Hash, PartialEq, SerdeInternal)]
+#[derive(Clone, Copy, Eq, Hash, PartialEq, Debug, SerdeInternal)]
 pub struct LocalRequestId {
     id: u8,
 }
@@ -151,7 +165,7 @@ impl Into<u16> for LocalRequestId {
     }
 }
 
-#[derive(Clone, Copy, Eq, Hash, PartialEq, SerdeInternal)]
+#[derive(Clone, Copy, Eq, Hash, PartialEq, Debug, SerdeInternal)]
 pub struct LocalResponseId {
     id: u8,
 }

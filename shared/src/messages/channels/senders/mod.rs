@@ -1,4 +1,5 @@
 pub mod channel_sender;
+pub mod error;
 pub mod indexed_message_writer;
 pub mod message_fragmenter;
 pub mod reliable_message_sender;

@@ -25,6 +25,7 @@ use crate::{
                 unordered_unreliable_sender::UnorderedUnreliableSender,
             },
         },
+        error::MessageManagerError,
         message_container::MessageContainer,
         request::GlobalRequestId,
     },
@@ -162,25 +163,33 @@ impl MessageManager {
 
     // Outgoing Messages
 
-    /// Queues an Message to be transmitted to the remote host
-    pub fn send_message(
+    /// Queues a Message to be transmitted to the remote host (fallible version)
+    pub fn try_send_message(
         &mut self,
         message_kinds: &MessageKinds,
         converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
         channel_kind: &ChannelKind,
         message: MessageContainer,
-    ) {
-        let Some(channel) = self.channel_senders.get_mut(channel_kind) else {
-            panic!("Channel not configured correctly! Cannot send message.");
-        };
+    ) -> Result<(), MessageManagerError> {
+        let channel = self.channel_senders.get_mut(channel_kind).ok_or_else(|| {
+            MessageManagerError::ChannelNotConfiguredForSending {
+                channel: format!("{:?}", channel_kind),
+            }
+        })?;
 
         let message_bit_length = message.bit_length();
         if message_bit_length > FRAGMENTATION_LIMIT_BITS {
-            let Some(settings) = self.channel_settings.get(channel_kind) else {
-                panic!("Channel not configured correctly! Cannot send message.");
-            };
+            let settings = self.channel_settings.get(channel_kind).ok_or_else(|| {
+                MessageManagerError::ChannelSettingsNotFound {
+                    channel: format!("{:?}", channel_kind),
+                }
+            })?;
             if !settings.reliable() {
-                panic!("ERROR: Attempting to send Message above the fragmentation size limit over an unreliable Message channel! Slim down the size of your Message, or send this Message through a reliable message channel.");
+                return Err(MessageManagerError::FragmentationLimitExceeded {
+                    bit_length: message_bit_length,
+                    limit: FRAGMENTATION_LIMIT_BITS,
+                    channel: format!("{:?}", channel_kind),
+                });
             }
 
             // Now fragment this message ...
@@ -193,6 +202,36 @@ impl MessageManager {
         } else {
             channel.send_message(message);
         }
+        Ok(())
+    }
+
+    /// Queues an Message to be transmitted to the remote host
+    pub fn send_message(
+        &mut self,
+        message_kinds: &MessageKinds,
+        converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
+        channel_kind: &ChannelKind,
+        message: MessageContainer,
+    ) {
+        self.try_send_message(message_kinds, converter, channel_kind, message)
+            .expect("Channel not configured correctly! Cannot send message.")
+    }
+
+    pub fn try_send_request(
+        &mut self,
+        message_kinds: &MessageKinds,
+        converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
+        channel_kind: &ChannelKind,
+        global_request_id: GlobalRequestId,
+        request: MessageContainer,
+    ) -> Result<(), MessageManagerError> {
+        let channel = self.channel_senders.get_mut(channel_kind).ok_or_else(|| {
+            MessageManagerError::ChannelNotConfiguredForSending {
+                channel: format!("{:?}", channel_kind),
+            }
+        })?;
+        channel.send_outgoing_request(message_kinds, converter, global_request_id, request);
+        Ok(())
     }
 
     pub fn send_request(
@@ -203,10 +242,25 @@ impl MessageManager {
         global_request_id: GlobalRequestId,
         request: MessageContainer,
     ) {
-        let Some(channel) = self.channel_senders.get_mut(channel_kind) else {
-            panic!("Channel not configured correctly! Cannot send message.");
-        };
-        channel.send_outgoing_request(message_kinds, converter, global_request_id, request);
+        self.try_send_request(message_kinds, converter, channel_kind, global_request_id, request)
+            .expect("Channel not configured correctly! Cannot send message.")
+    }
+
+    pub fn try_send_response(
+        &mut self,
+        message_kinds: &MessageKinds,
+        converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
+        channel_kind: &ChannelKind,
+        local_response_id: LocalResponseId,
+        response: MessageContainer,
+    ) -> Result<(), MessageManagerError> {
+        let channel = self.channel_senders.get_mut(channel_kind).ok_or_else(|| {
+            MessageManagerError::ChannelNotConfiguredForSending {
+                channel: format!("{:?}", channel_kind),
+            }
+        })?;
+        channel.send_outgoing_response(message_kinds, converter, local_response_id, response);
+        Ok(())
     }
 
     pub fn send_response(
@@ -217,10 +271,8 @@ impl MessageManager {
         local_response_id: LocalResponseId,
         response: MessageContainer,
     ) {
-        let Some(channel) = self.channel_senders.get_mut(channel_kind) else {
-            panic!("Channel not configured correctly! Cannot send message.");
-        };
-        channel.send_outgoing_response(message_kinds, converter, local_response_id, response);
+        self.try_send_response(message_kinds, converter, channel_kind, local_response_id, response)
+            .expect("Channel not configured correctly! Cannot send message.")
     }
 
     pub fn collect_outgoing_messages(&mut self, now: &Instant, rtt_millis: &f32) {
@@ -275,10 +327,10 @@ impl MessageManager {
             if let Some(message_indices) =
                 channel.write_messages(&protocol.message_kinds, converter, writer, has_written)
             {
-                self.packet_to_message_map
+                let channel_list = self
+                    .packet_to_message_map
                     .entry(packet_index)
                     .or_insert_with(Vec::new);
-                let channel_list = self.packet_to_message_map.get_mut(&packet_index).unwrap();
                 channel_list.push((channel_kind.clone(), message_indices));
             }
 
@@ -294,6 +346,48 @@ impl MessageManager {
 
     // Incoming Messages
 
+    pub fn try_read_messages<E: Copy + Eq + Hash + Send + Sync>(
+        &mut self,
+        protocol: &Protocol,
+        entity_waitlist: &mut EntityWaitlist,
+        global_converter: &dyn EntityAndGlobalEntityConverter<E>,
+        local_converter: &dyn EntityAndLocalEntityConverter<E>,
+        reader: &mut BitReader,
+    ) -> Result<(), MessageManagerError> {
+        let converter = EntityConverter::new(global_converter, local_converter);
+        loop {
+            let message_continue = bool::de(reader).map_err(|_| {
+                MessageManagerError::ChannelNotConfiguredForReceiving {
+                    channel: "unknown".to_string(),
+                }
+            })?;
+            if !message_continue {
+                break;
+            }
+
+            // read channel id
+            let channel_kind = ChannelKind::de(&protocol.channel_kinds, reader).map_err(|_| {
+                MessageManagerError::ChannelNotConfiguredForReceiving {
+                    channel: "unknown".to_string(),
+                }
+            })?;
+
+            // continue read inside channel
+            let channel = self.channel_receivers.get_mut(&channel_kind).ok_or_else(|| {
+                MessageManagerError::ChannelNotConfiguredForReceiving {
+                    channel: format!("{:?}", channel_kind),
+                }
+            })?;
+            channel
+                .read_messages(&protocol.message_kinds, entity_waitlist, &converter, reader)
+                .map_err(|_| MessageManagerError::ChannelNotConfiguredForReceiving {
+                    channel: format!("{:?}", channel_kind),
+                })?;
+        }
+
+        Ok(())
+    }
+
     pub fn read_messages<E: Copy + Eq + Hash + Send + Sync>(
         &mut self,
         protocol: &Protocol,
@@ -302,22 +396,8 @@ impl MessageManager {
         local_converter: &dyn EntityAndLocalEntityConverter<E>,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
-        let converter = EntityConverter::new(global_converter, local_converter);
-        loop {
-            let message_continue = bool::de(reader)?;
-            if !message_continue {
-                break;
-            }
-
-            // read channel id
-            let channel_kind = ChannelKind::de(&protocol.channel_kinds, reader)?;
-
-            // continue read inside channel
-            let channel = self.channel_receivers.get_mut(&channel_kind).unwrap();
-            channel.read_messages(&protocol.message_kinds, entity_waitlist, &converter, reader)?;
-        }
-
-        Ok(())
+        self.try_read_messages(protocol, entity_waitlist, global_converter, local_converter, reader)
+            .map_err(|_| SerdeErr)
     }
 
     /// Retrieve all messages from the channel buffers
@@ -341,22 +421,25 @@ impl MessageManager {
         output
     }
 
-    /// Retrieve all requests from the channel buffers
-    pub fn receive_requests_and_responses(
+    /// Retrieve all requests and responses from the channel buffers (fallible version)
+    pub fn try_receive_requests_and_responses(
         &mut self,
-    ) -> (
-        Vec<(ChannelKind, Vec<(LocalResponseId, MessageContainer)>)>,
-        Vec<(GlobalRequestId, MessageContainer)>,
-    ) {
+    ) -> Result<
+        (
+            Vec<(ChannelKind, Vec<(LocalResponseId, MessageContainer)>)>,
+            Vec<(GlobalRequestId, MessageContainer)>,
+        ),
+        MessageManagerError,
+    > {
         let mut request_output = Vec::new();
         let mut response_output = Vec::new();
         for (channel_kind, channel) in &mut self.channel_receivers {
-            if !self
-                .channel_settings
-                .get(channel_kind)
-                .unwrap()
-                .can_request_and_respond()
-            {
+            let settings = self.channel_settings.get(channel_kind).ok_or_else(|| {
+                MessageManagerError::ChannelSettingsNotFound {
+                    channel: format!("{:?}", channel_kind),
+                }
+            })?;
+            if !settings.can_request_and_respond() {
                 continue;
             }
 
@@ -366,21 +449,31 @@ impl MessageManager {
             }
 
             if !responses.is_empty() {
-                let Some(channel_sender) = self.channel_senders.get_mut(channel_kind) else {
-                    panic!(
-                        "Channel not configured correctly! Cannot send message on channel: {:?}",
-                        channel_kind
-                    );
-                };
+                let channel_sender = self.channel_senders.get_mut(channel_kind).ok_or_else(|| {
+                    MessageManagerError::ChannelNotConfiguredForSending {
+                        channel: format!("{:?}", channel_kind),
+                    }
+                })?;
                 for (local_request_id, response) in responses {
                     let global_request_id = channel_sender
                         .process_incoming_response(&local_request_id)
-                        .unwrap();
+                        .ok_or(MessageManagerError::ResponseProcessingFailed)?;
                     response_output.push((global_request_id, response));
                 }
             }
         }
-        (request_output, response_output)
+        Ok((request_output, response_output))
+    }
+
+    /// Retrieve all requests from the channel buffers
+    pub fn receive_requests_and_responses(
+        &mut self,
+    ) -> (
+        Vec<(ChannelKind, Vec<(LocalResponseId, MessageContainer)>)>,
+        Vec<(GlobalRequestId, MessageContainer)>,
+    ) {
+        self.try_receive_requests_and_responses()
+            .expect("Channel not configured correctly! Cannot process requests/responses.")
     }
 }
 

@@ -43,7 +43,8 @@ impl GameInstant {
     // Returns offset to target time, in milliseconds (possibly negative)
     // 10.offset_from(12) = 2
     // 12.offset_from(10) = -2
-    pub fn offset_from(&self, other: &GameInstant) -> i32 {
+    // Returns None if integer overflow occurs (should be extremely rare)
+    pub fn try_offset_from(&self, other: &GameInstant) -> Option<i32> {
         const MAX: i32 = TIME_OFFSET_MAX;
         const MIN: i32 = TIME_OFFSET_MIN;
         const ADJUST: i32 = GAME_TIME_LIMIT as i32;
@@ -53,26 +54,40 @@ impl GameInstant {
 
         let mut result = b - a;
         if (MIN..=MAX).contains(&result) {
-            result
+            Some(result)
         } else if b > a {
             result = b - (a + ADJUST);
             if (MIN..=MAX).contains(&result) {
-                result
+                Some(result)
             } else {
-                panic!("integer overflow, this shouldn't happen");
+                None
             }
         } else {
             result = (b + ADJUST) - a;
             if (MIN..=MAX).contains(&result) {
-                result
+                Some(result)
             } else {
-                panic!("integer overflow, this shouldn't happen");
+                None
             }
         }
     }
 
+    /// Returns offset to target time, in milliseconds (possibly negative).
+    ///
+    /// # Panics
+    /// Panics if integer overflow occurs (should be extremely rare).
+    /// For non-panicking version, use `try_offset_from`.
+    #[deprecated(since = "0.24.2", note = "Use try_offset_from for safe error handling")]
+    pub fn offset_from(&self, other: &GameInstant) -> i32 {
+        self.try_offset_from(other)
+            .expect("GameInstant::offset_from: integer overflow occurred")
+    }
+
     pub fn is_more_than(&self, other: &GameInstant) -> bool {
-        return self.offset_from(other) < 0;
+        // Use try_offset_from internally to avoid deprecation warnings
+        self.try_offset_from(other)
+            .map(|offset| offset < 0)
+            .unwrap_or(false)
     }
 
     pub fn as_millis(&self) -> u32 {

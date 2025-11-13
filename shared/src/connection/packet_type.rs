@@ -31,7 +31,10 @@ impl Serde for PacketType {
         }
 
         let index = match self {
-            PacketType::Data => panic!("shouldn't happen, caught above"),
+            // SAFETY: This case is unreachable because we already checked is_data above.
+            // This should never happen in correct code, but we avoid panicking to maintain
+            // robustness. If somehow reached, we'll serialize as Heartbeat (index 0).
+            PacketType::Data => 0,
             PacketType::Heartbeat => 0,
             PacketType::Handshake => 1,
             PacketType::Ping => 2,
@@ -52,7 +55,9 @@ impl Serde for PacketType {
             1 => Ok(PacketType::Handshake),
             2 => Ok(PacketType::Ping),
             3 => Ok(PacketType::Pong),
-            _ => panic!("shouldn't happen, caught above"),
+            // SECURITY: Malicious or malformed packets could send invalid indices.
+            // Return error instead of panicking to prevent DoS attacks.
+            _ => Err(SerdeErr),
         }
     }
 

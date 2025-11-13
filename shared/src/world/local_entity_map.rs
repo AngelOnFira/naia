@@ -2,7 +2,10 @@
 use log::warn;
 use std::{collections::HashMap, hash::Hash};
 
-use crate::world::entity::local_entity::{HostEntity, OwnedLocalEntity, RemoteEntity};
+use crate::world::entity::{
+    error::EntityError,
+    local_entity::{HostEntity, OwnedLocalEntity, RemoteEntity},
+};
 
 #[derive(Debug)]
 pub struct LocalEntityRecord {
@@ -175,5 +178,68 @@ impl<E: Copy + Eq + Hash> LocalEntityMap<E> {
 
     pub fn iter(&self) -> impl Iterator<Item = (&E, &LocalEntityRecord)> {
         self.world_to_local.iter()
+    }
+
+    // Try versions that return Result instead of panicking
+
+    pub fn try_get_owned_entity(&self, world: &E) -> Result<OwnedLocalEntity, EntityError> {
+        let record = self.world_to_local.get(world)
+            .ok_or_else(|| EntityError::EntityNotFound {
+                context: "get_owned_entity lookup",
+            })?;
+
+        if let Some(remote_entity) = record.remote {
+            Ok(remote_entity.copy_to_owned())
+        } else if let Some(host_entity) = record.host {
+            Ok(host_entity.copy_to_owned())
+        } else {
+            Err(EntityError::EntityNeitherHostNorRemote {
+                entity_id: "<entity>".to_string(),
+            })
+        }
+    }
+
+    pub fn try_remove_redundant_host_entity(&mut self, world_entity: &E) -> Result<HostEntity, EntityError> {
+        let record = self.world_to_local.get_mut(world_entity)
+            .ok_or_else(|| EntityError::EntityNotFound {
+                context: "remove_redundant_host_entity lookup",
+            })?;
+
+        if record.host.is_none() || record.remote.is_none() {
+            return Err(EntityError::EntityMappingInconsistency {
+                entity_id: "<entity>".to_string(),
+                details: "record does not have dual host and remote entity",
+            });
+        }
+
+        let host_entity = record.host.take()
+            .ok_or_else(|| EntityError::EntityRecordCorruption {
+                message: "record.host was Some but became None".to_string(),
+            })?;
+
+        self.host_to_world.remove(&host_entity);
+        Ok(host_entity)
+    }
+
+    pub fn try_remove_redundant_remote_entity(&mut self, world_entity: &E) -> Result<RemoteEntity, EntityError> {
+        let record = self.world_to_local.get_mut(world_entity)
+            .ok_or_else(|| EntityError::EntityNotFound {
+                context: "remove_redundant_remote_entity lookup",
+            })?;
+
+        if record.host.is_none() || record.remote.is_none() {
+            return Err(EntityError::EntityMappingInconsistency {
+                entity_id: "<entity>".to_string(),
+                details: "record does not have dual host and remote entity",
+            });
+        }
+
+        let remote_entity = record.remote.take()
+            .ok_or_else(|| EntityError::EntityRecordCorruption {
+                message: "record.remote was Some but became None".to_string(),
+            })?;
+
+        self.remote_to_world.remove(&remote_entity);
+        Ok(remote_entity)
     }
 }

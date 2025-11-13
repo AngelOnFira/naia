@@ -6,7 +6,10 @@ use naia_socket_shared::Instant;
 use crate::messages::channels::senders::request_sender::LocalRequestId;
 use crate::{
     messages::{
-        channels::receivers::channel_receiver::{ChannelReceiver, MessageChannelReceiver},
+        channels::receivers::{
+            channel_receiver::{ChannelReceiver, MessageChannelReceiver},
+            error::ReceiverError,
+        },
         message_kinds::MessageKinds,
     },
     world::remote::entity_waitlist::{EntityWaitlist, WaitlistStore},
@@ -92,6 +95,21 @@ impl MessageChannelReceiver for UnorderedUnreliableReceiver {
         Vec<(LocalResponseId, MessageContainer)>,
         Vec<(LocalRequestId, MessageContainer)>,
     ) {
-        panic!("UnorderedUnreliable channels do not support requests");
+        Self::try_receive_requests_and_responses()
+            .unwrap_or_else(|e| panic!("UnorderedUnreliableReceiver error: {}", e))
+    }
+}
+
+impl UnorderedUnreliableReceiver {
+    /// Attempt to receive requests and responses (not supported on this channel type)
+    ///
+    /// Returns Err always since UnorderedUnreliable channels do not support requests
+    pub fn try_receive_requests_and_responses() -> Result<(
+        Vec<(LocalResponseId, MessageContainer)>,
+        Vec<(LocalRequestId, MessageContainer)>,
+    ), ReceiverError> {
+        Err(ReceiverError::RequestsNotSupported {
+            channel_type: "UnorderedUnreliable",
+        })
     }
 }

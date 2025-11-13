@@ -2,7 +2,10 @@ use std::{any::TypeId, collections::HashMap};
 
 use naia_serde::{BitReader, BitWrite, ConstBitLength, Serde, SerdeErr};
 
-use crate::{LocalEntityAndGlobalEntityConverter, Message, MessageBuilder, MessageContainer};
+use crate::{
+    messages::error::MessageKindsError, LocalEntityAndGlobalEntityConverter, Message,
+    MessageBuilder, MessageContainer,
+};
 
 type NetId = u16;
 
@@ -79,25 +82,48 @@ impl MessageKinds {
         return self.kind_to_builder(&message_kind).read(reader, converter);
     }
 
+    pub fn try_net_id_to_kind(&self, net_id: &NetId) -> Result<MessageKind, MessageKindsError> {
+        self.net_id_map
+            .get(net_id)
+            .copied()
+            .ok_or(MessageKindsError::NetIdNotFound { net_id: *net_id })
+    }
+
     fn net_id_to_kind(&self, net_id: &NetId) -> MessageKind {
-        return *self.net_id_map.get(net_id).expect(
+        self.try_net_id_to_kind(net_id).expect(
             "Must properly initialize Message with Protocol via `add_message()` function!",
-        );
+        )
+    }
+
+    pub fn try_kind_to_net_id(
+        &self,
+        message_kind: &MessageKind,
+    ) -> Result<NetId, MessageKindsError> {
+        self.kind_map
+            .get(message_kind)
+            .map(|(net_id, _)| *net_id)
+            .ok_or(MessageKindsError::MessageKindNotFound)
     }
 
     fn kind_to_net_id(&self, message_kind: &MessageKind) -> NetId {
-        return self
-            .kind_map
+        self.try_kind_to_net_id(message_kind).expect(
+            "Must properly initialize Message with Protocol via `add_message()` function!",
+        )
+    }
+
+    pub fn try_kind_to_builder(
+        &self,
+        message_kind: &MessageKind,
+    ) -> Result<&Box<dyn MessageBuilder>, MessageKindsError> {
+        self.kind_map
             .get(message_kind)
-            .expect("Must properly initialize Message with Protocol via `add_message()` function!")
-            .0;
+            .map(|(_, builder)| builder)
+            .ok_or(MessageKindsError::MessageKindNotFound)
     }
 
     fn kind_to_builder(&self, message_kind: &MessageKind) -> &Box<dyn MessageBuilder> {
-        return &self
-            .kind_map
-            .get(&message_kind)
-            .expect("Must properly initialize Message with Protocol via `add_message()` function!")
-            .1;
+        self.try_kind_to_builder(message_kind).expect(
+            "Must properly initialize Message with Protocol via `add_message()` function!",
+        )
     }
 }

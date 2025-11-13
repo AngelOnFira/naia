@@ -8,6 +8,7 @@ use crate::{
     messages::{
         channels::receivers::{
             channel_receiver::{ChannelReceiver, MessageChannelReceiver},
+            error::ReceiverError,
             indexed_message_reader::IndexedMessageReader,
         },
         message_kinds::MessageKinds,
@@ -106,6 +107,21 @@ impl MessageChannelReceiver for SequencedUnreliableReceiver {
         Vec<(LocalResponseId, MessageContainer)>,
         Vec<(LocalRequestId, MessageContainer)>,
     ) {
-        panic!("SequencedUnreliable channels do not support requests");
+        Self::try_receive_requests_and_responses()
+            .unwrap_or_else(|e| panic!("SequencedUnreliableReceiver error: {}", e))
+    }
+}
+
+impl SequencedUnreliableReceiver {
+    /// Attempt to receive requests and responses (not supported on this channel type)
+    ///
+    /// Returns Err always since SequencedUnreliable channels do not support requests
+    pub fn try_receive_requests_and_responses() -> Result<(
+        Vec<(LocalResponseId, MessageContainer)>,
+        Vec<(LocalRequestId, MessageContainer)>,
+    ), ReceiverError> {
+        Err(ReceiverError::RequestsNotSupported {
+            channel_type: "SequencedUnreliable",
+        })
     }
 }

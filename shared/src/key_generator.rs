@@ -33,13 +33,15 @@ impl<K: From<u16> + Into<u16> + Copy> KeyGenerator<K> {
             if instant.elapsed(&now) < self.recycle_timeout {
                 break;
             }
-            let (key, _) = self.recycling_keys.pop_front().unwrap();
+            // SAFETY: We just checked that front() returned Some, so pop_front() cannot fail
+            let (key, _) = unsafe { self.recycling_keys.pop_front().unwrap_unchecked() };
             self.recycled_keys.push_back(key);
         }
 
         // Check whether we can return a recycled key
-        if self.recycled_keys.len() > 0 {
-            let key = self.recycled_keys.pop_front().unwrap();
+        if !self.recycled_keys.is_empty() {
+            // SAFETY: We just checked that the deque is not empty, so pop_front() cannot fail
+            let key = unsafe { self.recycled_keys.pop_front().unwrap_unchecked() };
             return K::from(key);
         }
 

@@ -1,10 +1,14 @@
 use naia_derive::MessageFragment;
 use naia_serde::{BitReader, BitWrite, ConstBitLength, Serde, SerdeErr, UnsignedInteger};
 
+use crate::messages::error::FragmentationError;
+
 const FRAGMENT_ID_BITS: u8 = 10;
 const FRAGMENT_ID_LIMIT: u16 = 2_u16.pow(FRAGMENT_ID_BITS as u32);
 const FRAGMENT_INDEX_BITS: u8 = 20;
 const FRAGMENT_INDEX_LIMIT: u32 = 2_u32.pow(FRAGMENT_INDEX_BITS as u32);
+// Estimate: ~500 bytes per fragment on average
+const ESTIMATED_BYTES_PER_FRAGMENT: usize = 500;
 
 // FragmentId
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
@@ -59,6 +63,21 @@ impl FragmentIndex {
         Self { inner: 0 }
     }
 
+    /// Attempt to increment fragment index, returning error if limit is exceeded
+    pub(crate) fn try_increment(&mut self) -> Result<(), FragmentationError> {
+        self.inner += 1;
+        if self.inner >= FRAGMENT_INDEX_LIMIT {
+            let estimated_mb = (FRAGMENT_INDEX_LIMIT as usize * ESTIMATED_BYTES_PER_FRAGMENT) / (1024 * 1024);
+            return Err(FragmentationError::FragmentLimitExceeded {
+                limit: FRAGMENT_INDEX_LIMIT,
+                estimated_mb,
+            });
+        }
+        Ok(())
+    }
+
+    /// Increment fragment index, panicking if limit is exceeded
+    /// For backward compatibility with existing code
     pub(crate) fn increment(&mut self) {
         self.inner += 1;
         if self.inner >= FRAGMENT_INDEX_LIMIT {

@@ -19,6 +19,9 @@ use crate::{
     EntityEventMessage, ReliableSettings, Request, RequestOrResponse,
 };
 
+pub mod error;
+pub use error::ProtocolError;
+
 // Protocol Plugin
 pub trait ProtocolPlugin {
     fn build(&self, protocol: &mut Protocol);
@@ -149,11 +152,104 @@ impl Protocol {
         self
     }
 
+    // Non-panicking builder methods
+
+    pub fn try_add_plugin<P: ProtocolPlugin>(&mut self, plugin: P) -> Result<&mut Self, ProtocolError> {
+        self.try_check_lock()?;
+        plugin.build(self);
+        Ok(self)
+    }
+
+    pub fn try_link_condition(&mut self, config: LinkConditionerConfig) -> Result<&mut Self, ProtocolError> {
+        self.try_check_lock()?;
+        self.socket.link_condition = Some(config);
+        Ok(self)
+    }
+
+    pub fn try_rtc_endpoint(&mut self, path: String) -> Result<&mut Self, ProtocolError> {
+        self.try_check_lock()?;
+        self.socket.rtc_endpoint_path = path;
+        Ok(self)
+    }
+
+    pub fn try_tick_interval(&mut self, duration: Duration) -> Result<&mut Self, ProtocolError> {
+        self.try_check_lock()?;
+        self.tick_interval = duration;
+        Ok(self)
+    }
+
+    pub fn try_compression(&mut self, config: CompressionConfig) -> Result<&mut Self, ProtocolError> {
+        self.try_check_lock()?;
+        self.compression = Some(config);
+        Ok(self)
+    }
+
+    pub fn try_enable_client_authoritative_entities(&mut self) -> Result<&mut Self, ProtocolError> {
+        self.try_check_lock()?;
+        self.client_authoritative_entities = true;
+        Ok(self)
+    }
+
+    pub fn try_add_default_channels(&mut self) -> Result<&mut Self, ProtocolError> {
+        self.try_check_lock()?;
+        let plugin = DefaultChannelsPlugin;
+        plugin.build(self);
+        Ok(self)
+    }
+
+    pub fn try_add_channel<C: Channel>(
+        &mut self,
+        direction: ChannelDirection,
+        mode: ChannelMode,
+    ) -> Result<&mut Self, ProtocolError> {
+        self.try_check_lock()?;
+        self.channel_kinds
+            .add_channel::<C>(ChannelSettings::new(mode, direction));
+        Ok(self)
+    }
+
+    pub fn try_add_message<M: Message>(&mut self) -> Result<&mut Self, ProtocolError> {
+        self.try_check_lock()?;
+        self.message_kinds.add_message::<M>();
+        Ok(self)
+    }
+
+    pub fn try_add_request<Q: Request>(&mut self) -> Result<&mut Self, ProtocolError> {
+        self.try_check_lock()?;
+        self.message_kinds.add_message::<Q>();
+        self.message_kinds.add_message::<Q::Response>();
+        Ok(self)
+    }
+
+    pub fn try_add_component<C: Replicate>(&mut self) -> Result<&mut Self, ProtocolError> {
+        self.try_check_lock()?;
+        self.component_kinds.add_component::<C>();
+        Ok(self)
+    }
+
+    pub fn try_lock(&mut self) -> Result<(), ProtocolError> {
+        self.try_check_lock()?;
+        self.locked = true;
+        Ok(())
+    }
+
     pub fn lock(&mut self) {
         self.check_lock();
         self.locked = true;
     }
 
+    /// Checks if protocol is locked without panicking
+    /// Returns Err if protocol is locked
+    pub fn try_check_lock(&self) -> Result<(), ProtocolError> {
+        if self.locked {
+            Err(ProtocolError::AlreadyLocked)
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Checks if protocol is locked, panics if it is
+    /// For backward compatibility with existing code
     pub fn check_lock(&self) {
         if self.locked {
             panic!("Protocol already locked!");

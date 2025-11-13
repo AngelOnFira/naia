@@ -8,6 +8,7 @@ cfg_if! {
         use zstd::{bulk::Compressor, dict::from_continuous};
 
         use super::compression_config::CompressionMode;
+        use super::error::EncoderError;
 
         pub struct Encoder {
             result: Vec<u8>,
@@ -15,39 +16,63 @@ cfg_if! {
         }
 
         impl Encoder {
-            pub fn new(compression_mode: CompressionMode) -> Self {
+            /// Try to create a new Encoder with the specified compression mode
+            pub fn try_new(compression_mode: CompressionMode) -> Result<Self, EncoderError> {
                 let encoder = match compression_mode {
                     CompressionMode::Training(sample_size) => {
                         EncoderType::DictionaryTrainer(DictionaryTrainer::new(sample_size))
                     }
                     CompressionMode::Default(compression_level) => EncoderType::Compressor(
-                        Compressor::new(compression_level).expect("error creating Compressor"),
+                        Compressor::new(compression_level).map_err(|_| EncoderError::CompressorCreationFailed {
+                            level: compression_level,
+                        })?,
                     ),
                     CompressionMode::Dictionary(compression_level, dictionary) => EncoderType::Compressor(
                         Compressor::with_dictionary(compression_level, &dictionary)
-                            .expect("error creating Compressor with dictionary"),
+                            .map_err(|_| EncoderError::CompressorWithDictionaryFailed {
+                                level: compression_level,
+                            })?,
                     ),
                 };
 
-                Self {
+                Ok(Self {
                     result: Vec::new(),
                     encoder,
-                }
+                })
             }
 
-            pub fn encode(&mut self, payload: &[u8]) -> &[u8] {
+            /// Create a new Encoder with the specified compression mode
+            ///
+            /// # Panics
+            /// Panics if the compressor cannot be created with the given configuration
+            pub fn new(compression_mode: CompressionMode) -> Self {
+                Self::try_new(compression_mode).expect("Failed to create Encoder")
+            }
+
+            /// Try to encode a payload, returning error on compression failure
+            pub fn try_encode(&mut self, payload: &[u8]) -> Result<&[u8], EncoderError> {
                 // TODO: only use compressed packet if the resulting size would be less!
                 match &mut self.encoder {
                     EncoderType::DictionaryTrainer(trainer) => {
                         trainer.record_bytes(payload);
                         self.result = payload.to_vec();
-                        return &self.result;
+                        Ok(&self.result)
                     }
                     EncoderType::Compressor(encoder) => {
-                        self.result = encoder.compress(payload).expect("encode error");
-                        return &self.result;
+                        self.result = encoder.compress(payload).map_err(|_| EncoderError::CompressionFailed {
+                            payload_size: payload.len(),
+                        })?;
+                        Ok(&self.result)
                     }
                 }
+            }
+
+            /// Encode a payload
+            ///
+            /// # Panics
+            /// Panics if compression fails
+            pub fn encode(&mut self, payload: &[u8]) -> &[u8] {
+                self.try_encode(payload).expect("Failed to encode payload")
             }
         }
 
@@ -78,9 +103,10 @@ cfg_if! {
                 }
             }
 
-            pub fn record_bytes(&mut self, bytes: &[u8]) {
+            /// Try to record bytes for dictionary training, returning error on failure
+            pub fn try_record_bytes(&mut self, bytes: &[u8]) -> Result<(), EncoderError> {
                 if self.training_complete {
-                    return;
+                    return Ok(());
                 }
 
                 self.sample_data.extend_from_slice(bytes);
@@ -109,16 +135,31 @@ cfg_if! {
                     let target_dict_size = self.sample_data.len() / 100;
                     let dictionary =
                         from_continuous(&self.sample_data, &self.sample_sizes, target_dict_size)
-                            .expect("Error while training dictionary");
+                            .map_err(|_| EncoderError::DictionaryTrainingFailed {
+                                sample_count: self.sample_sizes.len(),
+                                total_bytes: self.sample_data.len(),
+                            })?;
 
                     // Now need to ... write it to a file I guess
-                    fs::write("dictionary.txt", dictionary)
-                        .expect("Error while writing dictionary to file");
+                    fs::write("dictionary.txt", &dictionary)
+                        .map_err(|_| EncoderError::DictionaryWriteFailed {
+                            path: "dictionary.txt",
+                        })?;
 
                     info!("Dictionary written to `dictionary.txt`!");
 
                     self.training_complete = true;
                 }
+
+                Ok(())
+            }
+
+            /// Record bytes for dictionary training
+            ///
+            /// # Panics
+            /// Panics if dictionary training or writing fails
+            pub fn record_bytes(&mut self, bytes: &[u8]) {
+                self.try_record_bytes(bytes).expect("Failed to record bytes for dictionary training")
             }
         }
     }

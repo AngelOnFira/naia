@@ -61,8 +61,16 @@ impl PingStore {
             }
 
             if found {
-                let (_, ping_instant) = self.buffer.remove(vec_index).unwrap();
-                return Some(ping_instant);
+                // SAFETY: We've verified that vec_index contains the matching ping_index,
+                // so remove() will always return Some. Using unwrap here is safe, but we
+                // use a defensive approach with if-let to maintain consistency with
+                // panic-free code patterns.
+                if let Some((_, ping_instant)) = self.buffer.remove(vec_index) {
+                    return Some(ping_instant);
+                } else {
+                    // This should never happen, but return None defensively
+                    return None;
+                }
             }
 
             // made it to the front

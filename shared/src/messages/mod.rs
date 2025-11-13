@@ -1,4 +1,5 @@
 pub mod channels;
+pub mod error;
 pub mod fragment;
 pub mod message;
 pub mod message_container;

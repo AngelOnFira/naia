@@ -7,6 +7,7 @@ use crate::{
         channels::{
             receivers::{
                 channel_receiver::{ChannelReceiver, MessageChannelReceiver},
+                error::ReceiverError,
                 fragment_receiver::FragmentReceiver,
                 indexed_message_reader::IndexedMessageReader,
                 reliable_receiver::ReliableReceiver,
@@ -115,27 +116,30 @@ impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
         }
     }
 
-    fn receive_message(
+    /// Attempt to receive and process a message (request, response, or regular message)
+    ///
+    /// Returns Ok(()) on success, or Err if the message cannot be processed
+    fn try_receive_message(
         &mut self,
         message_kinds: &MessageKinds,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
         message_container: MessageContainer,
-    ) {
+    ) -> Result<(), ReceiverError> {
         // look at message, see if it's a request or response
         if message_container.is_request_or_response() {
             // it is! cast it
             let request_or_response_container = message_container
                 .to_boxed_any()
                 .downcast::<RequestOrResponse>()
-                .unwrap();
+                .map_err(|_| ReceiverError::MessageDowncastFailed {
+                    expected_type: "RequestOrResponse",
+                })?;
             let (local_id, request_bytes) = request_or_response_container.to_id_and_bytes();
             let mut reader = BitReader::new(&request_bytes);
-            let request_or_response_result = message_kinds.read(&mut reader, converter);
-            if request_or_response_result.is_err() {
-                // TODO: bubble up error instead of panicking here
-                panic!("Cannot read request or response message!");
-            }
-            let request_or_response = request_or_response_result.unwrap();
+            let request_or_response = message_kinds.read(&mut reader, converter)
+                .map_err(|_| ReceiverError::RequestOrResponseReadFailed {
+                    reason: "deserialization failed",
+                })?;
 
             // add it to incoming requests or responses
             match local_id {
@@ -154,6 +158,17 @@ impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
             // it's not a request, just add it to incoming messages
             self.incoming_messages.push(message_container);
         }
+        Ok(())
+    }
+
+    fn receive_message(
+        &mut self,
+        message_kinds: &MessageKinds,
+        converter: &dyn LocalEntityAndGlobalEntityConverter,
+        message_container: MessageContainer,
+    ) {
+        self.try_receive_message(message_kinds, converter, message_container)
+            .unwrap_or_else(|e| panic!("ReliableMessageReceiver error: {}", e))
     }
 }
 

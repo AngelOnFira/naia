@@ -3,6 +3,7 @@ use std::{any::Any, collections::HashSet};
 use naia_serde::BitWrite;
 
 use crate::{
+    messages::error::MessageContainerError,
     world::entity::{
         entity_converters::LocalEntityAndGlobalEntityConverterMut, local_entity::RemoteEntity,
     },
@@ -38,8 +39,13 @@ impl MessageContainer {
         self.inner.name()
     }
 
+    pub fn try_bit_length(&self) -> Result<u32, MessageContainerError> {
+        self.bit_length
+            .ok_or(MessageContainerError::BitLengthNotAvailable)
+    }
+
     pub fn bit_length(&self) -> u32 {
-        self.bit_length.expect("bit_length should never be called on a MessageContainer that was created from a read operation")
+        self.try_bit_length().expect("bit_length should never be called on a MessageContainer that was created from a read operation")
     }
 
     pub fn write(

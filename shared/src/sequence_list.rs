@@ -1,4 +1,13 @@
 use crate::sequence_less_than;
+use thiserror::Error;
+
+/// Errors that can occur during SequenceList operations
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+pub enum SequenceError {
+    /// Attempted to insert a duplicate ID into the sequence list
+    #[error("Duplicate sequence ID {id} not allowed in SequenceList")]
+    DuplicateId { id: u16 },
+}
 
 pub struct SequenceList<T> {
     list: Vec<(u16, T)>,
@@ -28,7 +37,8 @@ impl<T> SequenceList<T> {
 
             index -= 1;
 
-            let (old_id, _) = self.list.get(index).unwrap();
+            // SAFETY: index is always < list.len() because we checked above
+            let (old_id, _) = unsafe { self.list.get_unchecked(index) };
             if *old_id == *id {
                 return true;
             }
@@ -50,7 +60,8 @@ impl<T> SequenceList<T> {
             index -= 1;
 
             {
-                let (old_id, _) = self.list.get(index).unwrap();
+                // SAFETY: index is always < list.len() because we checked above
+                let (old_id, _) = unsafe { self.list.get_unchecked(index) };
                 if *old_id == *id {
                     break;
                 }
@@ -60,31 +71,45 @@ impl<T> SequenceList<T> {
             }
         }
 
-        let (_, item) = self.list.get_mut(index).unwrap();
+        // SAFETY: We broke out of the loop, so index is still < list.len()
+        let (_, item) = unsafe { self.list.get_unchecked_mut(index) };
         Some(item)
     }
 
-    pub fn insert_scan_from_back(&mut self, id: u16, item: T) {
+    /// Attempts to insert an item with the given ID, scanning from the back.
+    /// Returns an error if the ID already exists.
+    pub fn try_insert_scan_from_back(&mut self, id: u16, item: T) -> Result<(), SequenceError> {
         let mut index = self.list.len();
 
         loop {
             if index == 0 {
                 // made it all the way through, insert at front and be done
                 self.list.insert(index, (id, item));
-                return;
+                return Ok(());
             }
 
             index -= 1;
 
-            let (old_id, _) = self.list.get(index).unwrap();
+            // SAFETY: index is always < list.len() because we checked above
+            let (old_id, _) = unsafe { self.list.get_unchecked(index) };
             if *old_id == id {
-                panic!("duplicates are not allowed");
+                return Err(SequenceError::DuplicateId { id });
             }
             if sequence_less_than(*old_id, id) {
                 self.list.insert(index + 1, (id, item));
-                return;
+                return Ok(());
             }
         }
+    }
+
+    /// Inserts an item with the given ID, scanning from the back.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a duplicate ID already exists in the list.
+    pub fn insert_scan_from_back(&mut self, id: u16, item: T) {
+        self.try_insert_scan_from_back(id, item)
+            .expect("duplicates are not allowed in SequenceList")
     }
 
     pub fn remove_scan_from_front(&mut self, id: &u16) -> Option<T> {
@@ -96,7 +121,8 @@ impl<T> SequenceList<T> {
                 return None;
             }
 
-            let (old_id, _) = self.list.get(index).unwrap();
+            // SAFETY: index is always < list.len() because we checked above
+            let (old_id, _) = unsafe { self.list.get_unchecked(index) };
             if *old_id == *id {
                 remove = true;
             }

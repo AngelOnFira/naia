@@ -1,6 +1,6 @@
 use naia_serde::{BitReader, BitWrite, ConstBitLength, Serde, SerdeErr, UnsignedVariableInteger};
 
-use crate::{EntityDoesNotExistError, GlobalEntity, LocalEntityAndGlobalEntityConverter};
+use crate::{EntityDoesNotExistError, EntityError, GlobalEntity, LocalEntityAndGlobalEntityConverter};
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum OwnedLocalEntity {
@@ -55,11 +55,28 @@ impl OwnedLocalEntity {
         }
     }
 
+    /// Extracts the RemoteEntity value from this OwnedLocalEntity.
+    ///
+    /// Returns an error if this is a HostEntity instead of a RemoteEntity.
+    pub(crate) fn try_take_remote(&self) -> Result<RemoteEntity, EntityError> {
+        match self {
+            OwnedLocalEntity::Remote(remote_entity) => Ok(RemoteEntity::new(*remote_entity)),
+            OwnedLocalEntity::Host(_) => Err(EntityError::InvalidEntityType {
+                expected: "RemoteEntity",
+                actual: "HostEntity",
+            }),
+        }
+    }
+
+    /// Extracts the RemoteEntity value from this OwnedLocalEntity.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this OwnedLocalEntity is a HostEntity instead of a RemoteEntity.
+    /// For non-panicking version, use `try_take_remote()`.
     pub(crate) fn take_remote(&self) -> RemoteEntity {
-        let OwnedLocalEntity::Remote(remote_entity) = self else {
-            panic!("Expected RemoteEntity")
-        };
-        RemoteEntity::new(*remote_entity)
+        self.try_take_remote()
+            .expect("Expected RemoteEntity, got HostEntity")
     }
 
     pub(crate) fn to_reversed(&self) -> OwnedLocalEntity {

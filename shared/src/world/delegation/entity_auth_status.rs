@@ -59,11 +59,12 @@ impl HostEntityAuthStatus {
             (HostType::Client, EntityAuthStatus::Granted) => false,
             (HostType::Client, EntityAuthStatus::Releasing) => false,
             (HostType::Client, EntityAuthStatus::Denied) => false,
-            (HostType::Server, EntityAuthStatus::Available) => todo!(),
-            (HostType::Server, EntityAuthStatus::Requested) => todo!(),
-            (HostType::Server, EntityAuthStatus::Granted) => todo!(),
-            (HostType::Server, EntityAuthStatus::Releasing) => todo!(),
-            (HostType::Server, EntityAuthStatus::Denied) => todo!(),
+            // Server doesn't need to request authority - it has implicit authority
+            (HostType::Server, EntityAuthStatus::Available) => false,
+            (HostType::Server, EntityAuthStatus::Requested) => false,
+            (HostType::Server, EntityAuthStatus::Granted) => false,
+            (HostType::Server, EntityAuthStatus::Releasing) => false,
+            (HostType::Server, EntityAuthStatus::Denied) => false,
         }
     }
 
@@ -74,11 +75,12 @@ impl HostEntityAuthStatus {
             (HostType::Client, EntityAuthStatus::Granted) => true,
             (HostType::Client, EntityAuthStatus::Releasing) => false,
             (HostType::Client, EntityAuthStatus::Denied) => false,
-            (HostType::Server, EntityAuthStatus::Available) => todo!(),
-            (HostType::Server, EntityAuthStatus::Requested) => todo!(),
-            (HostType::Server, EntityAuthStatus::Granted) => todo!(),
-            (HostType::Server, EntityAuthStatus::Releasing) => todo!(),
-            (HostType::Server, EntityAuthStatus::Denied) => todo!(),
+            // Server doesn't release authority - it always has it
+            (HostType::Server, EntityAuthStatus::Available) => false,
+            (HostType::Server, EntityAuthStatus::Requested) => false,
+            (HostType::Server, EntityAuthStatus::Granted) => false,
+            (HostType::Server, EntityAuthStatus::Releasing) => false,
+            (HostType::Server, EntityAuthStatus::Denied) => false,
         }
     }
 

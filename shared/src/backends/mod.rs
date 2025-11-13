@@ -10,7 +10,7 @@ cfg_if! {
         pub use self::miniquad::timestamp::Timestamp;
     }
     else if #[cfg(not(target_arch = "wasm32"))] {
-        mod native;
+        pub mod native;
         pub use native::timer::Timer;
         pub use native::timestamp::Timestamp;
     }

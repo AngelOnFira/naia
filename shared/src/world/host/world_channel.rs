@@ -7,7 +7,7 @@ use std::{
 use log::{info, warn};
 
 use super::{
-    entity_action_event::EntityActionEvent, host_world_manager::ActionId,
+    entity_action_event::EntityActionEvent, error::WorldChannelError, host_world_manager::ActionId,
     user_diff_handler::UserDiffHandler,
 };
 use crate::{
@@ -118,6 +118,38 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         }
     }
 
+    pub fn try_host_spawn_entity(
+        &mut self,
+        world_manager: &mut LocalWorldManager<E>,
+        entity: &E,
+        component_kinds: &Vec<ComponentKind>,
+    ) -> Result<(), WorldChannelError>
+    where
+        E: std::fmt::Debug,
+    {
+        if self.host_world.contains_key(entity) {
+            return Err(WorldChannelError::EntityAlreadySpawned {
+                entity_id: format!("{:?}", entity),
+            });
+        }
+
+        self.host_world.insert(*entity, CheckedSet::new());
+
+        if self.entity_channels.get(entity).is_none() {
+            // spawn entity
+            self.entity_channels
+                .insert(*entity, EntityChannel::new_spawning());
+            self.outgoing_actions
+                .send_message(EntityActionEvent::SpawnEntity(
+                    *entity,
+                    component_kinds.clone(),
+                ));
+            self.on_entity_channel_opening(world_manager, entity);
+        }
+
+        Ok(())
+    }
+
     pub fn host_despawn_entity(&mut self, entity: &E) {
         if !self.host_world.contains_key(entity) {
             panic!("World Channel: cannot despawn entity that doesn't exist");
@@ -149,6 +181,49 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         }
     }
 
+    pub fn try_host_despawn_entity(&mut self, entity: &E) -> Result<(), WorldChannelError>
+    where
+        E: std::fmt::Debug,
+    {
+        if !self.host_world.contains_key(entity) {
+            return Err(WorldChannelError::EntityNotFound {
+                entity_id: format!("{:?}", entity),
+            });
+        }
+
+        let Some(entity_channel) = self.entity_channels.get_mut(entity) else {
+            return Err(WorldChannelError::EntityHasNoChannel {
+                entity_id: format!("{:?}", entity),
+            });
+        };
+
+        if entity_channel.is_spawning() {
+            entity_channel.queue_despawn_after_spawned();
+            return Ok(());
+        }
+
+        if entity_channel.is_despawning() {
+            return Err(WorldChannelError::EntityAlreadyDespawned {
+                entity_id: format!("{:?}", entity),
+            });
+        }
+
+        self.host_world.remove(entity);
+
+        let removing_components = entity_channel.inserted_components();
+
+        entity_channel.despawn();
+
+        self.outgoing_actions
+            .send_message(EntityActionEvent::DespawnEntity(*entity));
+
+        for component_kind in removing_components {
+            self.on_component_channel_closing(entity, &component_kind);
+        }
+
+        Ok(())
+    }
+
     pub fn client_initiated_despawn(&mut self, entity: &E) {
         if !self.host_world.contains_key(entity) {
             panic!("World Channel: cannot despawn entity that doesn't exist");
@@ -176,11 +251,53 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         self.entity_channels.remove(entity);
     }
 
+    pub fn try_client_initiated_despawn(&mut self, entity: &E) -> Result<(), WorldChannelError>
+    where
+        E: std::fmt::Debug,
+    {
+        if !self.host_world.contains_key(entity) {
+            return Err(WorldChannelError::EntityNotFound {
+                entity_id: format!("{:?}", entity),
+            });
+        }
+
+        self.host_world.remove(entity);
+
+        let Some(entity_channel) = self.entity_channels.get(entity) else {
+            return Err(WorldChannelError::EntityNotSpawned {
+                entity_id: format!("{:?}", entity),
+                operation: "despawn",
+            });
+        };
+
+        if !entity_channel.is_spawned() {
+            return Err(WorldChannelError::EntityNotSpawned {
+                entity_id: format!("{:?}", entity),
+                operation: "despawn",
+            });
+        }
+
+        let mut removed_components = Vec::new();
+
+        for component_kind in entity_channel.inserted_components() {
+            removed_components.push(component_kind);
+        }
+
+        for component_kind in removed_components {
+            self.on_component_channel_closing(entity, &component_kind);
+        }
+
+        self.entity_channels.remove(entity);
+
+        Ok(())
+    }
+
     pub fn host_insert_component(&mut self, entity: &E, component_kind: &ComponentKind) {
         if !self.host_world.contains_key(entity) {
             panic!("World Channel: cannot insert component into entity that doesn't exist");
         }
 
+        // SAFETY: We just checked that entity exists in host_world
         let components = self.host_world.get_mut(entity).unwrap();
         if components.contains(component_kind) {
             warn!("World Channel: cannot insert component into entity that already has it.. this shouldn't happen?");
@@ -197,6 +314,41 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
                     .send_message(EntityActionEvent::InsertComponent(*entity, *component_kind));
             }
         }
+    }
+
+    pub fn try_host_insert_component(
+        &mut self,
+        entity: &E,
+        component_kind: &ComponentKind,
+    ) -> Result<(), WorldChannelError>
+    where
+        E: std::fmt::Debug,
+    {
+        if !self.host_world.contains_key(entity) {
+            return Err(WorldChannelError::EntityNotFound {
+                entity_id: format!("{:?}", entity),
+            });
+        }
+
+        // SAFETY: We just checked that entity exists in host_world
+        let components = self.host_world.get_mut(entity).unwrap();
+        if components.contains(component_kind) {
+            warn!("World Channel: cannot insert component into entity that already has it.. this shouldn't happen?");
+            return Ok(());
+        }
+
+        components.insert(*component_kind);
+
+        if let Some(entity_channel) = self.entity_channels.get_mut(entity) {
+            if entity_channel.is_spawned() && !entity_channel.has_component(component_kind) {
+                // insert component
+                entity_channel.insert_component(component_kind, false);
+                self.outgoing_actions
+                    .send_message(EntityActionEvent::InsertComponent(*entity, *component_kind));
+            }
+        }
+
+        Ok(())
     }
 
     pub fn host_remove_component(&mut self, world_entity: &E, component_kind: &ComponentKind) {
@@ -221,6 +373,45 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
                 }
             }
         }
+    }
+
+    pub fn try_host_remove_component(
+        &mut self,
+        world_entity: &E,
+        component_kind: &ComponentKind,
+    ) -> Result<(), WorldChannelError>
+    where
+        E: std::fmt::Debug,
+    {
+        let Some(components) = self.host_world.get_mut(world_entity) else {
+            return Err(WorldChannelError::EntityNotFound {
+                entity_id: format!("{:?}", world_entity),
+            });
+        };
+
+        if !components.contains(component_kind) {
+            return Err(WorldChannelError::ComponentNotFound {
+                entity_id: format!("{:?}", world_entity),
+                component_kind: format!("{:?}", component_kind),
+            });
+        }
+
+        components.remove(component_kind);
+
+        if let Some(entity_channel) = self.entity_channels.get_mut(world_entity) {
+            if entity_channel.is_spawned() {
+                if entity_channel.remove_component(component_kind) {
+                    self.outgoing_actions
+                        .send_message(EntityActionEvent::RemoveComponent(
+                            *world_entity,
+                            *component_kind,
+                        ));
+                    self.on_component_channel_closing(world_entity, component_kind);
+                }
+            }
+        }
+
+        Ok(())
     }
 
     // Track Remote Entities
@@ -250,6 +441,36 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         new_host_entity
     }
 
+    pub fn try_track_remote_entity(
+        &mut self,
+        local_world_manager: &mut LocalWorldManager<E>,
+        entity: &E,
+        component_kinds: &Vec<ComponentKind>,
+    ) -> Result<HostEntity, WorldChannelError>
+    where
+        E: std::fmt::Debug,
+    {
+        if self.host_world.contains_key(entity) {
+            return Err(WorldChannelError::RemoteEntityAlreadyTracked {
+                entity_id: format!("{:?}", entity),
+            });
+        }
+
+        self.host_world.insert(*entity, CheckedSet::new());
+        self.remote_world.insert(*entity, CheckedSet::new());
+
+        // spawn entity
+        self.entity_channels
+            .insert(*entity, EntityChannel::new_spawned());
+
+        let new_host_entity = self.on_entity_channel_opening(local_world_manager, entity);
+
+        self.delivered_actions
+            .track_hosts_redundant_remote_entity(entity, component_kinds);
+
+        Ok(new_host_entity)
+    }
+
     pub fn untrack_remote_entity(
         &mut self,
         local_world_manager: &mut LocalWorldManager<E>,
@@ -260,11 +481,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
             panic!("World Channel: cannot untrack remote entity that doesn't exist");
         }
 
+        // SAFETY: We just checked that entity exists in host_world
         let components = self.host_world.remove(entity).unwrap();
         for component_kind in components.iter() {
             self.on_component_channel_closing(entity, component_kind);
         }
         self.remote_world.remove(entity);
+        // SAFETY: Entity was tracked so it must have a channel
         self.entity_channels.remove(entity).unwrap();
 
         local_world_manager.remove_redundant_host_entity(entity);
@@ -273,12 +496,44 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
             .untrack_hosts_redundant_remote_entity(entity);
     }
 
+    pub fn try_untrack_remote_entity(
+        &mut self,
+        local_world_manager: &mut LocalWorldManager<E>,
+        entity: &E,
+    ) -> Result<(), WorldChannelError>
+    where
+        E: std::fmt::Debug,
+    {
+        if !self.host_world.contains_key(entity) {
+            return Err(WorldChannelError::RemoteEntityNotTracked {
+                entity_id: format!("{:?}", entity),
+            });
+        }
+
+        // SAFETY: We just checked that entity exists in host_world
+        let components = self.host_world.remove(entity).unwrap();
+        for component_kind in components.iter() {
+            self.on_component_channel_closing(entity, component_kind);
+        }
+        self.remote_world.remove(entity);
+        // SAFETY: Entity was tracked so it must have a channel
+        self.entity_channels.remove(entity).unwrap();
+
+        local_world_manager.remove_redundant_host_entity(entity);
+
+        self.delivered_actions
+            .untrack_hosts_redundant_remote_entity(entity);
+
+        Ok(())
+    }
+
     pub fn track_remote_component(&mut self, entity: &E, component_kind: &ComponentKind) {
         if !self.host_world.contains_key(entity) {
             panic!("World Channel: cannot insert component into entity that doesn't exist");
         }
 
         {
+            // SAFETY: We just checked that entity exists in host_world
             let components = self.remote_world.get_mut(entity).unwrap();
             if components.contains(component_kind) {
                 warn!("World Channel: cannot insert component into entity that already has it.. this shouldn't happen?");
@@ -289,6 +544,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         }
 
         {
+            // SAFETY: We just checked that entity exists in host_world
             let components = self.host_world.get_mut(entity).unwrap();
             if components.contains(component_kind) {
                 warn!("World Channel: cannot insert component into entity that already has it.. this shouldn't happen?");
@@ -308,6 +564,60 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
 
             // info!("     --- Remote Delegated Entity now is Tracking Component");
         }
+    }
+
+    pub fn try_track_remote_component(
+        &mut self,
+        entity: &E,
+        component_kind: &ComponentKind,
+    ) -> Result<(), WorldChannelError>
+    where
+        E: std::fmt::Debug,
+    {
+        if !self.host_world.contains_key(entity) {
+            return Err(WorldChannelError::EntityNotFound {
+                entity_id: format!("{:?}", entity),
+            });
+        }
+
+        {
+            // SAFETY: We just checked that entity exists in host_world
+            let components = self.remote_world.get_mut(entity).unwrap();
+            if components.contains(component_kind) {
+                warn!("World Channel: cannot insert component into entity that already has it.. this shouldn't happen?");
+                return Ok(());
+            }
+
+            components.insert(*component_kind);
+        }
+
+        {
+            // SAFETY: We just checked that entity exists in host_world
+            let components = self.host_world.get_mut(entity).unwrap();
+            if components.contains(component_kind) {
+                warn!("World Channel: cannot insert component into entity that already has it.. this shouldn't happen?");
+                return Ok(());
+            }
+
+            components.insert(*component_kind);
+
+            let Some(entity_channel) = self.entity_channels.get_mut(entity) else {
+                return Err(WorldChannelError::MustSpawnBeforeTracking {
+                    entity_id: format!("{:?}", entity),
+                });
+            };
+
+            if !entity_channel.is_spawned() {
+                return Err(WorldChannelError::MustSpawnBeforeTracking {
+                    entity_id: format!("{:?}", entity),
+                });
+            }
+
+            entity_channel.insert_remote_component(component_kind);
+            self.on_component_channel_opened(entity, component_kind);
+        }
+
+        Ok(())
     }
 
     // Remote Actions
@@ -337,6 +647,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
 
         if self.host_world.contains_key(entity) {
             // initialize component channels
+            // SAFETY: We just checked that entity exists in host_world
             let host_components = self.host_world.get(entity).unwrap();
 
             let inserted_and_inserting_components: HashSet<&ComponentKind> = host_components
@@ -380,6 +691,98 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         }
     }
 
+    pub fn try_on_remote_spawn_entity(
+        &mut self,
+        entity: &E,
+        inserted_component_kinds: &HashSet<ComponentKind>,
+    ) -> Result<(), WorldChannelError>
+    where
+        E: std::fmt::Debug,
+    {
+        if self.remote_world.contains_key(entity) {
+            return Err(WorldChannelError::RemoteEntityAlreadyExists {
+                entity_id: format!("{:?}", entity),
+            });
+        }
+
+        let Some(entity_channel) = self.entity_channels.get_mut(entity) else {
+            return Err(WorldChannelError::InvalidChannelState {
+                entity_id: format!("{:?}", entity),
+                operation: "remote spawn",
+                expected_state: "Spawning",
+                actual_state: "no channel",
+            });
+        };
+
+        if !entity_channel.is_spawning() {
+            let actual_state = if entity_channel.is_spawned() {
+                "Spawned"
+            } else {
+                "Despawning"
+            };
+            return Err(WorldChannelError::InvalidChannelState {
+                entity_id: format!("{:?}", entity),
+                operation: "remote spawn",
+                expected_state: "Spawning",
+                actual_state,
+            });
+        }
+
+        let (should_despawn, should_send_release_message) = entity_channel.spawning_complete();
+        if should_send_release_message {
+            self.outgoing_release_auth_messages.push(*entity);
+        }
+
+        self.remote_world.insert(*entity, CheckedSet::new());
+
+        if self.host_world.contains_key(entity) {
+            // initialize component channels
+            // SAFETY: We just checked that entity exists in host_world
+            let host_components = self.host_world.get(entity).unwrap();
+
+            let inserted_and_inserting_components: HashSet<&ComponentKind> = host_components
+                .inner
+                .union(&inserted_component_kinds)
+                .collect();
+
+            for component_kind in inserted_and_inserting_components {
+                // change to inserting status.
+                // for the components that have already been inserted, they will be migrated with
+                // the `on_remote_insert_component()` call below.
+                entity_channel.insert_component(component_kind, true);
+            }
+
+            let send_insert_action_component_kinds: HashSet<&ComponentKind> = host_components
+                .inner
+                .difference(&inserted_component_kinds)
+                .collect();
+
+            for component in send_insert_action_component_kinds {
+                // send insert action
+                self.outgoing_actions
+                    .send_message(EntityActionEvent::InsertComponent(*entity, *component));
+            }
+
+            // receive inserted components
+            for component_kind in inserted_component_kinds {
+                self.on_remote_insert_component(entity, component_kind);
+            }
+
+            if should_despawn {
+                warn!("complete queued despawn");
+                self.host_despawn_entity(entity);
+            }
+        } else {
+            // despawn entity
+            entity_channel.despawn();
+
+            self.outgoing_actions
+                .send_message(EntityActionEvent::DespawnEntity(*entity));
+        }
+
+        Ok(())
+    }
+
     pub fn on_remote_despawn_entity(
         &mut self,
         local_world_manager: &mut LocalWorldManager<E>,
@@ -416,11 +819,70 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         self.remote_world.remove(entity);
     }
 
+    pub fn try_on_remote_despawn_entity(
+        &mut self,
+        local_world_manager: &mut LocalWorldManager<E>,
+        entity: &E,
+    ) -> Result<(), WorldChannelError>
+    where
+        E: std::fmt::Debug,
+    {
+        if !self.remote_world.contains_key(entity) {
+            return Err(WorldChannelError::RemoteEntityNotFoundForDespawn {
+                entity_id: format!("{:?}", entity),
+            });
+        }
+
+        let Some(entity_channel) = self.entity_channels.get(entity) else {
+            return Err(WorldChannelError::InvalidChannelState {
+                entity_id: format!("{:?}", entity),
+                operation: "remote despawn",
+                expected_state: "Despawning",
+                actual_state: "no channel",
+            });
+        };
+
+        if !entity_channel.is_despawning() {
+            let actual_state = if entity_channel.is_spawning() {
+                "Spawning"
+            } else {
+                "Spawned"
+            };
+            return Err(WorldChannelError::InvalidChannelState {
+                entity_id: format!("{:?}", entity),
+                operation: "remote despawn",
+                expected_state: "Despawning",
+                actual_state,
+            });
+        }
+
+        self.entity_channels.remove(entity);
+        self.on_remote_entity_channel_closed(local_world_manager, entity);
+
+        // if entity is spawned in host, respawn entity channel
+        if self.host_world.contains_key(entity) {
+            // spawn entity
+            self.entity_channels
+                .insert(*entity, EntityChannel::new_spawning());
+            self.outgoing_actions
+                .send_message(EntityActionEvent::SpawnEntity(
+                    *entity,
+                    self.host_component_kinds(entity),
+                ));
+            self.on_entity_channel_opening(local_world_manager, entity);
+        }
+
+        self.remote_world.remove(entity);
+
+        Ok(())
+    }
+
     pub fn on_remote_insert_component(&mut self, entity: &E, component_kind: &ComponentKind) {
         if !self.remote_world.contains_key(entity) {
             panic!("World Channel: cannot insert component into non-existent entity");
         }
 
+        // SAFETY: We just checked that entity exists in remote_world
         let components = self.remote_world.get_mut(entity).unwrap();
         if components.contains(component_kind) {
             panic!("World Channel: should not be able to replace component in remote world");
@@ -445,6 +907,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         if !entity_channel.component_is_inserting(component_kind) {
             panic!("World Channel: cannot insert component if component channel has not been initialized");
         }
+        // SAFETY: Entity exists in remote_world (checked at start), and host_world/remote_world are kept in sync
         let host_has_component = self
             .host_world
             .get(entity)
@@ -469,11 +932,99 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         }
     }
 
+    pub fn try_on_remote_insert_component(
+        &mut self,
+        entity: &E,
+        component_kind: &ComponentKind,
+    ) -> Result<(), WorldChannelError>
+    where
+        E: std::fmt::Debug,
+    {
+        if !self.remote_world.contains_key(entity) {
+            return Err(WorldChannelError::RemoteComponentEntityNotFound {
+                entity_id: format!("{:?}", entity),
+                component_kind: format!("{:?}", component_kind),
+                operation: "insert",
+            });
+        }
+
+        // SAFETY: We just checked that entity exists in remote_world
+        let components = self.remote_world.get_mut(entity).unwrap();
+        if components.contains(component_kind) {
+            return Err(WorldChannelError::RemoteComponentAlreadyExists {
+                entity_id: format!("{:?}", entity),
+                component_kind: format!("{:?}", component_kind),
+            });
+        }
+
+        components.insert(*component_kind);
+
+        let Some(entity_channel) = self.entity_channels.get_mut(entity) else {
+            // entity channel may be despawning, which is okay at this point
+            // TODO: enforce this check
+            // info!("World Channel: received insert component message for entity without initialized channel, ignoring");
+            return Ok(());
+        };
+        if entity_channel.is_despawning() {
+            // entity channel may be despawning, which is okay at this point
+            // info!("World Channel: received insert component message for despawning entity, ignoring");
+            return Ok(());
+        }
+
+        if !entity_channel.is_spawned() {
+            let actual_state = if entity_channel.is_spawning() {
+                "Spawning"
+            } else {
+                "Despawning"
+            };
+            return Err(WorldChannelError::InvalidChannelState {
+                entity_id: format!("{:?}", entity),
+                operation: "remote insert component",
+                expected_state: "Spawned",
+                actual_state,
+            });
+        }
+
+        if !entity_channel.component_is_inserting(component_kind) {
+            return Err(WorldChannelError::RemoteComponentChannelNotInitialized {
+                entity_id: format!("{:?}", entity),
+                component_kind: format!("{:?}", component_kind),
+            });
+        }
+
+        // SAFETY: Entity exists in remote_world (checked at start), and host_world/remote_world are kept in sync
+        let host_has_component = self
+            .host_world
+            .get(entity)
+            .unwrap()
+            .contains(component_kind);
+
+        let send_entity_auth_release_message =
+            entity_channel.component_insertion_complete(component_kind);
+        if send_entity_auth_release_message {
+            self.outgoing_release_auth_messages.push(*entity);
+        }
+
+        if host_has_component {
+            // if component exist in host, finalize channel state
+            self.on_component_channel_opened(entity, component_kind);
+        } else {
+            // if component doesn't exist in host, start removal
+            entity_channel.remove_component(component_kind);
+            self.outgoing_actions
+                .send_message(EntityActionEvent::RemoveComponent(*entity, *component_kind));
+            self.on_component_channel_closing(entity, component_kind);
+        }
+
+        Ok(())
+    }
+
     pub fn on_remote_remove_component(&mut self, entity: &E, component_kind: &ComponentKind) {
         if !self.remote_world.contains_key(entity) {
             panic!("World Channel: cannot remove component from non-existent entity");
         }
 
+        // SAFETY: We just checked that entity exists in remote_world
         let components = self.remote_world.get_mut(entity).unwrap();
         if !components.contains(component_kind) {
             panic!("World Channel: should not be able to remove non-existent component in remote world");
@@ -495,6 +1046,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
             }
 
             // if component exists in host, start insertion
+            // SAFETY: Entity exists in remote_world (checked at start), and host_world/remote_world are kept in sync
             let host_has_component = self
                 .host_world
                 .get(entity)
@@ -512,6 +1064,82 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         }
 
         components.remove(component_kind);
+    }
+
+    pub fn try_on_remote_remove_component(
+        &mut self,
+        entity: &E,
+        component_kind: &ComponentKind,
+    ) -> Result<(), WorldChannelError>
+    where
+        E: std::fmt::Debug,
+    {
+        if !self.remote_world.contains_key(entity) {
+            return Err(WorldChannelError::RemoteComponentEntityNotFound {
+                entity_id: format!("{:?}", entity),
+                component_kind: format!("{:?}", component_kind),
+                operation: "remove",
+            });
+        }
+
+        // SAFETY: We just checked that entity exists in remote_world
+        let components = self.remote_world.get_mut(entity).unwrap();
+        if !components.contains(component_kind) {
+            return Err(WorldChannelError::RemoteComponentNotFound {
+                entity_id: format!("{:?}", entity),
+                component_kind: format!("{:?}", component_kind),
+            });
+        }
+
+        if let Some(entity_channel) = self.entity_channels.get_mut(entity) {
+            if !entity_channel.is_spawned() {
+                let actual_state = if entity_channel.is_spawning() {
+                    "Spawning"
+                } else {
+                    "Despawning"
+                };
+                return Err(WorldChannelError::InvalidChannelState {
+                    entity_id: format!("{:?}", entity),
+                    operation: "remote remove component",
+                    expected_state: "Spawned",
+                    actual_state,
+                });
+            }
+
+            if !entity_channel.component_is_removing(component_kind) {
+                return Err(WorldChannelError::RemoteComponentNotRemoving {
+                    entity_id: format!("{:?}", entity),
+                    component_kind: format!("{:?}", component_kind),
+                });
+            }
+
+            let send_auth_release_message =
+                entity_channel.component_removal_complete(component_kind);
+            if send_auth_release_message {
+                self.outgoing_release_auth_messages.push(*entity);
+            }
+
+            // if component exists in host, start insertion
+            // SAFETY: Entity exists in remote_world (checked at start), and host_world/remote_world are kept in sync
+            let host_has_component = self
+                .host_world
+                .get(entity)
+                .unwrap()
+                .contains(component_kind);
+            if host_has_component {
+                // insert component
+                entity_channel.insert_component(component_kind, false);
+                self.outgoing_actions
+                    .send_message(EntityActionEvent::InsertComponent(*entity, *component_kind));
+            }
+        } else {
+            // entity channel may be despawning, which is okay at this point
+            // TODO: enforce this check
+        }
+
+        components.remove(component_kind);
+
+        Ok(())
     }
 
     // State Transition events
@@ -624,6 +1252,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
                         if !output.contains_key(entity) {
                             output.insert(*entity, HashSet::new());
                         }
+                        // SAFETY: We just inserted entity into output above
                         let send_component_set = output.get_mut(entity).unwrap();
                         send_component_set.insert(component_kind);
                     }
@@ -673,12 +1302,40 @@ impl<K: Eq + Hash, V> CheckedMap<K, V> {
         self.inner.insert(key, value);
     }
 
+    pub fn try_insert(&mut self, key: K, value: V) -> Result<(), WorldChannelError>
+    where
+        K: std::fmt::Debug,
+    {
+        if self.inner.contains_key(&key) {
+            return Err(WorldChannelError::DuplicateMapKey {
+                key: format!("{:?}", key),
+            });
+        }
+
+        self.inner.insert(key, value);
+        Ok(())
+    }
+
     pub fn remove(&mut self, key: &K) -> Option<V> {
         if !self.inner.contains_key(key) {
             panic!("Cannot remove value for key with non-existent value. Check whether map contains key first.")
         }
 
         self.inner.remove(key)
+    }
+
+    pub fn try_remove(&mut self, key: &K) -> Result<V, WorldChannelError>
+    where
+        K: std::fmt::Debug,
+    {
+        if !self.inner.contains_key(key) {
+            return Err(WorldChannelError::MapKeyNotFound {
+                key: format!("{:?}", key),
+            });
+        }
+
+        // SAFETY: We just checked that the key exists
+        Ok(self.inner.remove(key).unwrap())
     }
 
     pub fn iter(&self) -> std::collections::hash_map::Iter<K, V> {
@@ -718,12 +1375,40 @@ impl<K: Eq + Hash> CheckedSet<K> {
         self.inner.insert(key);
     }
 
+    pub fn try_insert(&mut self, key: K) -> Result<(), WorldChannelError>
+    where
+        K: std::fmt::Debug,
+    {
+        if self.inner.contains(&key) {
+            return Err(WorldChannelError::DuplicateSetValue {
+                value: format!("{:?}", key),
+            });
+        }
+
+        self.inner.insert(key);
+        Ok(())
+    }
+
     pub fn remove(&mut self, key: &K) {
         if !self.inner.contains(key) {
             panic!("Cannot remove given non-existent key. Check first.")
         }
 
         self.inner.remove(key);
+    }
+
+    pub fn try_remove(&mut self, key: &K) -> Result<(), WorldChannelError>
+    where
+        K: std::fmt::Debug,
+    {
+        if !self.inner.contains(key) {
+            return Err(WorldChannelError::SetValueNotFound {
+                value: format!("{:?}", key),
+            });
+        }
+
+        self.inner.remove(key);
+        Ok(())
     }
 
     pub fn iter(&self) -> std::collections::hash_set::Iter<K> {

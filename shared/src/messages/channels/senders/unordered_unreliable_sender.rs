@@ -7,7 +7,10 @@ use crate::messages::channels::senders::request_sender::LocalRequestId;
 use crate::messages::request::GlobalRequestId;
 use crate::{
     messages::{
-        channels::senders::channel_sender::{ChannelSender, MessageChannelSender},
+        channels::senders::{
+            channel_sender::{ChannelSender, MessageChannelSender},
+            error::SenderError,
+        },
         message_container::MessageContainer,
         message_kinds::MessageKinds,
     },
@@ -42,6 +45,20 @@ impl UnorderedUnreliableSender {
             "Packet Write Error: Blocking overflow detected! Message of type `{message_name}` requires {bits_needed} bits, but packet only has {bits_free} bits available! Recommended to slim down this Message, or send this message over a Reliable channel so it can be Fragmented)"
         )
     }
+
+    fn try_warn_overflow(
+        &self,
+        message: &MessageContainer,
+        bits_needed: u32,
+        bits_free: u32,
+    ) -> Result<(), SenderError> {
+        let message_name = message.name();
+        Err(SenderError::UnreliableMessageTooLarge {
+            message_name,
+            bits_needed,
+            bits_free,
+        })
+    }
 }
 
 impl ChannelSender<MessageContainer> for UnorderedUnreliableSender {
@@ -75,7 +92,9 @@ impl MessageChannelSender for UnorderedUnreliableSender {
                 break;
             }
 
-            let message = self.outgoing_messages.front().unwrap();
+            let Some(message) = self.outgoing_messages.front() else {
+                break;
+            };
 
             // Check that we can write the next message
             let mut counter = writer.counter();
@@ -128,5 +147,43 @@ impl MessageChannelSender for UnorderedUnreliableSender {
         _: MessageContainer,
     ) {
         panic!("UnorderedUnreliable channel does not support requests");
+    }
+}
+
+impl UnorderedUnreliableSender {
+    /// Try version of send_outgoing_request that returns an error instead of panicking
+    pub fn try_send_outgoing_request(
+        &mut self,
+        _: &MessageKinds,
+        _: &mut dyn LocalEntityAndGlobalEntityConverterMut,
+        _: GlobalRequestId,
+        _: MessageContainer,
+    ) -> Result<(), SenderError> {
+        Err(SenderError::RequestsNotSupported {
+            channel_type: "UnorderedUnreliable",
+        })
+    }
+
+    /// Try version of send_outgoing_response that returns an error instead of panicking
+    pub fn try_send_outgoing_response(
+        &mut self,
+        _: &MessageKinds,
+        _: &mut dyn LocalEntityAndGlobalEntityConverterMut,
+        _: LocalResponseId,
+        _: MessageContainer,
+    ) -> Result<(), SenderError> {
+        Err(SenderError::RequestsNotSupported {
+            channel_type: "UnorderedUnreliable",
+        })
+    }
+
+    /// Try version of process_incoming_response that returns an error instead of panicking
+    pub fn try_process_incoming_response(
+        &mut self,
+        _: &LocalRequestId,
+    ) -> Result<Option<GlobalRequestId>, SenderError> {
+        Err(SenderError::RequestsNotSupported {
+            channel_type: "UnorderedUnreliable",
+        })
     }
 }

@@ -1,8 +1,9 @@
 use std::collections::VecDeque;
 
 use crate::{
-    messages::channels::receivers::reliable_message_receiver::{
-        ReceiverArranger, ReliableMessageReceiver,
+    messages::channels::receivers::{
+        error::ReceiverError,
+        reliable_message_receiver::{ReceiverArranger, ReliableMessageReceiver},
     },
     types::MessageIndex,
     MessageContainer,
@@ -48,19 +49,32 @@ impl ReceiverArranger for OrderedArranger {
         end_message_index: MessageIndex,
         message: MessageContainer,
     ) -> Vec<MessageContainer> {
+        self.try_process(start_message_index, end_message_index, message)
+            .unwrap_or_else(|e| panic!("OrderedArranger error: {}", e))
+    }
+}
+
+impl OrderedArranger {
+    /// Attempt to process a message and arrange it in order
+    ///
+    /// Returns Ok(vec) with ordered messages ready to be delivered,
+    /// or Err if the buffer is in an inconsistent state
+    pub fn try_process(
+        &mut self,
+        start_message_index: MessageIndex,
+        end_message_index: MessageIndex,
+        message: MessageContainer,
+    ) -> Result<Vec<MessageContainer>, ReceiverError> {
         let mut output = Vec::new();
         let mut current_index = 0;
 
         // Put message where it needs to go in buffer
         loop {
             if current_index < self.buffer.len() {
-                let Some((old_message_index, old_message)) = self.buffer.get_mut(current_index)
-                else {
-                    panic!(
-                        "Buffer should be instantiated to slot {:?} !",
-                        start_message_index
-                    );
-                };
+                let (old_message_index, old_message) = self.buffer.get_mut(current_index)
+                    .ok_or_else(|| ReceiverError::BufferInconsistency {
+                        reason: "buffer slot not instantiated",
+                    })?;
                 let old_message_index = *old_message_index;
                 if old_message_index == start_message_index {
                     if old_message.is_not_received() {
@@ -69,32 +83,27 @@ impl ReceiverArranger for OrderedArranger {
                         let mut current_message_index = start_message_index;
                         while current_message_index != end_message_index {
                             current_index = current_index.wrapping_add(1);
-                            let Some((old_message_index, old_message)) =
+                            let (old_message_index, old_message) =
                                 self.buffer.get_mut(current_index)
-                            else {
-                                panic!(
-                                    "Buffer should be instantiated to slot {:?} !",
-                                    old_message_index
-                                );
-                            };
+                                    .ok_or_else(|| ReceiverError::BufferInconsistency {
+                                        reason: "buffer slot not instantiated for fragment",
+                                    })?;
                             let old_message_index = *old_message_index;
                             current_message_index = old_message_index;
                             if old_message.is_not_received() {
                                 *old_message = MessageSlot::PreviousFragment;
                             } else {
-                                panic!(
-                                    "Buffer should not have received message in slot {:?} !",
-                                    old_message_index
-                                );
+                                return Err(ReceiverError::BufferInconsistency {
+                                    reason: "duplicate message in fragment slot",
+                                });
                             }
                         }
 
                         break;
                     } else {
-                        panic!(
-                            "Buffer should not have received message in slot {:?} !",
-                            old_message_index
-                        );
+                        return Err(ReceiverError::BufferInconsistency {
+                            reason: "duplicate message received",
+                        });
                     }
                 }
             } else {
@@ -126,10 +135,13 @@ impl ReceiverArranger for OrderedArranger {
         loop {
             let Some((_, MessageSlot::Received(_))) = self.buffer.front() else {
                 // no more messages, return
-                return output;
+                return Ok(output);
             };
             let Some((_, MessageSlot::Received(message))) = self.buffer.pop_front() else {
-                panic!("shouldn't be possible due to above check");
+                // This should be impossible due to above check, but we handle it gracefully
+                return Err(ReceiverError::BufferInconsistency {
+                    reason: "message disappeared between check and pop",
+                });
             };
 
             output.push(message);

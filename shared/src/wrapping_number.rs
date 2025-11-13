@@ -1,3 +1,14 @@
+use thiserror::Error;
+
+/// Errors that can occur during wrapping number operations
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+pub enum WrappingNumberError {
+    /// Integer overflow occurred during wrapping difference calculation.
+    /// This should be mathematically impossible with valid u16 inputs.
+    #[error("Integer overflow in wrapping_diff({a}, {b}) - this should not happen")]
+    IntegerOverflow { a: u16, b: u16 },
+}
+
 /// Returns whether or not a wrapping number is greater than another
 /// sequence_greater_than(2,1) will return true
 /// sequence_greater_than(1,2) will return false
@@ -14,37 +25,61 @@ pub fn sequence_less_than(s1: u16, s2: u16) -> bool {
     sequence_greater_than(s2, s1)
 }
 
-/// Retrieves the wrapping difference between 2 u16 values
-/// wrapping_diff(1,2) will return 1
-/// wrapping_diff(2,1) will return -1
-/// wrapping_diff(65535,0) will return 1
-/// wrapping_diff(0,65535) will return -1
-pub fn wrapping_diff(a: u16, b: u16) -> i16 {
+/// Retrieves the wrapping difference between 2 u16 values.
+/// Returns an error if an impossible integer overflow occurs.
+///
+/// # Examples
+/// ```
+/// # use naia_shared::try_wrapping_diff;
+/// assert_eq!(try_wrapping_diff(1, 2).unwrap(), 1);
+/// assert_eq!(try_wrapping_diff(2, 1).unwrap(), -1);
+/// assert_eq!(try_wrapping_diff(65535, 0).unwrap(), 1);
+/// assert_eq!(try_wrapping_diff(0, 65535).unwrap(), -1);
+/// ```
+pub fn try_wrapping_diff(a: u16, b: u16) -> Result<i16, WrappingNumberError> {
     const MAX: i32 = std::i16::MAX as i32;
     const MIN: i32 = std::i16::MIN as i32;
     const ADJUST: i32 = (std::u16::MAX as i32) + 1;
 
-    let a: i32 = i32::from(a);
-    let b: i32 = i32::from(b);
+    let a_i32: i32 = i32::from(a);
+    let b_i32: i32 = i32::from(b);
 
-    let mut result = b - a;
+    let mut result = b_i32 - a_i32;
     if (MIN..=MAX).contains(&result) {
-        result as i16
-    } else if b > a {
-        result = b - (a + ADJUST);
+        Ok(result as i16)
+    } else if b_i32 > a_i32 {
+        result = b_i32 - (a_i32 + ADJUST);
         if (MIN..=MAX).contains(&result) {
-            result as i16
+            Ok(result as i16)
         } else {
-            panic!("integer overflow, this shouldn't happen")
+            Err(WrappingNumberError::IntegerOverflow { a, b })
         }
     } else {
-        result = (b + ADJUST) - a;
+        result = (b_i32 + ADJUST) - a_i32;
         if (MIN..=MAX).contains(&result) {
-            result as i16
+            Ok(result as i16)
         } else {
-            panic!("integer overflow, this shouldn't happen")
+            Err(WrappingNumberError::IntegerOverflow { a, b })
         }
     }
+}
+
+/// Retrieves the wrapping difference between 2 u16 values.
+///
+/// # Panics
+///
+/// Panics if an impossible integer overflow occurs (this should never happen with valid u16 inputs).
+///
+/// # Examples
+/// ```
+/// # use naia_shared::wrapping_diff;
+/// assert_eq!(wrapping_diff(1, 2), 1);
+/// assert_eq!(wrapping_diff(2, 1), -1);
+/// assert_eq!(wrapping_diff(65535, 0), 1);
+/// assert_eq!(wrapping_diff(0, 65535), -1);
+/// ```
+pub fn wrapping_diff(a: u16, b: u16) -> i16 {
+    try_wrapping_diff(a, b).expect("integer overflow in wrapping_diff - this should not happen")
 }
 
 #[cfg(test)]

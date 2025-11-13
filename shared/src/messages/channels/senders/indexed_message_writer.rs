@@ -3,7 +3,10 @@ use std::collections::VecDeque;
 use naia_serde::{BitWrite, BitWriter, Serde, UnsignedVariableInteger};
 
 use crate::{
-    messages::{message_container::MessageContainer, message_kinds::MessageKinds},
+    messages::{
+        channels::senders::error::SenderError, message_container::MessageContainer,
+        message_kinds::MessageKinds,
+    },
     types::MessageIndex,
     world::entity::entity_converters::LocalEntityAndGlobalEntityConverterMut,
     wrapping_diff,
@@ -28,7 +31,9 @@ impl IndexedMessageWriter {
                 break;
             }
 
-            let (message_index, message) = outgoing_messages.front().unwrap();
+            let Some((message_index, message)) = outgoing_messages.front() else {
+                break;
+            };
 
             // check that we can write the next message
             let mut counter = writer.counter();
@@ -95,6 +100,30 @@ impl IndexedMessageWriter {
         }
     }
 
+    pub fn try_write_message_index(
+        writer: &mut dyn BitWrite,
+        last_written_id: &Option<MessageIndex>,
+        message_index: &MessageIndex,
+    ) -> Result<(), SenderError> {
+        if let Some(last_id) = last_written_id {
+            // write message id diff
+            let id_diff = wrapping_diff(*last_id, *message_index);
+            if id_diff < 0 {
+                return Err(SenderError::NegativeIndexDiff {
+                    previous: *last_id,
+                    current: *message_index,
+                    diff: id_diff,
+                });
+            }
+            let id_diff_encoded = UnsignedVariableInteger::<3>::new(id_diff);
+            id_diff_encoded.ser(writer);
+        } else {
+            // write message id
+            message_index.ser(writer);
+        }
+        Ok(())
+    }
+
     fn write_message(
         message_kinds: &MessageKinds,
         converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
@@ -112,5 +141,12 @@ impl IndexedMessageWriter {
         panic!(
             "Packet Write Error: Blocking overflow detected! Message requires {bits_needed} bits, but packet only has {bits_free} bits available! This condition should never be reached, as large Messages should be Fragmented in the Reliable channel"
         )
+    }
+
+    fn try_warn_overflow(bits_needed: u32, bits_free: u32) -> Result<(), SenderError> {
+        Err(SenderError::MessageTooLarge {
+            bits_needed,
+            bits_free,
+        })
     }
 }

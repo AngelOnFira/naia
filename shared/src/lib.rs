@@ -48,6 +48,8 @@ mod types;
 mod world;
 mod wrapping_number;
 
+mod transport;
+
 cfg_if! {
     if #[cfg(feature = "transport_udp")]{
         pub mod transport_udp;
@@ -62,6 +64,7 @@ pub use connection::{
     connection_config::ConnectionConfig,
     decoder::Decoder,
     encoder::Encoder,
+    error::{ConnectionError, DecoderError, EncoderError, PacketTypeError},
     packet_notifiable::PacketNotifiable,
     packet_type::PacketType,
     ping_store::{PingIndex, PingStore},
@@ -69,19 +72,28 @@ pub use connection::{
 };
 pub use messages::{
     channels::{
-        channel::{Channel, ChannelDirection, ChannelMode, ReliableSettings, TickBufferSettings},
+        channel::{
+            Channel, ChannelDirection, ChannelMode, ChannelSettings, ReliableSettings,
+            TickBufferSettings,
+        },
         channel_kinds::{ChannelKind, ChannelKinds},
         default_channels,
         receivers::{
-            channel_receiver::ChannelReceiver, ordered_reliable_receiver::OrderedReliableReceiver,
+            channel_receiver::ChannelReceiver, error::ReceiverError,
+            ordered_reliable_receiver::OrderedReliableReceiver,
             unordered_reliable_receiver::UnorderedReliableReceiver,
         },
         senders::{
             channel_sender::{ChannelSender, MessageChannelSender},
+            error::SenderError,
             reliable_sender::ReliableSender,
-            request_sender::LocalResponseId,
+            request_sender::{LocalRequestId, LocalRequestOrResponseId, LocalResponseId},
         },
         system_channel::SystemChannel,
+    },
+    error::{
+        ChannelError, FragmentationError, MessageContainerError, MessageError, MessageKindsError,
+        MessageManagerError,
     },
     message::{Message, Message as MessageBevy, Message as MessageHecs, MessageBuilder},
     message_container::MessageContainer,
@@ -98,7 +110,8 @@ pub use world::{
         component_update::{ComponentFieldUpdate, ComponentUpdate},
         diff_mask::DiffMask,
         entity_property::EntityProperty,
-        property::Property,
+        error::{ComponentError, EntityPropertyError},
+        property::{Property, PropertyError},
         property_mutate::{PropertyMutate, PropertyMutator},
         replica_ref::{
             ReplicaDynMut, ReplicaDynMutTrait, ReplicaDynMutWrapper, ReplicaDynRef,
@@ -125,19 +138,23 @@ pub use world::{
             EntityConverterMut, FakeEntityConverter, GlobalWorldManagerType,
             LocalEntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverterMut,
         },
-        error::EntityDoesNotExistError,
+        error::{EntityAuthError, EntityDoesNotExistError, EntityError},
         global_entity::GlobalEntity,
         local_entity::{HostEntity, OwnedLocalEntity, RemoteEntity},
     },
     host::{
+        error::WorldChannelError,
         global_diff_handler::GlobalDiffHandler,
         host_world_manager::{HostWorldEvents, HostWorldManager},
         mut_channel::{MutChannelType, MutReceiver},
+        CheckedMap, CheckedSet,
     },
     local_world_manager::LocalWorldManager,
     remote::{
         entity_action_event::EntityActionEvent,
         entity_event::{EntityEvent, EntityResponseEvent},
+        entity_waitlist::{EntityWaitlist, WaitlistHandle, WaitlistStore},
+        error::RemoteWorldError,
         remote_world_manager::RemoteWorldManager,
     },
     shared_global_world_manager::SharedGlobalWorldManager,
@@ -147,9 +164,12 @@ pub use world::{
 pub use bigmap::{BigMap, BigMapKey};
 pub use game_time::{GameDuration, GameInstant, GAME_TIME_LIMIT};
 pub use key_generator::KeyGenerator;
-pub use messages::channels::senders::request_sender::{
-    LocalRequestOrResponseId, RequestOrResponse,
-};
-pub use protocol::{Protocol, ProtocolPlugin};
+pub use messages::channels::senders::request_sender::RequestOrResponse;
+pub use protocol::{Protocol, ProtocolError, ProtocolPlugin};
+pub use sequence_list::{SequenceError, SequenceList};
+pub use transport::error::{HttpParseError, TransportError};
 pub use types::{HostType, MessageIndex, PacketIndex, ShortMessageIndex, Tick};
-pub use wrapping_number::{sequence_greater_than, sequence_less_than, wrapping_diff};
+pub use wrapping_number::{
+    sequence_greater_than, sequence_less_than, try_wrapping_diff, wrapping_diff,
+    WrappingNumberError,
+};

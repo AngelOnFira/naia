@@ -1,3 +1,5 @@
+use crate::messages::error::ChannelError;
+
 // Channel Trait
 pub trait Channel: 'static {}
 
@@ -15,6 +17,14 @@ impl ChannelSettings {
         }
 
         Self { mode, direction }
+    }
+
+    pub fn try_new(mode: ChannelMode, direction: ChannelDirection) -> Result<Self, ChannelError> {
+        if mode.tick_buffered() && direction != ChannelDirection::ClientToServer {
+            return Err(ChannelError::InvalidTickBufferedDirection);
+        }
+
+        Ok(Self { mode, direction })
     }
 
     pub fn reliable(&self) -> bool {

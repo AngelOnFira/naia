@@ -6,6 +6,7 @@ use std::{
 use naia_socket_shared::Instant;
 
 use crate::{KeyGenerator, RemoteEntity};
+use super::error::RemoteWorldError;
 
 pub type WaitlistHandle = u16;
 
@@ -116,7 +117,11 @@ impl EntityWaitlist {
         self.in_scope_entities.remove(entity);
     }
 
-    pub fn remove_waiting_handle(&mut self, handle: &WaitlistHandle) {
+    /// Try to remove a waiting handle from the waitlist
+    ///
+    /// Returns an error if the handle is not found in the required entities map,
+    /// which indicates internal inconsistency.
+    pub fn try_remove_waiting_handle(&mut self, handle: &WaitlistHandle) -> Result<(), RemoteWorldError> {
         // remove handle from ttl list
         if let Some(ttl_index) = self
             .handle_ttls
@@ -127,7 +132,9 @@ impl EntityWaitlist {
         }
 
         // remove handle from required entities map
-        let entities = self.handle_to_required_entities.remove(&handle).unwrap();
+        let entities = self.handle_to_required_entities
+            .remove(&handle)
+            .ok_or(RemoteWorldError::WaitlistHandleMissing { handle: *handle })?;
 
         // recycle message handle
         self.handle_store.recycle_key(&handle);
@@ -145,9 +152,24 @@ impl EntityWaitlist {
                 self.waiting_entity_to_handles.remove(&entity);
             }
         }
+
+        Ok(())
     }
 
-    fn check_handle_ttls(&mut self, now: &Instant) {
+    /// Remove a waiting handle from the waitlist
+    ///
+    /// # Panics
+    /// Panics if the handle is not found in the required entities map.
+    /// For non-panicking version, use `try_remove_waiting_handle`.
+    pub fn remove_waiting_handle(&mut self, handle: &WaitlistHandle) {
+        self.try_remove_waiting_handle(handle)
+            .expect("waitlist handle should exist in required entities map")
+    }
+
+    /// Try to check handle TTLs and move expired handles to removed set
+    ///
+    /// Returns an error if the TTL queue is corrupted (contains entry but pop fails).
+    fn try_check_handle_ttls(&mut self, now: &Instant) -> Result<(), RemoteWorldError> {
         loop {
             let Some((ttl, _)) = self.handle_ttls.front() else {
                 break;
@@ -155,10 +177,17 @@ impl EntityWaitlist {
             if ttl.elapsed(now) < self.handle_ttl {
                 break;
             }
-            let (_, handle) = self.handle_ttls.pop_front().unwrap();
+            let (_, handle) = self.handle_ttls.pop_front()
+                .ok_or(RemoteWorldError::HandleTtlQueueEmpty)?;
             self.removed_handles.insert(handle);
-            self.remove_waiting_handle(&handle);
+            self.try_remove_waiting_handle(&handle)?;
         }
+        Ok(())
+    }
+
+    fn check_handle_ttls(&mut self, now: &Instant) {
+        self.try_check_handle_ttls(now)
+            .expect("handle TTL queue should be consistent")
     }
 }
 
@@ -180,10 +209,13 @@ impl<T> WaitlistStore<T> {
         self.items.insert(handle, item);
     }
 
-    pub fn collect_ready_items(
+    /// Try to collect ready items from the store
+    ///
+    /// Returns an error if an item with a ready handle is missing from the store.
+    pub fn try_collect_ready_items(
         &mut self,
         ready_handles: &mut HashSet<WaitlistHandle>,
-    ) -> Option<Vec<T>> {
+    ) -> Result<Option<Vec<T>>, RemoteWorldError> {
         let intersection: HashSet<WaitlistHandle> = self
             .item_handles
             .intersection(&ready_handles)
@@ -192,18 +224,32 @@ impl<T> WaitlistStore<T> {
 
         if intersection.len() == 0 {
             // Handles in ready_handles must refer to items in another WaitlistStore
-            return None;
+            return Ok(None);
         }
 
         let mut ready_messages = Vec::new();
 
         for handle in intersection {
             ready_handles.remove(&handle);
-            let item = self.remove(&handle).unwrap();
+            let item = self.remove(&handle)
+                .ok_or(RemoteWorldError::WaitlistItemMissing { handle })?;
             ready_messages.push(item);
         }
 
-        Some(ready_messages)
+        Ok(Some(ready_messages))
+    }
+
+    /// Collect ready items from the store
+    ///
+    /// # Panics
+    /// Panics if an item with a ready handle is missing from the store.
+    /// For non-panicking version, use `try_collect_ready_items`.
+    pub fn collect_ready_items(
+        &mut self,
+        ready_handles: &mut HashSet<WaitlistHandle>,
+    ) -> Option<Vec<T>> {
+        self.try_collect_ready_items(ready_handles)
+            .expect("waitlist store should contain all ready items")
     }
 
     pub fn remove_expired_items(&mut self, expired_handles: &mut HashSet<WaitlistHandle>) {
