@@ -55,20 +55,31 @@ impl Handshaker for HandshakeManager {
         match handshake_header {
             HandshakeHeader::ClientIdentifyRequest => {
                 if let Ok(id_token) = self.recv_identify_request(reader) {
-                    if let Some(user_key) = self.authenticated_unidentified_users.remove(&id_token)
-                    {
+                    // Check if this token exists in authenticated_unidentified_users
+                    if let Some(user_key) = self.authenticated_unidentified_users.get(&id_token) {
+                        let user_key = *user_key;
+
+                        // Remove from unidentified map
+                        self.authenticated_unidentified_users.remove(&id_token);
+
                         // remove identity token from map
                         if self.identity_token_map.remove(&user_key).is_none() {
                             panic!("Server Error: Identity Token not found for user_key: {:?}. Shouldn't be possible.", user_key);
                         }
 
-                        // User is authenticated
-                        self.authenticated_and_identified_users
-                            .insert(*address, user_key);
-                    } else {
-                        // commented out because it's pretty common to get multiple ClientIdentifyRequests which would trigger this
-                        //warn!("Server Error: User not authenticated for: {:?}, with token: {}", address, identity_token);
+                        // Remove any old address mapping for this user (in case address changed)
+                        self.authenticated_and_identified_users.retain(|_, v| *v != user_key);
 
+                        // User is authenticated at this address
+                        self.authenticated_and_identified_users.insert(*address, user_key);
+
+                        warn!("ClientIdentifyRequest: User {:?} authenticated at address {}", user_key, address);
+                    } else if self.authenticated_and_identified_users.contains_key(address) {
+                        // User already authenticated at this exact address - send response for retransmit
+                        warn!("ClientIdentifyRequest from already identified user at {}, sending response", address);
+                    } else {
+                        // Token not found and address not identified - ignore
+                        warn!("ClientIdentifyRequest with unknown token from {}, ignoring", address);
                         return Ok(HandshakeAction::None);
                     }
 
@@ -94,18 +105,21 @@ impl Handshaker for HandshakeManager {
                 );
 
                 if has_connection {
-                    warn!("    RESULT: Sending SendPacket (NO ConnectEvent will fire!)");
+                    warn!("    RESULT: Sending SendPacket to {} (NO ConnectEvent will fire!)", address);
+                    warn!("    This means client already has a connection, just resending response");
                     return Ok(HandshakeAction::SendPacket(packet));
                 } else {
                     let Some(user_key) = self.authenticated_and_identified_users.get(address)
                     else {
                         warn!("Server Error: User not authenticated for: {:?}", address);
+                        warn!("    Available addresses: {:?}",
+                            self.authenticated_and_identified_users.keys().collect::<Vec<_>>());
                         return Ok(HandshakeAction::None);
                     };
 
                     warn!(
-                        "    RESULT: Sending FinalizeConnection for {:?} (ConnectEvent WILL fire)",
-                        user_key
+                        "    RESULT: Sending FinalizeConnection for {:?} to {} (ConnectEvent WILL fire)",
+                        user_key, address
                     );
                     return Ok(HandshakeAction::FinalizeConnection(*user_key, packet));
                 }

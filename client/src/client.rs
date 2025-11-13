@@ -1172,9 +1172,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         loop {
             match self.io.recv_reader() {
                 Ok(Some(mut reader)) => {
+                    warn!("CLIENT: Received packet from server");
+
                     match self.handshake_manager.recv(&mut reader) {
                         Some(HandshakeResult::Connected(time_manager)) => {
                             // new connect!
+                            warn!("CLIENT: ✓✓✓ HandshakeResult::Connected received! Connection established!");
                             self.server_connection = Some(Connection::new(
                                 &self.client_config.connection,
                                 &self.protocol.channel_kinds,

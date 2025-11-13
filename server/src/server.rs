@@ -1865,6 +1865,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                             continue;
                         }
                         PacketType::Handshake => {
+                            warn!(">>> HANDSHAKE PACKET RECEIVED from {}", address);
+                            warn!("    user_connections.len() = {}", self.user_connections.len());
+                            warn!("    user_connections contains address? {}", self.user_connections.contains_key(&address));
+                            warn!("    about to call maintain_handshake...");
+
                             // Check if there's an existing connection AND it's for a different user
                             // If connection exists but for same user (reconnection), treat as new connection
                             let has_different_user_connection = if let Some(existing_conn) =
@@ -1899,19 +1904,30 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                                     user_key,
                                     validate_packet,
                                 )) => {
+                                    warn!(">>> FinalizeConnection for UserKey({:?}) at address {}", user_key, &address);
+                                    warn!("    Calling finalize_connection...");
                                     self.finalize_connection(&user_key, &address);
-                                    if self.io.send_packet(&address, validate_packet).is_err() {
-                                        // TODO: pass this on and handle above
-                                        warn!(
-                                            "Server Error: Cannot send validation packet to {}",
-                                            &address
-                                        );
+                                    warn!("    finalize_connection complete, now sending ConnectResponse packet");
+                                    match self.io.send_packet(&address, validate_packet) {
+                                        Ok(_) => {
+                                            warn!("    ✓ ConnectResponse packet sent successfully to {}", &address);
+                                            warn!("    Client should transition to Connected state now");
+                                        }
+                                        Err(e) => {
+                                            warn!("    ✗ FAILED to send ConnectResponse packet to {}: {:?}", &address, e);
+                                            warn!("    Client will NOT receive ConnectResponse and will timeout!");
+                                        }
                                     }
                                 }
                                 Ok(HandshakeAction::SendPacket(packet)) => {
-                                    if self.io.send_packet(&address, packet).is_err() {
-                                        // TODO: pass this on and handle above
-                                        warn!("Server Error: Cannot send packet to {}", &address);
+                                    warn!(">>> Attempting to send handshake packet to {}", &address);
+                                    match self.io.send_packet(&address, packet) {
+                                        Ok(_) => {
+                                            warn!("    ✓ Packet sent successfully to {}", &address);
+                                        }
+                                        Err(e) => {
+                                            warn!("    ✗ FAILED to send packet to {}: {:?}", &address, e);
+                                        }
                                     }
                                 }
                                 Ok(HandshakeAction::DisconnectUser(user_key)) => {

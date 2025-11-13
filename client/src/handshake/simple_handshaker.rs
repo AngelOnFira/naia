@@ -85,7 +85,7 @@ impl Handshaker for HandshakeManager {
                 return Some(writer.to_packet());
             }
             HandshakeState::AwaitingConnectResponse(_) => {
-                info!("CLIENT HANDSHAKE: Sending ClientConnectRequest");
+                warn!("CLIENT HANDSHAKE: Sending ClientConnectRequest (waiting for ServerConnectResponse...)");
                 let writer = self.write_connect_request();
                 return Some(writer.to_packet());
             }
@@ -116,7 +116,7 @@ impl Handshaker for HandshakeManager {
                         return None;
                     }
                     HandshakeHeader::ServerConnectResponse => {
-                        info!("CLIENT HANDSHAKE: Received ServerConnectResponse, transitioning to Connected");
+                        warn!("CLIENT HANDSHAKE: ✓ Received ServerConnectResponse! Transitioning to Connected state");
                         return self.recv_connect_response();
                     }
                     HandshakeHeader::ClientIdentifyRequest
