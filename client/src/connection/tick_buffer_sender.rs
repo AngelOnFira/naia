@@ -60,7 +60,7 @@ impl TickBufferSender {
         false
     }
 
-    pub fn write_messages<E: Copy + Eq + Hash + Send + Sync>(
+    pub fn write_messages<E: Copy + Eq + Hash + Send + Sync + std::fmt::Debug>(
         &mut self,
         protocol: &Protocol,
         global_world_manager: &GlobalWorldManager<E>,

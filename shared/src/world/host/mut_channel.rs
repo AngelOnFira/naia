@@ -68,7 +68,7 @@ impl MutReceiver {
         }
     }
 
-    pub fn mask(&self) -> RwLockReadGuard<DiffMask> {
+    pub fn mask(&self) -> RwLockReadGuard<'_, DiffMask> {
         let Ok(mask) = self.mask.as_ref().read() else {
             panic!("Mask held on current thread");
         };
@@ -106,12 +106,12 @@ impl MutReceiver {
 
     // Try versions that return Result instead of panicking
 
-    pub fn try_mask(&self) -> Result<RwLockReadGuard<DiffMask>, WorldChannelError> {
+    pub fn try_mask(&self) -> Result<RwLockReadGuard<'_, DiffMask>, WorldChannelError> {
         self.mask.as_ref().read()
             .map_err(|_| WorldChannelError::RwLockReentrant)
     }
 
-    pub fn try_mask_mut(&self) -> Result<RwLockWriteGuard<DiffMask>, WorldChannelError> {
+    pub fn try_mask_mut(&self) -> Result<RwLockWriteGuard<'_, DiffMask>, WorldChannelError> {
         self.mask.as_ref().write()
             .map_err(|_| WorldChannelError::RwLockReentrant)
     }

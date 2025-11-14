@@ -31,7 +31,7 @@ pub struct Connection<E: Copy + Eq + Hash + Send + Sync> {
     pub manual_disconnect: bool,
 }
 
-impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
+impl<E: Copy + Eq + Hash + Send + Sync + std::fmt::Debug> Connection<E> {
     pub fn new(
         connection_config: &ConnectionConfig,
         ping_config: &PingConfig,

@@ -29,7 +29,7 @@ pub struct ServerAuthHandler<E: Copy + Eq + Hash + Send + Sync> {
     user_to_entity_map: HashMap<UserKey, HashSet<E>>,
 }
 
-impl<E: Copy + Eq + Hash + Send + Sync> ServerAuthHandler<E> {
+impl<E: Copy + Eq + Hash + Send + Sync + std::fmt::Debug> ServerAuthHandler<E> {
     pub fn new() -> Self {
         Self {
             host_auth_handler: HostAuthHandler::new(),

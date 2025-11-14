@@ -46,7 +46,7 @@ pub struct Client<E: Copy + Eq + Hash + Send + Sync> {
     queued_entity_auth_release_messages: Vec<E>,
 }
 
-impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
+impl<E: Copy + Eq + Hash + Send + Sync + std::fmt::Debug> Client<E> {
     /// Create a new Client
     pub fn new<P: Into<Protocol>>(client_config: ClientConfig, protocol: P) -> Self {
         let mut protocol: Protocol = protocol.into();
@@ -504,7 +504,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
     /// Creates a new Entity and returns an EntityMut which can be used for
     /// further operations on the Entity
-    pub fn spawn_entity<W: WorldMutType<E>>(&mut self, mut world: W) -> EntityMut<E, W> {
+    pub fn spawn_entity<W: WorldMutType<E>>(&mut self, mut world: W) -> EntityMut<'_, E, W> {
         self.check_client_authoritative_allowed();
 
         let entity = world.spawn_entity();
@@ -529,7 +529,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     /// Retrieves an EntityRef that exposes read-only operations for the
     /// given Entity.
     /// Panics if the Entity does not exist.
-    pub fn entity<W: WorldRefType<E>>(&self, world: W, entity: &E) -> EntityRef<E, W> {
+    pub fn entity<W: WorldRefType<E>>(&self, world: W, entity: &E) -> EntityRef<'_, E, W> {
         if world.has_entity(entity) {
             return EntityRef::new(self, world, entity);
         }
@@ -539,7 +539,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     /// Retrieves an EntityMut that exposes read and write operations for the
     /// Entity.
     /// Panics if the Entity does not exist.
-    pub fn entity_mut<W: WorldMutType<E>>(&mut self, world: W, entity: &E) -> EntityMut<E, W> {
+    pub fn entity_mut<W: WorldMutType<E>>(&mut self, world: W, entity: &E) -> EntityMut<'_, E, W> {
         self.check_client_authoritative_allowed();
         if world.has_entity(entity) {
             return EntityMut::new(self, world, entity);
@@ -1519,7 +1519,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     }
 }
 
-impl<E: Copy + Eq + Hash + Send + Sync> EntityAndGlobalEntityConverter<E> for Client<E> {
+impl<E: Copy + Eq + Hash + Send + Sync + std::fmt::Debug> EntityAndGlobalEntityConverter<E> for Client<E> {
     fn global_entity_to_entity(
         &self,
         global_entity: &GlobalEntity,

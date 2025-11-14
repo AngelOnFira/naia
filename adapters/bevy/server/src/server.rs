@@ -102,11 +102,11 @@ impl<'w> Server<'w> {
         self.server.0.user_exists(user_key)
     }
 
-    pub fn user(&self, user_key: &UserKey) -> UserRef<Entity> {
+    pub fn user(&self, user_key: &UserKey) -> UserRef<'_, Entity> {
         self.server.0.user(user_key)
     }
 
-    pub fn user_mut(&mut self, user_key: &UserKey) -> UserMut<Entity> {
+    pub fn user_mut(&mut self, user_key: &UserKey) -> UserMut<'_, Entity> {
         self.server.0.user_mut(user_key)
     }
 
@@ -118,17 +118,17 @@ impl<'w> Server<'w> {
         self.server.0.users_count()
     }
 
-    pub fn user_scope(&self, user_key: &UserKey) -> UserScopeRef<Entity> {
+    pub fn user_scope(&self, user_key: &UserKey) -> UserScopeRef<'_, Entity> {
         self.server.0.user_scope(user_key)
     }
 
-    pub fn user_scope_mut(&mut self, user_key: &UserKey) -> UserScopeMut<Entity> {
+    pub fn user_scope_mut(&mut self, user_key: &UserKey) -> UserScopeMut<'_, Entity> {
         self.server.0.user_scope_mut(user_key)
     }
 
     //// Rooms ////
 
-    pub fn make_room(&mut self) -> RoomMut<Entity> {
+    pub fn make_room(&mut self) -> RoomMut<'_, Entity> {
         self.server.0.make_room()
     }
 
@@ -136,11 +136,11 @@ impl<'w> Server<'w> {
         self.server.0.room_exists(room_key)
     }
 
-    pub fn room(&self, room_key: &RoomKey) -> RoomRef<Entity> {
+    pub fn room(&self, room_key: &RoomKey) -> RoomRef<'_, Entity> {
         self.server.0.room(room_key)
     }
 
-    pub fn room_mut(&mut self, room_key: &RoomKey) -> RoomMut<Entity> {
+    pub fn room_mut(&mut self, room_key: &RoomKey) -> RoomMut<'_, Entity> {
         self.server.0.room_mut(room_key)
     }
 

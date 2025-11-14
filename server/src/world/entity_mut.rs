@@ -5,13 +5,13 @@ use naia_shared::{EntityAuthStatus, ReplicaMutWrapper, ReplicatedComponent, Worl
 use crate::{room::RoomKey, server::Server, ReplicationConfig};
 
 // EntityMut
-pub struct EntityMut<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> {
+pub struct EntityMut<'s, E: Copy + Eq + Hash + Send + Sync + std::fmt::Debug, W: WorldMutType<E>> {
     server: &'s mut Server<E>,
     world: W,
     entity: E,
 }
 
-impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> EntityMut<'s, E, W> {
+impl<'s, E: Copy + Eq + Hash + Send + Sync + std::fmt::Debug, W: WorldMutType<E>> EntityMut<'s, E, W> {
     pub(crate) fn new(server: &'s mut Server<E>, world: W, entity: &E) -> Self {
         EntityMut {
             server,
@@ -34,7 +34,7 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> EntityMut<'s, E,
         self.world.has_component::<R>(&self.entity)
     }
 
-    pub fn component<R: ReplicatedComponent>(&mut self) -> Option<ReplicaMutWrapper<R>> {
+    pub fn component<R: ReplicatedComponent>(&mut self) -> Option<ReplicaMutWrapper<'_, R>> {
         self.world.component_mut::<R>(&self.entity)
     }
 

@@ -9,5 +9,4 @@ pub mod world_channel;
 mod entity_action_event;
 mod entity_channel;
 
-pub use error::WorldChannelError;
 pub use world_channel::{CheckedMap, CheckedSet};

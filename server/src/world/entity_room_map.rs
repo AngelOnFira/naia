@@ -9,7 +9,7 @@ pub struct EntityRoomMap<E: Copy + Eq + Hash> {
     map: HashMap<E, HashSet<RoomKey>>,
 }
 
-impl<E: Copy + Eq + Hash> EntityRoomMap<E> {
+impl<E: Copy + Eq + Hash + std::fmt::Debug> EntityRoomMap<E> {
     pub fn new() -> Self {
         Self {
             map: HashMap::new(),

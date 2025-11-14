@@ -119,8 +119,14 @@ impl BaseTimeManager {
             self.never_been_pinged = false;
             self.most_recent_ping = ping_index;
 
-            let send_offset_millis = server_received_time.offset_from(&client_sent_time);
-            let recv_offset_millis = server_sent_time.offset_from(&client_received_time);
+            let Some(send_offset_millis) = server_received_time.try_offset_from(&client_sent_time) else {
+                warn!("Time offset overflow in ping calculation");
+                return Err(SerdeErr);
+            };
+            let Some(recv_offset_millis) = server_sent_time.try_offset_from(&client_received_time) else {
+                warn!("Time offset overflow in pong calculation");
+                return Err(SerdeErr);
+            };
 
             let round_trip_time_millis = client_received_time
                 .time_since(&client_sent_time)

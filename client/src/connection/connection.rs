@@ -32,7 +32,7 @@ pub struct Connection<E: Copy + Eq + Hash + Send + Sync> {
     pub global_response_manager: GlobalResponseManager,
 }
 
-impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
+impl<E: Copy + Eq + Hash + Send + Sync + std::fmt::Debug> Connection<E> {
     pub fn new(
         connection_config: &ConnectionConfig,
         channel_kinds: &ChannelKinds,

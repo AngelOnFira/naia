@@ -28,7 +28,7 @@ pub struct Room<E: Copy + Eq + Hash> {
     entity_removal_queue: VecDeque<(UserKey, E)>,
 }
 
-impl<E: Copy + Eq + Hash> Room<E> {
+impl<E: Copy + Eq + Hash + std::fmt::Debug> Room<E> {
     pub(crate) fn new() -> Room<E> {
         Room {
             users: HashSet::new(),
@@ -54,7 +54,7 @@ impl<E: Copy + Eq + Hash> Room<E> {
         }
     }
 
-    pub(crate) fn user_keys(&self) -> Iter<UserKey> {
+    pub(crate) fn user_keys(&self) -> Iter<'_, UserKey> {
         self.users.iter()
     }
 
@@ -85,7 +85,7 @@ impl<E: Copy + Eq + Hash> Room<E> {
         self.entities.contains(entity)
     }
 
-    pub(crate) fn entities(&self) -> Iter<E> {
+    pub(crate) fn entities(&self) -> Iter<'_, E> {
         self.entities.iter()
     }
 
@@ -109,7 +109,7 @@ pub struct RoomRef<'s, E: Copy + Eq + Hash + Send + Sync> {
     key: RoomKey,
 }
 
-impl<'s, E: Copy + Eq + Hash + Send + Sync> RoomRef<'s, E> {
+impl<'s, E: Copy + Eq + Hash + Send + Sync + std::fmt::Debug> RoomRef<'s, E> {
     pub fn new(server: &'s Server<E>, key: &RoomKey) -> Self {
         RoomRef { server, key: *key }
     }
@@ -154,7 +154,7 @@ pub struct RoomMut<'s, E: Copy + Eq + Hash + Send + Sync> {
     key: RoomKey,
 }
 
-impl<'s, E: Copy + Eq + Hash + Send + Sync> RoomMut<'s, E> {
+impl<'s, E: Copy + Eq + Hash + Send + Sync + std::fmt::Debug> RoomMut<'s, E> {
     pub fn new(server: &'s mut Server<E>, key: &RoomKey) -> Self {
         RoomMut { server, key: *key }
     }

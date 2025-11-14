@@ -5,13 +5,13 @@ use naia_shared::{EntityAuthStatus, ReplicaRefWrapper, ReplicatedComponent, Worl
 use crate::{Client, ReplicationConfig};
 
 // EntityRef
-pub struct EntityRef<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>> {
+pub struct EntityRef<'s, E: Copy + Eq + Hash + Send + Sync + std::fmt::Debug, W: WorldRefType<E>> {
     client: &'s Client<E>,
     world: W,
     entity: E,
 }
 
-impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>> EntityRef<'s, E, W> {
+impl<'s, E: Copy + Eq + Hash + Send + Sync + std::fmt::Debug, W: WorldRefType<E>> EntityRef<'s, E, W> {
     pub fn new(client: &'s Client<E>, world: W, entity: &E) -> Self {
         EntityRef {
             client,
@@ -28,7 +28,7 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>> EntityRef<'s, E,
         self.world.has_component::<R>(&self.entity)
     }
 
-    pub fn component<R: ReplicatedComponent>(&self) -> Option<ReplicaRefWrapper<R>> {
+    pub fn component<R: ReplicatedComponent>(&self) -> Option<ReplicaRefWrapper<'_, R>> {
         self.world.component::<R>(&self.entity)
     }
 

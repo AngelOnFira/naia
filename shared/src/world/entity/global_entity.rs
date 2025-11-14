@@ -1,4 +1,4 @@
-use crate::{BigMapKey, EntityError};
+use crate::BigMapKey;
 use naia_serde::{BitReader, BitWrite, Serde, SerdeErr};
 
 // GlobalEntity

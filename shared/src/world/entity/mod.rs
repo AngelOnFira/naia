@@ -8,4 +8,3 @@ pub mod global_entity;
 pub mod local_entity;
 
 // Export error types for public API
-pub use error::{EntityAuthError, EntityDoesNotExistError, EntityError};

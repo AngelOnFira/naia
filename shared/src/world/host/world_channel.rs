@@ -1338,7 +1338,7 @@ impl<K: Eq + Hash, V> CheckedMap<K, V> {
         Ok(self.inner.remove(key).unwrap())
     }
 
-    pub fn iter(&self) -> std::collections::hash_map::Iter<K, V> {
+    pub fn iter(&self) -> std::collections::hash_map::Iter<'_, K, V> {
         self.inner.iter()
     }
 
@@ -1411,7 +1411,7 @@ impl<K: Eq + Hash> CheckedSet<K> {
         Ok(())
     }
 
-    pub fn iter(&self) -> std::collections::hash_set::Iter<K> {
+    pub fn iter(&self) -> std::collections::hash_set::Iter<'_, K> {
         self.inner.iter()
     }
 }

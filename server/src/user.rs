@@ -100,7 +100,7 @@ pub struct UserRef<'s, E: Copy + Eq + Hash + Send + Sync> {
     key: UserKey,
 }
 
-impl<'s, E: Copy + Eq + Hash + Send + Sync> UserRef<'s, E> {
+impl<'s, E: Copy + Eq + Hash + Send + Sync + std::fmt::Debug> UserRef<'s, E> {
     pub fn new(server: &'s Server<E>, key: &UserKey) -> Self {
         UserRef { server, key: *key }
     }
@@ -129,7 +129,7 @@ pub struct UserMut<'s, E: Copy + Eq + Hash + Send + Sync> {
     key: UserKey,
 }
 
-impl<'s, E: Copy + Eq + Hash + Send + Sync> UserMut<'s, E> {
+impl<'s, E: Copy + Eq + Hash + Send + Sync + std::fmt::Debug> UserMut<'s, E> {
     pub fn new(server: &'s mut Server<E>, key: &UserKey) -> Self {
         UserMut { server, key: *key }
     }
@@ -165,7 +165,7 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync> UserMut<'s, E> {
     }
 
     /// Returns an iterator of all the keys of the [`Room`]s the User belongs to
-    pub fn room_keys(&self) -> Iter<RoomKey> {
+    pub fn room_keys(&self) -> Iter<'_, RoomKey> {
         self.server.user_room_keys(&self.key).unwrap()
     }
 }

@@ -179,7 +179,11 @@ impl TimeManager {
         }
 
         let prev_server_tick_instant = self.tick_to_instant(*server_tick);
-        let offset = prev_server_tick_instant.offset_from(&server_tick_instant);
+        let offset = prev_server_tick_instant.try_offset_from(&server_tick_instant)
+            .unwrap_or_else(|| {
+                log::warn!("Time offset overflow when receiving tick instant");
+                0
+            });
 
         self.server_tick = *server_tick;
         self.server_tick_instant = server_tick_instant.clone();
@@ -360,8 +364,12 @@ impl TimeManager {
     }
 
     pub(crate) fn get_interp(&self, tick: Tick, instant: &GameInstant) -> f32 {
-        let output = (self.tick_to_instant(tick).offset_from(&instant) as f32)
-            / self.server_tick_duration_avg;
+        let offset = self.tick_to_instant(tick).try_offset_from(&instant)
+            .unwrap_or_else(|| {
+                log::warn!("Time offset overflow in interpolation calculation");
+                0
+            });
+        let output = (offset as f32) / self.server_tick_duration_avg;
         output
     }
 
@@ -383,7 +391,12 @@ fn adjust_time(
     millis_elapsed: u32,
 ) {
     let default_next_instant = tick_instant.add_millis(millis_elapsed);
-    let speed = offset_to_speed(default_next_instant.offset_from(target_instant));
+    let offset = default_next_instant.try_offset_from(target_instant)
+        .unwrap_or_else(|| {
+            log::warn!("Time offset overflow in time adjustment");
+            0
+        });
+    let speed = offset_to_speed(offset);
     *tick_instant = tick_instant.add_millis(((millis_elapsed as f32) * speed).round() as u32);
     if tick_instant.is_more_than(target_instant) {
         *tick_instant = target_instant.clone();
@@ -407,7 +420,11 @@ fn instant_to_tick(
     server_tick_duration_avg: f32,
     instant: &GameInstant,
 ) -> Tick {
-    let offset_ms = server_tick_instant.offset_from(instant);
+    let offset_ms = server_tick_instant.try_offset_from(instant)
+        .unwrap_or_else(|| {
+            log::warn!("Time offset overflow in instant_to_tick conversion");
+            0
+        });
     let offset_ticks_f32 = (offset_ms as f32) / server_tick_duration_avg;
     return server_tick
         .clone()

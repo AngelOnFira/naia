@@ -11,7 +11,7 @@ pub struct EntityScopeMap<E: Copy + Eq + Hash> {
     main_map: HashMap<(UserKey, E), bool>,
 }
 
-impl<E: Copy + Eq + Hash> EntityScopeMap<E> {
+impl<E: Copy + Eq + Hash + std::fmt::Debug> EntityScopeMap<E> {
     pub fn new() -> Self {
         Self {
             main_map: HashMap::new(),

@@ -29,7 +29,7 @@ pub struct GlobalWorldManager<E: Copy + Eq + Hash + Send + Sync> {
     global_entity_map: BigMap<GlobalEntity, E>,
 }
 
-impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
+impl<E: Copy + Eq + Hash + Send + Sync + std::fmt::Debug> GlobalWorldManager<E> {
     pub fn new() -> Self {
         Self {
             auth_handler: HostAuthHandler::new(),
@@ -273,7 +273,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
     }
 }
 
-impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManagerType<E> for GlobalWorldManager<E> {
+impl<E: Copy + Eq + Hash + Send + Sync + std::fmt::Debug> GlobalWorldManagerType<E> for GlobalWorldManager<E> {
     fn component_kinds(&self, entity: &E) -> Option<Vec<ComponentKind>> {
         self.component_kinds(entity)
     }
@@ -340,7 +340,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManagerType<E> for GlobalWorl
     }
 }
 
-impl<E: Copy + Eq + Hash + Send + Sync> EntityAndGlobalEntityConverter<E>
+impl<E: Copy + Eq + Hash + Send + Sync + std::fmt::Debug> EntityAndGlobalEntityConverter<E>
     for GlobalWorldManager<E>
 {
     fn global_entity_to_entity(
