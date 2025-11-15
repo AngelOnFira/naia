@@ -12,6 +12,7 @@ mod impls;
 mod integer;
 mod outgoing_packet;
 mod serde;
+mod stream_writer;
 
 pub use bit_counter::BitCounter;
 pub use bit_reader::{BitReader, OwnedBitReader};
@@ -19,6 +20,7 @@ pub use bit_writer::{BitWrite, BitWriter};
 pub use constants::{MTU_SIZE_BITS, MTU_SIZE_BYTES};
 pub use error::SerdeErr;
 pub use file_bit_writer::FileBitWriter;
+pub use stream_writer::StreamWriter;
 pub use integer::{
     SerdeIntegerConversion, SignedInteger, SignedVariableInteger, UnsignedInteger,
     UnsignedVariableInteger,

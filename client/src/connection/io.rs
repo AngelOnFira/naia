@@ -8,6 +8,7 @@ use crate::{
     error::NaiaClientError,
     transport::{
         IdentityReceiver, IdentityReceiverResult, PacketReceiver, PacketSender, ServerAddr,
+        StreamReceiver, StreamSender,
     },
 };
 
@@ -16,6 +17,8 @@ pub struct Io {
     id_receiver: Option<Box<dyn IdentityReceiver>>,
     packet_sender: Option<Box<dyn PacketSender>>,
     packet_receiver: Option<Box<dyn PacketReceiver>>,
+    stream_sender: Option<Box<dyn StreamSender>>,
+    stream_receiver: Option<Box<dyn StreamReceiver>>,
     outgoing_bandwidth_monitor: Option<BandwidthMonitor>,
     incoming_bandwidth_monitor: Option<BandwidthMonitor>,
     outgoing_encoder: Option<Encoder>,
@@ -48,6 +51,8 @@ impl Io {
             id_receiver: None,
             packet_sender: None,
             packet_receiver: None,
+            stream_sender: None,
+            stream_receiver: None,
             outgoing_bandwidth_monitor,
             incoming_bandwidth_monitor,
             outgoing_encoder,
@@ -60,6 +65,8 @@ impl Io {
         id_receiver: Box<dyn IdentityReceiver>,
         packet_sender: Box<dyn PacketSender>,
         packet_receiver: Box<dyn PacketReceiver>,
+        stream_sender: Box<dyn StreamSender>,
+        stream_receiver: Box<dyn StreamReceiver>,
     ) {
         if self.packet_sender.is_some() {
             panic!("Packet sender/receiver already loaded! Cannot do this twice!");
@@ -68,6 +75,8 @@ impl Io {
         self.id_receiver = Some(id_receiver);
         self.packet_sender = Some(packet_sender);
         self.packet_receiver = Some(packet_receiver);
+        self.stream_sender = Some(stream_sender);
+        self.stream_receiver = Some(stream_receiver);
     }
 
     pub fn is_loaded(&self) -> bool {
@@ -166,5 +175,22 @@ impl Io {
             .as_mut()
             .expect("Need to call `enable_bandwidth_monitor()` on Io before calling this")
             .bandwidth();
+    }
+
+    // Stream methods (no compression/bandwidth monitoring - streams are for large infrequent data)
+    pub fn send_stream(&mut self, payload: &[u8]) -> Result<(), NaiaClientError> {
+        self.stream_sender
+            .as_ref()
+            .expect("Cannot call Client.send_stream() until connection is established!")
+            .send(payload)
+            .map_err(|_| NaiaClientError::SendError)
+    }
+
+    pub fn recv_stream(&mut self) -> Result<Option<Vec<u8>>, NaiaClientError> {
+        self.stream_receiver
+            .as_mut()
+            .expect("Cannot call Client.recv_stream() until connection is established!")
+            .receive()
+            .map_err(|_| NaiaClientError::RecvError)
     }
 }

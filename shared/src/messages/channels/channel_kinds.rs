@@ -34,7 +34,12 @@ impl ChannelKind {
 
     pub fn de(channel_kinds: &ChannelKinds, reader: &mut BitReader) -> Result<Self, SerdeErr> {
         let net_id: NetId = NetId::de(reader)?;
-        Ok(channel_kinds.net_id_to_kind(&net_id))
+        channel_kinds.try_net_id_to_kind(&net_id)
+            .map_err(|e| {
+                log::error!("Failed to deserialize ChannelKind: Received NetId={}, Error={:?}, Available NetIds={:?}",
+                    net_id, e, channel_kinds.registered_net_ids());
+                SerdeErr
+            })
     }
 }
 
@@ -101,6 +106,10 @@ impl ChannelKinds {
         self.net_id_map.get(net_id)
             .copied()
             .ok_or(ChannelError::NetIdNotFound { net_id: *net_id })
+    }
+
+    pub fn registered_net_ids(&self) -> Vec<NetId> {
+        self.net_id_map.keys().copied().collect()
     }
 
     fn kind_to_net_id(&self, channel_kind: &ChannelKind) -> NetId {

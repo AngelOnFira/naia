@@ -15,7 +15,7 @@ use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use super::{
     conditioner::ConditionedPacketReceiver, AuthReceiver as TransportAuthReceiver,
     AuthSender as TransportAuthSender, PacketReceiver, PacketSender as TransportSender, RecvError,
-    SendError, Socket as TransportSocket,
+    SendError, Socket as TransportSocket, StreamReceiver, StreamSender,
 };
 use crate::user::UserAuthAddr;
 
@@ -129,11 +129,14 @@ impl TransportSocket for Socket {
         Box<dyn TransportAuthReceiver>,
         Box<dyn TransportSender>,
         Box<dyn PacketReceiver>,
+        Box<dyn StreamSender>,
+        Box<dyn StreamReceiver>,
     ) {
         // Shared state
         let connections = Arc::new(Mutex::new(HashMap::<SocketAddr, Connection>::new()));
         let auth_queue = Arc::new(Mutex::new(VecDeque::<(UserAuthAddr, Vec<u8>)>::new()));
         let datagram_buffer = Arc::new(Mutex::new(VecDeque::<(SocketAddr, Vec<u8>)>::new()));
+        let stream_buffer = Arc::new(Mutex::new(VecDeque::<(SocketAddr, Vec<u8>)>::new()));
 
         // Spawn connection acceptor task - creates endpoint inside its async runtime
         spawn_connection_acceptor(
@@ -143,12 +146,15 @@ impl TransportSocket for Socket {
             connections.clone(),
             auth_queue.clone(),
             datagram_buffer.clone(),
+            stream_buffer.clone(),
         );
 
         let auth_sender = AuthSender::new(connections.clone());
         let auth_receiver = AuthReceiver::new(auth_queue);
         let packet_sender = QuicPacketSender::new(connections.clone());
         let packet_receiver = QuicPacketReceiver::new(datagram_buffer);
+        let stream_sender = QuicStreamSender::new(connections.clone());
+        let stream_receiver = QuicStreamReceiver::new(stream_buffer);
 
         let packet_receiver: Box<dyn PacketReceiver> = {
             if let Some(config) = &self.link_conditioner_config {
@@ -163,6 +169,8 @@ impl TransportSocket for Socket {
             Box::new(auth_receiver),
             Box::new(packet_sender),
             packet_receiver,
+            Box::new(stream_sender),
+            Box::new(stream_receiver),
         )
     }
 }
@@ -175,6 +183,7 @@ fn spawn_connection_acceptor(
     connections: Arc<Mutex<HashMap<SocketAddr, Connection>>>,
     auth_queue: Arc<Mutex<VecDeque<(UserAuthAddr, Vec<u8>)>>>,
     datagram_buffer: Arc<Mutex<VecDeque<(SocketAddr, Vec<u8>)>>>,
+    stream_buffer: Arc<Mutex<VecDeque<(SocketAddr, Vec<u8>)>>>,
 ) {
     std::thread::spawn(move || {
         // Use multi-threaded runtime to support tokio::spawn
@@ -202,10 +211,11 @@ fn spawn_connection_acceptor(
                         let connections = connections.clone();
                         let auth_queue = auth_queue.clone();
                         let datagram_buffer = datagram_buffer.clone();
+                        let stream_buffer = stream_buffer.clone();
 
                         tokio::spawn(async move {
                             if let Err(e) =
-                                handle_connection(incoming, connections, auth_queue, datagram_buffer)
+                                handle_connection(incoming, connections, auth_queue, datagram_buffer, stream_buffer)
                                     .await
                             {
                                 log::warn!("Connection handling error: {}", e);
@@ -227,6 +237,7 @@ async fn handle_connection(
     connections: Arc<Mutex<HashMap<SocketAddr, Connection>>>,
     auth_queue: Arc<Mutex<VecDeque<(UserAuthAddr, Vec<u8>)>>>,
     datagram_buffer: Arc<Mutex<VecDeque<(SocketAddr, Vec<u8>)>>>,
+    stream_buffer: Arc<Mutex<VecDeque<(SocketAddr, Vec<u8>)>>>,
 ) -> Result<(), String> {
     let connection = incoming.await.map_err(|e| format!("Connection failed: {}", e))?;
     let remote_addr = connection.remote_address();
@@ -261,7 +272,43 @@ async fn handle_connection(
         }
     }
 
-    // After auth, receive datagrams
+    // After auth, spawn two tasks: datagram receiver and stream receiver
+
+    // Spawn stream receiver task
+    let stream_buffer_clone = stream_buffer.clone();
+    let connection_clone = connection.clone();
+    let remote_addr_clone = remote_addr;
+
+    tokio::spawn(async move {
+        loop {
+            match connection_clone.accept_uni().await {
+                Ok(mut recv_stream) => {
+                    // Read stream to end (max 10 MB per message)
+                    match recv_stream.read_to_end(10_000_000).await {
+                        Ok(data) => {
+                            log::debug!("Received stream message from {} ({} bytes)", remote_addr_clone, data.len());
+                            let mut buffer = stream_buffer_clone.lock().unwrap();
+                            buffer.push_back((remote_addr_clone, data));
+                        }
+                        Err(e) => {
+                            log::warn!("Stream read error from {}: {}", remote_addr_clone, e);
+                            break;
+                        }
+                    }
+                }
+                Err(quinn::ConnectionError::ApplicationClosed(_)) => {
+                    log::debug!("Stream receiver: Connection closed by client: {}", remote_addr_clone);
+                    break;
+                }
+                Err(e) => {
+                    log::warn!("Stream accept error from {}: {}", remote_addr_clone, e);
+                    break;
+                }
+            }
+        }
+    });
+
+    // Datagram receiver (existing)
     loop {
         match connection.read_datagram().await {
             Ok(data) => {
@@ -362,6 +409,76 @@ impl PacketReceiver for QuicPacketReceiver {
         } else {
             Ok(None)
         }
+    }
+}
+
+// Stream Sender
+struct QuicStreamSender {
+    connections: Arc<Mutex<HashMap<SocketAddr, Connection>>>,
+}
+
+impl QuicStreamSender {
+    pub fn new(connections: Arc<Mutex<HashMap<SocketAddr, Connection>>>) -> Self {
+        Self { connections }
+    }
+}
+
+impl StreamSender for QuicStreamSender {
+    fn send(&self, socket_addr: &SocketAddr, payload: &[u8]) -> Result<(), SendError> {
+        let conns = self.connections.lock().unwrap();
+        if let Some(connection) = conns.get(socket_addr) {
+            let connection = connection.clone();
+            let payload = payload.to_vec();
+            let socket_addr = *socket_addr;
+
+            // Spawn async task to send via stream
+            std::thread::spawn(move || {
+                let runtime = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .expect("Failed to create tokio runtime");
+
+                runtime.block_on(async {
+                    match connection.open_uni().await {
+                        Ok(mut send) => {
+                            log::debug!("Sending stream message to {} ({} bytes)", socket_addr, payload.len());
+                            if let Err(e) = send.write_all(&payload).await {
+                                log::warn!("Failed to send stream message to {}: {}", socket_addr, e);
+                            }
+                            if let Err(e) = send.finish() {
+                                log::warn!("Failed to finish stream to {}: {}", socket_addr, e);
+                            }
+                        }
+                        Err(e) => {
+                            log::warn!("Failed to open stream to {}: {}", socket_addr, e);
+                        }
+                    }
+                });
+            });
+
+            Ok(())
+        } else {
+            Err(SendError)
+        }
+    }
+}
+
+// Stream Receiver
+#[derive(Clone)]
+pub(crate) struct QuicStreamReceiver {
+    buffer: Arc<Mutex<VecDeque<(SocketAddr, Vec<u8>)>>>,
+}
+
+impl QuicStreamReceiver {
+    pub fn new(buffer: Arc<Mutex<VecDeque<(SocketAddr, Vec<u8>)>>>) -> Self {
+        Self { buffer }
+    }
+}
+
+impl StreamReceiver for QuicStreamReceiver {
+    fn receive(&mut self) -> Result<Option<(SocketAddr, Vec<u8>)>, RecvError> {
+        let mut buffer = self.buffer.lock().unwrap();
+        Ok(buffer.pop_front())
     }
 }
 

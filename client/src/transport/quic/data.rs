@@ -11,7 +11,7 @@ use rustls::pki_types::{CertificateDer, ServerName};
 use crate::transport::{
     quic::auth::{AuthIo, AuthReceiver},
     IdentityReceiver, PacketReceiver as TransportPacketReceiver, PacketSender as TransportSender, RecvError, SendError,
-    ServerAddr as TransportAddr, Socket as TransportSocket,
+    ServerAddr as TransportAddr, Socket as TransportSocket, StreamReceiver as TransportStreamReceiver, StreamSender as TransportStreamSender,
 };
 
 // Constants
@@ -46,10 +46,13 @@ impl Socket {
         Box<dyn IdentityReceiver>,
         Box<dyn TransportSender>,
         Box<dyn TransportPacketReceiver>,
+        Box<dyn TransportStreamSender>,
+        Box<dyn TransportStreamReceiver>,
     ) {
         // Create shared state
         let auth_io = Arc::new(Mutex::new(AuthIo::new(self.connection.clone())));
         let datagram_buffer = Arc::new(Mutex::new(VecDeque::new()));
+        let stream_buffer = Arc::new(Mutex::new(VecDeque::new()));
 
         // Spawn connection task
         spawn_connection_task(
@@ -61,13 +64,16 @@ impl Socket {
             auth_bytes_opt,
             auth_headers_opt,
             datagram_buffer.clone(),
+            stream_buffer.clone(),
         );
 
         let id_receiver = AuthReceiver::new(auth_io);
         let packet_sender = Box::new(PacketSender::new(self.connection.clone()));
         let packet_receiver = Box::new(PacketReceiver::new(self.connection.clone(), datagram_buffer));
+        let stream_sender = Box::new(StreamSender::new(self.connection.clone()));
+        let stream_receiver = Box::new(StreamReceiver::new(stream_buffer));
 
-        (Box::new(id_receiver), packet_sender, packet_receiver)
+        (Box::new(id_receiver), packet_sender, packet_receiver, stream_sender, stream_receiver)
     }
 }
 
@@ -84,6 +90,8 @@ impl TransportSocket for Socket {
         Box<dyn IdentityReceiver>,
         Box<dyn TransportSender>,
         Box<dyn TransportPacketReceiver>,
+        Box<dyn TransportStreamSender>,
+        Box<dyn TransportStreamReceiver>,
     ) {
         self.connect_inner(None, None)
     }
@@ -95,6 +103,8 @@ impl TransportSocket for Socket {
         Box<dyn IdentityReceiver>,
         Box<dyn TransportSender>,
         Box<dyn TransportPacketReceiver>,
+        Box<dyn TransportStreamSender>,
+        Box<dyn TransportStreamReceiver>,
     ) {
         self.connect_inner(Some(auth_bytes), None)
     }
@@ -106,6 +116,8 @@ impl TransportSocket for Socket {
         Box<dyn IdentityReceiver>,
         Box<dyn TransportSender>,
         Box<dyn TransportPacketReceiver>,
+        Box<dyn TransportStreamSender>,
+        Box<dyn TransportStreamReceiver>,
     ) {
         self.connect_inner(None, Some(auth_headers))
     }
@@ -118,6 +130,8 @@ impl TransportSocket for Socket {
         Box<dyn IdentityReceiver>,
         Box<dyn TransportSender>,
         Box<dyn TransportPacketReceiver>,
+        Box<dyn TransportStreamSender>,
+        Box<dyn TransportStreamReceiver>,
     ) {
         self.connect_inner(Some(auth_bytes), Some(auth_headers))
     }
@@ -132,6 +146,7 @@ fn spawn_connection_task(
     auth_bytes_opt: Option<Vec<u8>>,
     auth_headers_opt: Option<Vec<(String, String)>>,
     datagram_buffer: Arc<Mutex<VecDeque<Vec<u8>>>>,
+    stream_buffer: Arc<Mutex<VecDeque<Vec<u8>>>>,
 ) {
     std::thread::spawn(move || {
         let runtime = tokio::runtime::Builder::new_current_thread()
@@ -168,6 +183,34 @@ fn spawn_connection_task(
                                 }
                                 Err(_) => {
                                     log::debug!("Datagram receive ended");
+                                    break;
+                                }
+                            }
+                        }
+                    });
+
+                    // Spawn stream receiver task
+                    let stream_buffer_clone = stream_buffer.clone();
+                    let connection_clone = connection.clone();
+                    tokio::spawn(async move {
+                        loop {
+                            match connection_clone.accept_uni().await {
+                                Ok(mut recv_stream) => {
+                                    // Read stream to end (max 10 MB per message)
+                                    match recv_stream.read_to_end(10_000_000).await {
+                                        Ok(data) => {
+                                            log::debug!("Received stream message ({} bytes)", data.len());
+                                            let mut buffer = stream_buffer_clone.lock().unwrap();
+                                            buffer.push_back(data);
+                                        }
+                                        Err(e) => {
+                                            log::warn!("Stream read error: {}", e);
+                                            break;
+                                        }
+                                    }
+                                }
+                                Err(_) => {
+                                    log::debug!("Stream receive ended");
                                     break;
                                 }
                             }
@@ -329,6 +372,75 @@ impl TransportPacketReceiver for PacketReceiver {
         } else {
             TransportAddr::Finding
         }
+    }
+}
+
+// Stream Sender
+struct StreamSender {
+    connection: Arc<Mutex<Option<Connection>>>,
+}
+
+impl StreamSender {
+    pub fn new(connection: Arc<Mutex<Option<Connection>>>) -> Self {
+        Self { connection }
+    }
+}
+
+impl TransportStreamSender for StreamSender {
+    fn send(&self, payload: &[u8]) -> Result<(), SendError> {
+        let conn_guard = self.connection.lock().unwrap();
+        if let Some(connection) = conn_guard.as_ref() {
+            let connection = connection.clone();
+            let payload = payload.to_vec();
+
+            // Spawn async task to send via stream
+            std::thread::spawn(move || {
+                let runtime = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .expect("Failed to create tokio runtime");
+
+                runtime.block_on(async {
+                    match connection.open_uni().await {
+                        Ok(mut send) => {
+                            log::debug!("Sending stream message ({} bytes)", payload.len());
+                            if let Err(e) = send.write_all(&payload).await {
+                                log::warn!("Failed to send stream message: {}", e);
+                            }
+                            if let Err(e) = send.finish() {
+                                log::warn!("Failed to finish stream: {}", e);
+                            }
+                        }
+                        Err(e) => {
+                            log::warn!("Failed to open stream: {}", e);
+                        }
+                    }
+                });
+            });
+
+            Ok(())
+        } else {
+            Err(SendError)
+        }
+    }
+}
+
+// Stream Receiver
+#[derive(Clone)]
+pub(crate) struct StreamReceiver {
+    stream_buffer: Arc<Mutex<VecDeque<Vec<u8>>>>,
+}
+
+impl StreamReceiver {
+    pub fn new(stream_buffer: Arc<Mutex<VecDeque<Vec<u8>>>>) -> Self {
+        Self { stream_buffer }
+    }
+}
+
+impl TransportStreamReceiver for StreamReceiver {
+    fn receive(&mut self) -> Result<Option<Vec<u8>>, RecvError> {
+        let mut buffer = self.stream_buffer.lock().unwrap();
+        Ok(buffer.pop_front())
     }
 }
 

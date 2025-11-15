@@ -12,11 +12,11 @@ use log::{info, warn};
 use naia_shared::{
     BigMap, BitReader, BitWriter, Channel, ChannelKind, ComponentKind,
     EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityAuthStatus,
-    EntityConverterMut, EntityDoesNotExistError, EntityEventMessage, EntityResponseEvent,
-    FakeEntityConverter, GlobalEntity, GlobalRequestId, GlobalResponseId, GlobalWorldManagerType,
-    Instant, Message, MessageContainer, PacketType, Protocol, RemoteEntity, Replicate,
-    ReplicatedComponent, Request, Response, ResponseReceiveKey, ResponseSendKey, Serde, SerdeErr,
-    SharedGlobalWorldManager, SocketConfig, StandardHeader, SystemChannel, Tick, Timer,
+    EntityConverter, EntityConverterMut, EntityDoesNotExistError, EntityEventMessage,
+    EntityResponseEvent, FakeEntityConverter, GlobalEntity, GlobalRequestId, GlobalResponseId,
+    GlobalWorldManagerType, Instant, Message, MessageContainer, PacketType, Protocol, RemoteEntity,
+    Replicate, ReplicatedComponent, Request, Response, ResponseReceiveKey, ResponseSendKey, Serde,
+    SerdeErr, SharedGlobalWorldManager, SocketConfig, StandardHeader, SystemChannel, Tick, Timer,
     WorldMutType, WorldRefType,
 };
 
@@ -119,9 +119,9 @@ impl<E: Copy + Eq + Hash + Send + Sync + std::fmt::Debug> Server<E> {
     /// Listen at the given addresses
     pub fn listen<S: Into<Box<dyn Socket>>>(&mut self, socket: S) {
         let boxed_socket: Box<dyn Socket> = socket.into();
-        let (auth_sender, auth_receiver, packet_sender, packet_receiver) = boxed_socket.listen();
+        let (auth_sender, auth_receiver, packet_sender, packet_receiver, stream_sender, stream_receiver) = boxed_socket.listen();
 
-        self.io.load(packet_sender, packet_receiver);
+        self.io.load(packet_sender, packet_receiver, stream_sender, stream_receiver);
 
         self.auth_io = Some((auth_sender, auth_receiver));
     }
@@ -258,18 +258,52 @@ impl<E: Copy + Eq + Hash + Send + Sync + std::fmt::Debug> Server<E> {
             if !user.has_address() {
                 return;
             }
-            if let Some(connection) = self.user_connections.get_mut(&user.address()) {
+            let address = user.address();
+
+            if let Some(connection) = self.user_connections.get_mut(&address) {
                 let mut converter = EntityConverterMut::new(
                     &self.global_world_manager,
                     &mut connection.base.local_world_manager,
                 );
                 let message = MessageContainer::from_write(message_box, &mut converter);
-                connection.base.message_manager.send_message(
-                    &self.protocol.message_kinds,
-                    &mut converter,
-                    channel_kind,
-                    message,
-                );
+
+                // Check message size and route to stream if large
+                let message_bit_length = message.bit_length();
+                let message_byte_length = (message_bit_length + 7) / 8; // Round up to bytes
+
+                const STREAM_THRESHOLD_BYTES: usize = 32_000; // 32 KB
+
+                if message_byte_length as usize > STREAM_THRESHOLD_BYTES && channel_settings.reliable() {
+                    // Large reliable message: send via QUIC stream
+                    use naia_shared::{Serde, StreamWriter};
+                    let mut writer = StreamWriter::new();
+
+                    // Write channel kind (so receiver knows which channel this belongs to)
+                    log::debug!("Server: Serializing stream message on channel {:?} for address {}", channel_kind, address);
+                    channel_kind.ser(&self.protocol.channel_kinds, &mut writer);
+
+                    // Write message (includes message kind and payload)
+                    message.write(&self.protocol.message_kinds, &mut writer, &mut converter);
+
+                    let bytes = writer.to_bytes();
+
+                    // Send via stream
+                    if let Err(e) = self.io.send_stream(&address, &bytes) {
+                        log::warn!("Failed to send large message ({} bytes) via stream to {}: {:?}",
+                                   message_byte_length, address, e);
+                    } else {
+                        log::debug!("Sent large message ({} bytes) via QUIC stream to {}",
+                                    message_byte_length, address);
+                    }
+                } else {
+                    // Normal message: send via datagram (with potential fragmentation)
+                    connection.base.message_manager.send_message(
+                        &self.protocol.message_kinds,
+                        &mut converter,
+                        channel_kind,
+                        message,
+                    );
+                }
             }
         }
     }
@@ -1755,6 +1789,51 @@ impl<E: Copy + Eq + Hash + Send + Sync + std::fmt::Debug> Server<E> {
                     Err(_) => {
                         self.incoming_events.push_error(NaiaServerError::RecvError);
                     }
+                }
+            }
+        }
+
+        // receive stream messages (large messages sent via QUIC streams)
+        loop {
+            match self.io.recv_stream() {
+                Ok(Some((address, stream_bytes))) => {
+                    // Deserialize message from stream
+                    let mut reader = BitReader::new(&stream_bytes);
+
+                    // Read channel kind
+                    let Ok(channel_kind) = ChannelKind::de(&self.protocol.channel_kinds, &mut reader) else {
+                        warn!("Server Error: cannot read channel kind from stream - channel not registered in Protocol. This may indicate a Protocol configuration mismatch.");
+                        continue;
+                    };
+
+                    // Find connection for this address
+                    if let Some(connection) = self.user_connections.get_mut(&address) {
+                        let user_key = connection.user_key;
+
+                        let converter = EntityConverter::new(
+                            &self.global_world_manager,
+                            &connection.base.local_world_manager,
+                        );
+
+                        // Read message (this reads both kind and payload)
+                        let Ok(message) = self.protocol.message_kinds.read(&mut reader, &converter) else {
+                            warn!("Server Error: cannot read message from stream");
+                            continue;
+                        };
+
+                        // Push message event
+                        self.incoming_events.push_message(&user_key, &channel_kind, message);
+                    } else {
+                        warn!("Received stream message from unknown address: {}", address);
+                    }
+                }
+                Ok(None) => {
+                    // No more stream messages, break loop
+                    break;
+                }
+                Err(_) => {
+                    self.incoming_events.push_error(NaiaServerError::RecvError);
+                    break;
                 }
             }
         }

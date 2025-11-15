@@ -10,7 +10,7 @@ use naia_shared::{transport_udp, IdentityToken, LinkConditionerConfig};
 use super::{
     conditioner::ConditionedPacketReceiver, AuthReceiver as TransportAuthReceiver,
     AuthSender as TransportAuthSender, PacketReceiver, PacketSender as TransportSender, RecvError,
-    SendError, Socket as TransportSocket,
+    SendError, Socket as TransportSocket, StreamReceiver, StreamSender,
 };
 use crate::user::UserAuthAddr;
 
@@ -64,6 +64,8 @@ impl TransportSocket for Socket {
         Box<dyn TransportAuthReceiver>,
         Box<dyn TransportSender>,
         Box<dyn PacketReceiver>,
+        Box<dyn StreamSender>,
+        Box<dyn StreamReceiver>,
     ) {
         let auth_sender = AuthSender::new(self.auth_io.clone());
         let auth_receiver = AuthReceiver::new(self.auth_io.clone());
@@ -78,11 +80,17 @@ impl TransportSocket for Socket {
             }
         };
 
+        // UDP doesn't support streams - provide dummy implementations
+        let stream_sender = DummyStreamSender;
+        let stream_receiver = DummyStreamReceiver;
+
         (
             Box::new(auth_sender),
             Box::new(auth_receiver),
             Box::new(packet_sender),
             packet_receiver,
+            Box::new(stream_sender),
+            Box::new(stream_receiver),
         )
     }
 }
@@ -312,6 +320,27 @@ impl TransportAuthReceiver for AuthReceiver {
             },
             Err(err) => Err(err),
         }
+    }
+}
+
+// Dummy Stream implementations (UDP doesn't support streams)
+struct DummyStreamSender;
+
+impl StreamSender for DummyStreamSender {
+    fn send(&self, _address: &SocketAddr, _payload: &[u8]) -> Result<(), SendError> {
+        // UDP transport doesn't support streams
+        log::warn!("Attempted to send stream message over UDP transport (not supported)");
+        Err(SendError)
+    }
+}
+
+#[derive(Clone)]
+struct DummyStreamReceiver;
+
+impl StreamReceiver for DummyStreamReceiver {
+    fn receive(&mut self) -> Result<Option<(SocketAddr, Vec<u8>)>, RecvError> {
+        // UDP transport doesn't support streams
+        Ok(None)
     }
 }
 

@@ -20,7 +20,7 @@ pub use server_addr::ServerAddr;
 
 pub use inner::{
     IdentityReceiver, IdentityReceiverResult, PacketReceiver, PacketSender, RecvError, SendError,
-    Socket,
+    Socket, StreamReceiver, StreamSender,
 };
 
 mod inner {
@@ -45,6 +45,8 @@ mod inner {
             Box<dyn IdentityReceiver>,
             Box<dyn PacketSender>,
             Box<dyn PacketReceiver>,
+            Box<dyn StreamSender>,
+            Box<dyn StreamReceiver>,
         );
         fn connect_with_auth(
             self: Box<Self>,
@@ -53,6 +55,8 @@ mod inner {
             Box<dyn IdentityReceiver>,
             Box<dyn PacketSender>,
             Box<dyn PacketReceiver>,
+            Box<dyn StreamSender>,
+            Box<dyn StreamReceiver>,
         );
         fn connect_with_auth_headers(
             self: Box<Self>,
@@ -61,6 +65,8 @@ mod inner {
             Box<dyn IdentityReceiver>,
             Box<dyn PacketSender>,
             Box<dyn PacketReceiver>,
+            Box<dyn StreamSender>,
+            Box<dyn StreamReceiver>,
         );
         fn connect_with_auth_and_headers(
             self: Box<Self>,
@@ -70,6 +76,8 @@ mod inner {
             Box<dyn IdentityReceiver>,
             Box<dyn PacketSender>,
             Box<dyn PacketReceiver>,
+            Box<dyn StreamSender>,
+            Box<dyn StreamReceiver>,
         );
     }
 
@@ -102,6 +110,36 @@ mod inner {
     impl Clone for Box<dyn PacketReceiver> {
         fn clone(&self) -> Box<dyn PacketReceiver> {
             PacketReceiverClone::clone_box(self.as_ref())
+        }
+    }
+
+    // Stream
+
+    pub trait StreamSender: Send + Sync {
+        /// Sends a large message via stream (reliable, ordered, no fragmentation)
+        fn send(&self, payload: &[u8]) -> Result<(), SendError>;
+    }
+
+    pub trait StreamReceiver: StreamReceiverClone + Send + Sync {
+        /// Receives a complete message from a stream
+        fn receive(&mut self) -> Result<Option<Vec<u8>>, RecvError>;
+    }
+
+    /// Used to clone Box<dyn StreamReceiver>
+    pub trait StreamReceiverClone {
+        /// Clone the boxed StreamReceiver
+        fn clone_box(&self) -> Box<dyn StreamReceiver>;
+    }
+
+    impl<T: 'static + StreamReceiver + Clone> StreamReceiverClone for T {
+        fn clone_box(&self) -> Box<dyn StreamReceiver> {
+            Box::new(self.clone())
+        }
+    }
+
+    impl Clone for Box<dyn StreamReceiver> {
+        fn clone(&self) -> Box<dyn StreamReceiver> {
+            StreamReceiverClone::clone_box(self.as_ref())
         }
     }
 

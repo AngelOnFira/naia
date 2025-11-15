@@ -5,12 +5,14 @@ use naia_shared::{CompressionConfig, Decoder, Encoder, OutgoingPacket, OwnedBitR
 use super::bandwidth_monitor::BandwidthMonitor;
 use crate::{
     error::NaiaServerError,
-    transport::{PacketReceiver, PacketSender},
+    transport::{PacketReceiver, PacketSender, StreamReceiver, StreamSender},
 };
 
 pub struct Io {
     packet_sender: Option<Box<dyn PacketSender>>,
     packet_receiver: Option<Box<dyn PacketReceiver>>,
+    stream_sender: Option<Box<dyn StreamSender>>,
+    stream_receiver: Option<Box<dyn StreamReceiver>>,
     outgoing_bandwidth_monitor: Option<BandwidthMonitor>,
     incoming_bandwidth_monitor: Option<BandwidthMonitor>,
     outgoing_encoder: Option<Encoder>,
@@ -41,6 +43,8 @@ impl Io {
         Io {
             packet_sender: None,
             packet_receiver: None,
+            stream_sender: None,
+            stream_receiver: None,
             outgoing_bandwidth_monitor,
             incoming_bandwidth_monitor,
             outgoing_encoder,
@@ -52,6 +56,8 @@ impl Io {
         &mut self,
         packet_sender: Box<dyn PacketSender>,
         packet_receiver: Box<dyn PacketReceiver>,
+        stream_sender: Box<dyn StreamSender>,
+        stream_receiver: Box<dyn StreamReceiver>,
     ) {
         if self.packet_sender.is_some() {
             panic!("Packet sender/receiver already loaded! Cannot do this twice!");
@@ -59,6 +65,8 @@ impl Io {
 
         self.packet_sender = Some(packet_sender);
         self.packet_receiver = Some(packet_receiver);
+        self.stream_sender = Some(stream_sender);
+        self.stream_receiver = Some(stream_receiver);
     }
 
     pub fn is_loaded(&self) -> bool {
@@ -172,5 +180,26 @@ impl Io {
             .as_mut()
             .expect("Need to call `enable_bandwidth_monitor()` on Io before calling this")
             .client_bandwidth(address);
+    }
+
+    // Stream methods (no compression/bandwidth monitoring for now - streams are for large infrequent data)
+    pub fn send_stream(
+        &mut self,
+        address: &SocketAddr,
+        payload: &[u8],
+    ) -> Result<(), NaiaServerError> {
+        self.stream_sender
+            .as_ref()
+            .expect("Cannot call Server.send_stream() until you call Server.listen()!")
+            .send(address, payload)
+            .map_err(|_| NaiaServerError::SendError(*address))
+    }
+
+    pub fn recv_stream(&mut self) -> Result<Option<(SocketAddr, Vec<u8>)>, NaiaServerError> {
+        self.stream_receiver
+            .as_mut()
+            .expect("Cannot call Server.receive_stream() until you call Server.listen()!")
+            .receive()
+            .map_err(|_| NaiaServerError::RecvError)
     }
 }

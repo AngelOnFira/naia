@@ -3,13 +3,13 @@ use std::{any::Any, collections::VecDeque, hash::Hash, net::SocketAddr, time::Du
 use log::{info, warn};
 
 use naia_shared::{
-    BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter,
-    EntityAndLocalEntityConverter, EntityAuthStatus, EntityConverterMut, EntityDoesNotExistError,
-    EntityEventMessage, EntityResponseEvent, FakeEntityConverter, GameInstant, GlobalEntity,
-    GlobalRequestId, GlobalResponseId, GlobalWorldManagerType, Instant, Message, MessageContainer,
-    PacketType, Protocol, RemoteEntity, Replicate, ReplicatedComponent, Request, Response,
-    ResponseReceiveKey, ResponseSendKey, Serde, SharedGlobalWorldManager, SocketConfig,
-    StandardHeader, SystemChannel, Tick, WorldMutType, WorldRefType,
+    BitReader, BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter,
+    EntityAndLocalEntityConverter, EntityAuthStatus, EntityConverter, EntityConverterMut,
+    EntityDoesNotExistError, EntityEventMessage, EntityResponseEvent, FakeEntityConverter,
+    GameInstant, GlobalEntity, GlobalRequestId, GlobalResponseId, GlobalWorldManagerType, Instant,
+    Message, MessageContainer, PacketType, Protocol, RemoteEntity, Replicate, ReplicatedComponent,
+    Request, Response, ResponseReceiveKey, ResponseSendKey, Serde, SharedGlobalWorldManager,
+    SocketConfig, StandardHeader, SystemChannel, Tick, WorldMutType, WorldRefType,
 };
 
 use super::{client_config::ClientConfig, error::NaiaClientError, events::Events};
@@ -111,28 +111,28 @@ impl<E: Copy + Eq + Hash + Send + Sync + std::fmt::Debug> Client<E> {
             if let Some(auth_headers) = &self.auth_headers {
                 // connect with auth & headers
                 let boxed_socket: Box<dyn Socket> = socket.into();
-                let (id_receiver, packet_sender, packet_receiver) = boxed_socket
+                let (id_receiver, packet_sender, packet_receiver, stream_sender, stream_receiver) = boxed_socket
                     .connect_with_auth_and_headers(auth_bytes.clone(), auth_headers.clone());
-                self.io.load(id_receiver, packet_sender, packet_receiver);
+                self.io.load(id_receiver, packet_sender, packet_receiver, stream_sender, stream_receiver);
             } else {
                 // connect with auth
                 let boxed_socket: Box<dyn Socket> = socket.into();
-                let (id_receiver, packet_sender, packet_receiver) =
+                let (id_receiver, packet_sender, packet_receiver, stream_sender, stream_receiver) =
                     boxed_socket.connect_with_auth(auth_bytes.clone());
-                self.io.load(id_receiver, packet_sender, packet_receiver);
+                self.io.load(id_receiver, packet_sender, packet_receiver, stream_sender, stream_receiver);
             }
         } else {
             if let Some(auth_headers) = &self.auth_headers {
                 // connect with auth headers
                 let boxed_socket: Box<dyn Socket> = socket.into();
-                let (id_receiver, packet_sender, packet_receiver) =
+                let (id_receiver, packet_sender, packet_receiver, stream_sender, stream_receiver) =
                     boxed_socket.connect_with_auth_headers(auth_headers.clone());
-                self.io.load(id_receiver, packet_sender, packet_receiver);
+                self.io.load(id_receiver, packet_sender, packet_receiver, stream_sender, stream_receiver);
             } else {
                 // connect without auth
                 let boxed_socket: Box<dyn Socket> = socket.into();
-                let (id_receiver, packet_sender, packet_receiver) = boxed_socket.connect();
-                self.io.load(id_receiver, packet_sender, packet_receiver);
+                let (id_receiver, packet_sender, packet_receiver, stream_sender, stream_receiver) = boxed_socket.connect();
+                self.io.load(id_receiver, packet_sender, packet_receiver, stream_sender, stream_receiver);
             }
         }
     }
@@ -334,12 +334,43 @@ impl<E: Copy + Eq + Hash + Send + Sync + std::fmt::Debug> Client<E> {
                 &mut connection.base.local_world_manager,
             );
             let message = MessageContainer::from_write(message_box, &mut converter);
-            connection.base.message_manager.send_message(
-                &self.protocol.message_kinds,
-                &mut converter,
-                channel_kind,
-                message,
-            );
+
+            // Check message size and route to stream if large
+            let message_bit_length = message.bit_length();
+            let message_byte_length = (message_bit_length + 7) / 8; // Round up to bytes
+
+            const STREAM_THRESHOLD_BYTES: usize = 32_000; // 32 KB
+
+            if message_byte_length as usize > STREAM_THRESHOLD_BYTES && channel_settings.reliable() {
+                // Large reliable message: send via QUIC stream
+                use naia_shared::{Serde, StreamWriter};
+                let mut writer = StreamWriter::new();
+
+                // Write channel kind (so receiver knows which channel this belongs to)
+                channel_kind.ser(&self.protocol.channel_kinds, &mut writer);
+
+                // Write message (includes message kind and payload)
+                message.write(&self.protocol.message_kinds, &mut writer, &mut converter);
+
+                let bytes = writer.to_bytes();
+
+                // Send via stream
+                if let Err(e) = self.io.send_stream(&bytes) {
+                    log::warn!("Failed to send large message ({} bytes) via stream: {:?}",
+                               message_byte_length, e);
+                } else {
+                    log::debug!("Sent large message ({} bytes) via QUIC stream",
+                                message_byte_length);
+                }
+            } else{
+                // Normal message: send via datagram (with potential fragmentation)
+                connection.base.message_manager.send_message(
+                    &self.protocol.message_kinds,
+                    &mut converter,
+                    channel_kind,
+                    message,
+                );
+            }
         } else {
             self.waitlist_messages
                 .push_back((channel_kind.clone(), message_box));
@@ -1215,6 +1246,44 @@ impl<E: Copy + Eq + Hash + Send + Sync + std::fmt::Debug> Client<E> {
         Self::handle_heartbeats(connection, &mut self.io);
         Self::handle_pings(connection, &mut self.io);
         Self::handle_empty_acks(connection, &mut self.io);
+
+        // receive stream messages (large messages sent via QUIC streams)
+        loop {
+            match self.io.recv_stream() {
+                Ok(Some(stream_bytes)) => {
+                    // Deserialize message from stream
+                    let mut reader = BitReader::new(&stream_bytes);
+
+                    // Read channel kind
+                    let Ok(channel_kind) = ChannelKind::de(&self.protocol.channel_kinds, &mut reader) else {
+                        warn!("Client Error: cannot read channel kind from stream - channel not registered in Protocol. This may indicate a Protocol configuration mismatch between client and server.");
+                        continue;
+                    };
+
+                    let converter = EntityConverter::new(
+                        &self.global_world_manager,
+                        &connection.base.local_world_manager,
+                    );
+
+                    // Read message (this reads both kind and payload)
+                    let Ok(message) = self.protocol.message_kinds.read(&mut reader, &converter) else {
+                        warn!("Client Error: cannot read message from stream");
+                        continue;
+                    };
+
+                    // Push message event
+                    self.incoming_events.push_message(&channel_kind, message);
+                }
+                Ok(None) => {
+                    // No more stream messages, break loop
+                    break;
+                }
+                Err(error) => {
+                    self.incoming_events.push_error(error);
+                    break;
+                }
+            }
+        }
 
         // receive from socket
         loop {
