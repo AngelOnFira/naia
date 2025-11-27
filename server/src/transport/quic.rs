@@ -185,13 +185,24 @@ fn spawn_connection_acceptor(
     datagram_buffer: Arc<Mutex<VecDeque<(SocketAddr, Vec<u8>)>>>,
     stream_buffer: Arc<Mutex<VecDeque<(SocketAddr, Vec<u8>)>>>,
 ) {
+    log::info!("Spawning QUIC connection acceptor thread for {}", listen_addr);
     std::thread::spawn(move || {
+        log::info!("QUIC acceptor thread started, creating tokio runtime...");
+
         // Use multi-threaded runtime to support tokio::spawn
-        let runtime = tokio::runtime::Builder::new_multi_thread()
+        let runtime = match tokio::runtime::Builder::new_multi_thread()
             .worker_threads(2)
             .enable_all()
-            .build()
-            .expect("Failed to create tokio runtime");
+            .build() {
+                Ok(rt) => {
+                    log::info!("Tokio runtime created successfully");
+                    rt
+                }
+                Err(e) => {
+                    log::error!("Failed to create tokio runtime: {}", e);
+                    return;
+                }
+            };
 
         runtime.block_on(async {
             // Create endpoint inside the async runtime
