@@ -203,11 +203,12 @@ fn spawn_connection_acceptor(
                 }
             };
 
-            log::info!("QUIC acceptor started, waiting for connections...");
+            log::info!("QUIC acceptor started on {:?}, waiting for connections...", endpoint.local_addr());
             loop {
+                log::trace!("Waiting for next QUIC connection...");
                 match endpoint.accept().await {
                     Some(incoming) => {
-                        log::debug!("Accepting new QUIC connection");
+                        log::info!(">>> Incoming QUIC connection from {:?}", incoming.remote_address());
                         let connections = connections.clone();
                         let auth_queue = auth_queue.clone();
                         let datagram_buffer = datagram_buffer.clone();
