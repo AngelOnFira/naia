@@ -1123,6 +1123,13 @@ impl<E: Copy + Eq + Hash + Send + Sync + std::fmt::Debug> Client<E> {
             (EntityAuthStatus::Available, EntityAuthStatus::Available) => {
                 // auth was released before it was granted, continue as normal
             }
+            (EntityAuthStatus::Denied, EntityAuthStatus::Denied) => {
+                // Already denied, receiving Denied again is a no-op.
+                // This can happen when multiple clients are in the same room with delegated
+                // entities: when Client B requests authority for their entity, the server
+                // broadcasts Denied to Client A (who already received Denied when delegation
+                // was first enabled). The redundant Denied is safe to ignore.
+            }
             (_, _) => {
                 panic!(
                     "-- Entity updated authority, not handled -- {:?} -> {:?}",
