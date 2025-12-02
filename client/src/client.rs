@@ -343,7 +343,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + std::fmt::Debug> Client<E> {
 
             if message_byte_length as usize > STREAM_THRESHOLD_BYTES && channel_settings.reliable() {
                 // Large reliable message: send via QUIC stream
-                use naia_shared::{Serde, StreamWriter};
+                use naia_shared::StreamWriter;
                 let mut writer = StreamWriter::new();
 
                 // Write channel kind (so receiver knows which channel this belongs to)

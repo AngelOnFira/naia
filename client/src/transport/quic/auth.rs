@@ -107,7 +107,7 @@ async fn send_auth_and_receive_token(
     auth_bytes_opt: Option<Vec<u8>>,
 ) -> Result<IdentityToken, AuthError> {
     // Open bidirectional stream for auth
-    let (mut send, recv) = connection
+    let (mut send, _recv) = connection
         .open_bi()
         .await
         .map_err(|e| AuthError::StreamError(format!("Failed to open auth stream: {}", e)))?;
@@ -156,6 +156,7 @@ async fn receive_identity_token(connection: Connection) -> Result<IdentityToken,
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 enum AuthError {
     Rejected,
     ConnectionClosed,

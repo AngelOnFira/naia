@@ -178,6 +178,7 @@ impl HandshakeManager {
         let mut handshake_timer = Timer::new(send_interval);
         handshake_timer.ring_manual();
 
+        #[allow(deprecated)]
         let pre_connection_timestamp = stamp_time::now();
 
         Self {

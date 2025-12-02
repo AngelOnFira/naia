@@ -325,10 +325,14 @@ impl<E: Copy + Eq + Hash + Send + Sync + std::fmt::Debug> GlobalWorldManagerType
         if let Some(record) = self.entity_records.get(entity) {
             let server_owned = record.owner == EntityOwner::Server;
             let is_public = record.replication_config == ReplicationConfig::Public;
-
-            return server_owned && is_public;
+            let result = server_owned && is_public;
+            info!(
+                "entity_needs_mutator_for_delegation: entity {:?}, owner {:?}, config {:?}, result: {}",
+                entity, record.owner, record.replication_config, result
+            );
+            return result;
         }
-        info!("entity_needs_mutator_for_delegation: entity does not have record");
+        info!("entity_needs_mutator_for_delegation: entity {:?} does not have record", entity);
         return false;
     }
 

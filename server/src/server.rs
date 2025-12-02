@@ -1922,7 +1922,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + std::fmt::Debug> Server<E> {
                                 Ok(HandshakeAction::SendPacket(packet)) => {
                                     if self.io.send_packet(&address, packet).is_err() {
                                         // TODO: pass this on and handle above
-                                        warn!("Server Error: Cannot send packet to {}", &address);
+                                        // warn!("Server Error: Cannot send packet to {}", &address);
                                     }
                                 }
                                 Ok(HandshakeAction::DisconnectUser(user_key)) => {
