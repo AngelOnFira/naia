@@ -258,7 +258,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + std::fmt::Debug> Connection<E> {
             // send packet
             if io.send_packet(&self.address, writer.to_packet()).is_err() {
                 // TODO: pass this on and handle above
-                warn!("Server Error: Cannot send data packet to {}", &self.address);
+                // warn!("Server Error: Cannot send data packet to {}", &self.address);
             }
 
             return true;
